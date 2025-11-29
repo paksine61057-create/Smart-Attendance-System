@@ -1,0 +1,8 @@
+{
+  "name": "SchoolCheckIn AI",
+  "description": "Smart school attendance system with geolocation verification, AI-powered image logging, and automated reporting.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
