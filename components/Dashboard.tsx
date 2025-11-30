@@ -228,7 +228,7 @@ const Dashboard: React.FC = () => {
             top: 0;
             width: 210mm;
             min-height: 297mm;
-            padding: 10mm 15mm; /* Internal padding for content */
+            padding: 5mm 15mm; /* Reduced top padding to move content up */
             background: white;
             z-index: 9999;
             box-sizing: border-box;
@@ -441,10 +441,10 @@ const Dashboard: React.FC = () => {
             <div id="printable-report" className="overflow-x-auto p-4 md:p-0">
                 
                 {/* Print Header */}
-                <div className="hidden print:flex flex-col items-center justify-center mb-6">
-                     <img src="https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png" className="w-20 h-20 object-contain grayscale-0 mb-3" alt="Logo" />
-                     <h1 className="text-2xl font-bold text-black leading-tight">โรงเรียนประจักษ์ศิลปาคม</h1>
-                     <p className="text-sm text-black font-medium tracking-wide mt-1">
+                <div className="hidden print:flex flex-col items-center justify-center mb-4">
+                     <img src="https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png" className="w-16 h-16 object-contain grayscale-0 mb-1" alt="Logo" />
+                     <h1 className="text-xl font-bold text-black leading-tight">โรงเรียนประจักษ์ศิลปาคม</h1>
+                     <p className="text-xs text-black font-medium tracking-wide mt-0">
                         {activeTab === 'monthly' 
                             ? `รายงานสรุปการมาสายรายเดือน ประจำเดือน ${formatMonthYear(selectedMonth)}` 
                             : `รายงานการมาปฏิบัติราชการ ประจำ${new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`}
@@ -453,44 +453,44 @@ const Dashboard: React.FC = () => {
 
                 <table className="w-full text-left border-collapse border-b-2 border-t-2 border-black">
                     <thead>
-                        <tr className="text-black text-sm uppercase tracking-wider border-b-2 border-black">
+                        <tr className="text-black text-xs uppercase tracking-wider border-b-2 border-black">
                             {activeTab === 'monthly' ? (
                                 <>
-                                    <th className="px-2 py-2 border-r border-black text-center w-[5%]">ลำดับ</th>
-                                    <th className="px-2 py-2 border-r border-black text-center w-[30%]">ชื่อ-สกุล</th>
-                                    <th className="px-2 py-2 border-r border-black text-center w-[20%]">ตำแหน่ง</th>
-                                    <th className="px-2 py-2 border-r border-black text-center w-[10%]">จำนวนครั้ง</th>
-                                    <th className="px-2 py-2 border-r border-black text-center w-[20%]">วันที่มาสาย</th>
-                                    <th className="px-2 py-2 text-center w-[15%]">หมายเหตุ</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[5%]">ลำดับ</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[30%]">ชื่อ-สกุล</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[20%]">ตำแหน่ง</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[10%]">จำนวนครั้ง</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[20%]">วันที่มาสาย</th>
+                                    <th className="px-2 py-1 text-center w-[15%]">หมายเหตุ</th>
                                 </>
                             ) : (
                                 <>
-                                    <th className="px-2 py-2 border-r border-black text-center w-[5%]">ลำดับ</th>
-                                    <th className="px-2 py-2 border-r border-black text-center w-[30%]">ชื่อ-สกุล</th>
-                                    <th className="px-2 py-2 border-r border-black text-center w-[20%]">ตำแหน่ง</th>
-                                    <th className="px-2 py-2 border-r border-black text-center w-[10%]">เวลามา</th>
-                                    <th className="px-2 py-2 border-r border-black text-center w-[10%]">เวลากลับ</th>
-                                    <th className="px-2 py-2 text-center w-[25%]">หมายเหตุ</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[5%]">ลำดับ</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[30%]">ชื่อ-สกุล</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[20%]">ตำแหน่ง</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[10%]">เวลามา</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[10%]">เวลากลับ</th>
+                                    <th className="px-2 py-1 text-center w-[25%]">หมายเหตุ</th>
                                 </>
                             )}
                         </tr>
                     </thead>
-                    <tbody className="text-sm print:text-sm">
+                    <tbody className="text-xs print:text-[10px]">
                         {activeTab === 'monthly' ? (
                             monthlyReportData.map((row, index) => (
                                 <tr key={row.staffId} className="print:hover:bg-transparent transition-colors border-b border-gray-300">
-                                    <td className="px-2 py-1.5 border-x border-gray-300 text-black text-center font-mono">{index + 1}</td>
-                                    <td className="px-2 py-1.5 border-r border-gray-300 text-left pl-3">
+                                    <td className="px-2 py-0.5 border-x border-gray-300 text-black text-center font-mono">{index + 1}</td>
+                                    <td className="px-2 py-0.5 border-r border-gray-300 text-left pl-2">
                                         <div className="font-bold text-black">{row.name}</div>
                                     </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-300 text-black text-center">{row.role}</td>
-                                    <td className={`px-2 py-1.5 border-r border-gray-300 text-center font-bold ${row.lateCount > 0 ? 'text-black' : 'text-gray-400'}`}>
+                                    <td className="px-2 py-0.5 border-r border-gray-300 text-black text-center">{row.role}</td>
+                                    <td className={`px-2 py-0.5 border-r border-gray-300 text-center font-bold ${row.lateCount > 0 ? 'text-black' : 'text-gray-400'}`}>
                                         {row.lateCount > 0 ? row.lateCount : '-'}
                                     </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-300 text-black text-xs text-center">
+                                    <td className="px-2 py-0.5 border-r border-gray-300 text-black text-[9px] text-center leading-tight">
                                         {row.dates || '-'}
                                     </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-300 text-black text-center">
+                                    <td className="px-2 py-0.5 border-r border-gray-300 text-black text-center">
                                         {row.note || ''}
                                     </td>
                                 </tr>
@@ -498,19 +498,19 @@ const Dashboard: React.FC = () => {
                         ) : (
                             officialReportData.map((row, index) => (
                                 <tr key={row.staffId} className="print:hover:bg-transparent transition-colors border-b border-gray-300">
-                                    <td className="px-2 py-1.5 border-x border-gray-300 text-black text-center font-mono">{index + 1}</td>
-                                    <td className="px-2 py-1.5 border-r border-gray-300 text-left pl-3">
+                                    <td className="px-2 py-0.5 border-x border-gray-300 text-black text-center font-mono">{index + 1}</td>
+                                    <td className="px-2 py-0.5 border-r border-gray-300 text-left pl-2">
                                         <div className="font-bold text-black">{row.name}</div>
                                     </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-300 text-black text-center">{row.role}</td>
-                                    <td className={`px-2 py-1.5 border-r border-gray-300 text-center font-mono font-bold text-black`}>
+                                    <td className="px-2 py-0.5 border-r border-gray-300 text-black text-center">{row.role}</td>
+                                    <td className={`px-2 py-0.5 border-r border-gray-300 text-center font-mono font-bold text-black`}>
                                         {row.arrivalTime}
                                         {row.arrivalStatus === 'Late' && <span className="print:hidden ml-1">⚠️</span>}
                                     </td>
-                                    <td className={`px-2 py-1.5 border-r border-gray-300 text-center font-mono font-bold text-black`}>
+                                    <td className={`px-2 py-0.5 border-r border-gray-300 text-center font-mono font-bold text-black`}>
                                         {row.departureTime}
                                     </td>
-                                    <td className="px-2 py-1.5 border-r border-gray-300 text-black max-w-xs break-words text-center">
+                                    <td className="px-2 py-0.5 border-r border-gray-300 text-black max-w-xs break-words text-center text-[9px]">
                                         {row.note || ''}
                                     </td>
                                 </tr>
@@ -520,20 +520,20 @@ const Dashboard: React.FC = () => {
                 </table>
                 
                 {/* Print Footer / Signature Area */}
-                <div className="hidden print:flex justify-between items-start mt-8 px-8 break-inside-avoid">
+                <div className="hidden print:flex justify-between items-start mt-4 px-8 break-inside-avoid">
                     <div className="text-center w-48">
-                        <p className="text-sm font-bold mb-8">ลงชื่อ..........................................................</p>
-                        <p className="text-sm font-bold">เจ้าหน้าที่/หัวหน้าฝ่ายบุคคล</p>
-                        <p className="text-xs text-black mt-1">ผู้ตรวจสอบ</p>
+                        <p className="text-xs font-bold mb-6">ลงชื่อ..........................................................</p>
+                        <p className="text-xs font-bold">เจ้าหน้าที่/หัวหน้าฝ่ายบุคคล</p>
+                        <p className="text-[10px] text-black mt-0.5">ผู้ตรวจสอบ</p>
                     </div>
                     <div className="text-center w-48">
-                         <p className="text-sm font-bold mb-8">ลงชื่อ..........................................................</p>
-                        <p className="text-sm font-bold">ผู้อำนวยการโรงเรียน</p>
-                        <p className="text-xs text-black mt-1">ผู้รับรอง</p>
+                         <p className="text-xs font-bold mb-6">ลงชื่อ..........................................................</p>
+                        <p className="text-xs font-bold">ผู้อำนวยการโรงเรียน</p>
+                        <p className="text-[10px] text-black mt-0.5">ผู้รับรอง</p>
                     </div>
                 </div>
 
-                <div className="hidden print:block text-[10px] text-gray-500 mt-4 text-center">
+                <div className="hidden print:block text-[9px] text-gray-400 mt-2 text-center">
                     เอกสารนี้สร้างโดยระบบ SchoolCheckIn AI System | ข้อมูล ณ เวลา {new Date().toLocaleTimeString('th-TH')}
                 </div>
             </div>
