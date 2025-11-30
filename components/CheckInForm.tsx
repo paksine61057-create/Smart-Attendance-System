@@ -254,7 +254,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         className={`w-full px-4 py-3 md:py-4 rounded-2xl focus:ring-4 outline-none transition-all font-bold text-lg text-center tracking-wider shadow-lg
                         ${currentUser 
                             ? 'bg-white text-emerald-700 border-2 border-emerald-400 focus:ring-emerald-400/30' 
-                            : 'bg-white text-blue-900 border-2 border-white focus:border-blue-300 focus:ring-blue-400/30 placeholder-blue-300'}`}
+                            : 'bg-white text-stone-700 border-4 border-amber-400 focus:border-amber-500 focus:ring-amber-400/50 placeholder-stone-400'}`}
                         placeholder="เช่น PJ001"
                         maxLength={5}
                     />
@@ -389,8 +389,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                     </div>
                 </div>
               ) : (
-                <div className="text-center p-6 border-2 border-dashed border-white/40 rounded-2xl bg-white/10 backdrop-blur-md">
-                    <p className="text-white font-semibold text-sm drop-shadow-md">กรุณากรอกรหัสบุคลากรเพื่อเข้าสู่ระบบ</p>
+                <div className="text-center p-6 border-2 border-dashed border-amber-300/70 rounded-2xl bg-amber-900/20 backdrop-blur-md">
+                    <p className="text-amber-100 font-bold text-sm drop-shadow-md tracking-wide">กรุณากรอกรหัสบุคลากรเพื่อเข้าสู่ระบบ</p>
                 </div>
               )}
             </div>

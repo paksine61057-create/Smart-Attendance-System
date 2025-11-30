@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import CheckInForm from './components/CheckInForm';
 import Dashboard from './components/Dashboard';
@@ -38,9 +37,9 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-stone-50 flex flex-col font-sans relative overflow-x-hidden text-stone-800">
-      {/* Premium Light Gradient Background */}
-      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-white via-stone-50 to-stone-100 pointer-events-none z-0"></div>
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans relative overflow-x-hidden text-slate-800">
+      {/* Premium Silver Gradient Background - Reduces Glare */}
+      <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-gray-100 via-slate-200 to-gray-300 pointer-events-none z-0 opacity-80"></div>
       
       {/* Header - Blue-Cyan Acrylic - Reduced height for mobile */}
       <header className="relative z-40 bg-gradient-to-r from-blue-600/90 via-cyan-500/85 to-blue-600/90 backdrop-blur-md border-b border-white/20 sticky top-0 shadow-lg text-white">
@@ -120,21 +119,21 @@ function App() {
 
       {/* Admin Login Modal */}
       {showAdminLogin && (
-        <div className="fixed inset-0 bg-stone-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full relative">
             <button 
               onClick={() => { setShowAdminLogin(false); setAdminPassword(''); setLoginError(''); }}
-              className="absolute top-4 right-4 text-stone-400 hover:text-stone-600"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
             
             <div className="text-center mb-6">
-              <div className="w-16 h-16 bg-stone-100 rounded-full flex items-center justify-center mx-auto mb-4 text-stone-600">
+              <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-600">
                 <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"></path></svg>
               </div>
-              <h3 className="text-xl font-bold text-stone-800">ผู้ดูแลระบบ</h3>
-              <p className="text-sm text-stone-500 mt-1">กรุณากรอกรหัสผ่านเพื่อเข้าถึงข้อมูลสถิติ</p>
+              <h3 className="text-xl font-bold text-slate-800">ผู้ดูแลระบบ</h3>
+              <p className="text-sm text-slate-500 mt-1">กรุณากรอกรหัสผ่านเพื่อเข้าถึงข้อมูลสถิติ</p>
             </div>
 
             <form onSubmit={handleAdminLogin} className="space-y-4">
@@ -143,7 +142,7 @@ function App() {
                   type="password" 
                   value={adminPassword}
                   onChange={(e) => setAdminPassword(e.target.value)}
-                  className="w-full px-4 py-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-center font-bold tracking-widest text-stone-800"
+                  className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none text-center font-bold tracking-widest text-slate-800"
                   placeholder="Password"
                   autoFocus
                 />
@@ -151,7 +150,7 @@ function App() {
               </div>
               <button 
                 type="submit"
-                className="w-full py-3 bg-stone-900 hover:bg-stone-800 text-white rounded-xl font-bold shadow-lg shadow-stone-900/10 transition-all"
+                className="w-full py-3 bg-slate-900 hover:bg-slate-800 text-white rounded-xl font-bold shadow-lg shadow-slate-900/10 transition-all"
               >
                 เข้าสู่ระบบ
               </button>

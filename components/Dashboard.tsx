@@ -240,11 +240,12 @@ const Dashboard: React.FC = () => {
       `}</style>
 
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 no-print">
-        <div>
-          <h2 className="text-3xl font-bold text-stone-800 tracking-tight">
+        <div className="bg-white/60 backdrop-blur-sm p-4 rounded-2xl border border-white shadow-sm">
+          <h2 className="text-3xl font-bold text-stone-800 tracking-tight flex items-center gap-2">
+             <span className="w-2 h-8 bg-gradient-to-b from-blue-500 to-purple-600 rounded-full"></span>
              Dashboard
           </h2>
-          <p className="text-stone-400 text-sm font-medium mt-1">ระบบบริหารจัดการข้อมูลการลงเวลา</p>
+          <p className="text-stone-500 text-sm font-medium mt-1 pl-4">ระบบบริหารจัดการข้อมูลการลงเวลา</p>
         </div>
         
         <div className="flex flex-wrap gap-4 items-center">
@@ -270,27 +271,24 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-4 mb-6 border-b border-stone-200 no-print">
+      <div className="flex flex-wrap gap-2 mb-6 border-b border-stone-200/50 pb-2 no-print bg-white/40 p-2 rounded-2xl backdrop-blur-sm">
           <button 
             onClick={() => setActiveTab('realtime')}
-            className={`pb-3 px-4 text-sm font-bold transition-all relative ${activeTab === 'realtime' ? 'text-purple-600' : 'text-stone-400 hover:text-stone-600'}`}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border ${activeTab === 'realtime' ? 'bg-white text-purple-700 shadow-sm border-purple-100' : 'text-stone-500 hover:bg-white/50 border-transparent'}`}
           >
             Realtime Log
-            {activeTab === 'realtime' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 rounded-t-full"></div>}
           </button>
           <button 
             onClick={() => setActiveTab('official')}
-            className={`pb-3 px-4 text-sm font-bold transition-all relative ${activeTab === 'official' ? 'text-purple-600' : 'text-stone-400 hover:text-stone-600'}`}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border ${activeTab === 'official' ? 'bg-white text-purple-700 shadow-sm border-purple-100' : 'text-stone-500 hover:bg-white/50 border-transparent'}`}
           >
             รายงานประจำวัน (Daily)
-            {activeTab === 'official' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 rounded-t-full"></div>}
           </button>
           <button 
             onClick={() => setActiveTab('monthly')}
-            className={`pb-3 px-4 text-sm font-bold transition-all relative ${activeTab === 'monthly' ? 'text-purple-600' : 'text-stone-400 hover:text-stone-600'}`}
+            className={`px-4 py-2 rounded-xl text-sm font-bold transition-all border ${activeTab === 'monthly' ? 'bg-white text-purple-700 shadow-sm border-purple-100' : 'text-stone-500 hover:bg-white/50 border-transparent'}`}
           >
             สรุปมาสายรายเดือน (Monthly Late)
-            {activeTab === 'monthly' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 rounded-t-full"></div>}
           </button>
       </div>
 
@@ -307,27 +305,42 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10 no-print">
-            <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-            <h3 className="text-xs font-bold text-stone-400 uppercase tracking-widest mb-1">รายการวันนี้</h3>
-            <p className="text-4xl font-bold text-stone-800">{filteredRecords.length}</p>
+            <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-stone-100 relative overflow-hidden group">
+               <div className="absolute right-0 top-0 w-24 h-24 bg-stone-50 rounded-bl-[100px] -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+               <div className="relative z-10">
+                   <span className="inline-block px-3 py-1 bg-stone-100 text-stone-500 text-[10px] font-bold uppercase tracking-widest rounded-full mb-2">รายการวันนี้</span>
+                   <p className="text-4xl font-bold text-stone-800">{filteredRecords.length}</p>
+               </div>
             </div>
-            <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-            <h3 className="text-xs font-bold text-red-400 uppercase tracking-widest mb-1">มาสาย</h3>
-            <p className="text-4xl font-bold text-red-500">{lateCount}</p>
+            <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-stone-100 relative overflow-hidden group">
+               <div className="absolute right-0 top-0 w-24 h-24 bg-red-50 rounded-bl-[100px] -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+               <div className="relative z-10">
+                   <span className="inline-block px-3 py-1 bg-red-100 text-red-600 text-[10px] font-bold uppercase tracking-widest rounded-full mb-2">มาสาย</span>
+                   <p className="text-4xl font-bold text-red-500">{lateCount}</p>
+               </div>
             </div>
-            <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-            <h3 className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-1">ลา/ราชการ</h3>
-            <p className="text-4xl font-bold text-blue-500">{dutyCount}</p>
+            <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-stone-100 relative overflow-hidden group">
+               <div className="absolute right-0 top-0 w-24 h-24 bg-blue-50 rounded-bl-[100px] -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+               <div className="relative z-10">
+                   <span className="inline-block px-3 py-1 bg-blue-100 text-blue-600 text-[10px] font-bold uppercase tracking-widest rounded-full mb-2">ลา/ราชการ</span>
+                   <p className="text-4xl font-bold text-blue-500">{dutyCount}</p>
+               </div>
             </div>
-            <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
-            <h3 className="text-xs font-bold text-amber-400 uppercase tracking-widest mb-1">กลับก่อน</h3>
-            <p className="text-4xl font-bold text-amber-500">{earlyLeaveCount}</p>
+            <div className="bg-white p-6 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-stone-100 relative overflow-hidden group">
+               <div className="absolute right-0 top-0 w-24 h-24 bg-amber-50 rounded-bl-[100px] -mr-4 -mt-4 transition-transform group-hover:scale-110"></div>
+               <div className="relative z-10">
+                   <span className="inline-block px-3 py-1 bg-amber-100 text-amber-600 text-[10px] font-bold uppercase tracking-widest rounded-full mb-2">กลับก่อน</span>
+                   <p className="text-4xl font-bold text-amber-500">{earlyLeaveCount}</p>
+               </div>
             </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 no-print">
-            <div className="lg:col-span-1 bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col h-[420px]">
-            <h3 className="font-bold text-stone-800 mb-6">Overview</h3>
+            <div className="lg:col-span-1 bg-white p-8 rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col h-[420px] border border-stone-100">
+            <h3 className="font-bold text-stone-800 mb-6 flex items-center gap-2">
+                <span className="w-1.5 h-6 bg-purple-400 rounded-full"></span>
+                Overview
+            </h3>
             <div className="flex-1 relative">
                 {hasData ? (
                 <ResponsiveContainer width="100%" height="100%">
@@ -345,19 +358,22 @@ const Dashboard: React.FC = () => {
             </div>
             </div>
 
-            <div className="lg:col-span-2 bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden flex flex-col h-[420px]">
+            <div className="lg:col-span-2 bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden flex flex-col h-[420px] border border-stone-100">
             <div className="p-6 flex justify-between items-center bg-white sticky top-0 z-10 border-b border-stone-50">
-                <h3 className="font-bold text-stone-800">Records (ล่าสุด)</h3>
-                <button onClick={handleClear} className="text-[10px] font-bold text-red-400 bg-red-50 px-3 py-1 rounded-full hover:bg-red-100">RESET</button>
+                <h3 className="font-bold text-stone-800 flex items-center gap-2">
+                    <span className="w-1.5 h-6 bg-emerald-400 rounded-full"></span>
+                    Records (ล่าสุด)
+                </h3>
+                <button onClick={handleClear} className="text-[10px] font-bold text-red-400 bg-red-50 px-3 py-1 rounded-full hover:bg-red-100 border border-red-100">RESET</button>
             </div>
             <div className="overflow-y-auto flex-1 p-4">
                 <table className="w-full text-sm text-left text-stone-600">
-                <thead className="text-xs text-stone-400 uppercase tracking-widest">
-                    <tr><th className="px-4 py-2">Time</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Status</th><th className="px-4 py-2">Note</th></tr>
+                <thead className="text-xs text-stone-400 uppercase tracking-widest bg-stone-50/50 rounded-lg">
+                    <tr><th className="px-4 py-2 rounded-l-lg">Time</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Status</th><th className="px-4 py-2 rounded-r-lg">Note</th></tr>
                 </thead>
                 <tbody className="divide-y divide-stone-50">
                     {filteredRecords.map((record) => (
-                    <tr key={record.id} className="hover:bg-stone-50">
+                    <tr key={record.id} className="hover:bg-stone-50 transition-colors">
                         <td className="px-4 py-3 text-xs font-mono">
                             {new Date(record.timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'})}
                             <span className={`ml-2 px-1.5 py-0.5 rounded text-[9px] uppercase 
@@ -393,11 +409,12 @@ const Dashboard: React.FC = () => {
         /* PRINTABLE REPORTS (Daily or Monthly) */
         <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden min-h-[600px] flex flex-col">
             <div className="p-8 border-b border-stone-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-stone-50/30 no-print">
-                <div>
-                    <h3 className="text-xl font-bold text-stone-800 text-center md:text-left">
+                <div className="p-4 bg-white rounded-xl border border-stone-200 shadow-sm">
+                    <h3 className="text-xl font-bold text-stone-800 text-center md:text-left flex items-center gap-2">
+                         <span className="w-1.5 h-6 bg-stone-800 rounded-full"></span>
                         {activeTab === 'monthly' ? 'รายงานสรุปการมาสายรายเดือน' : 'ตารางสรุปรายงานการมาปฏิบัติราชการ'}
                     </h3>
-                    <p className="text-stone-500 text-sm mt-1 text-center md:text-left">
+                    <p className="text-stone-500 text-sm mt-1 text-center md:text-left pl-4">
                         โรงเรียนประจักษ์ศิลปาคม • {activeTab === 'monthly' ? `ประจำเดือน ${formatMonthYear(selectedMonth)}` : `ประจำ${new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`}
                     </p>
                 </div>
