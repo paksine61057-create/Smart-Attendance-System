@@ -40,13 +40,24 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
       };
       
       setSettingsState(newSettings);
-      saveSettings(newSettings);
-      setMsg('บันทึกพิกัดเรียบร้อย');
+      // saveSettings(newSettings); // Don't save immediately, wait for user to click Save
+      setMsg('ดึงพิกัดปัจจุบันเรียบร้อย');
     } catch (err) {
       setMsg('ไม่พบสัญญาณ - โปรดเปิด GPS');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCoordinateChange = (field: 'lat' | 'lng', value: string) => {
+    const numValue = parseFloat(value);
+    setSettingsState(prev => ({
+        ...prev,
+        officeLocation: {
+            lat: field === 'lat' ? numValue : (prev.officeLocation?.lat || 0),
+            lng: field === 'lng' ? numValue : (prev.officeLocation?.lng || 0)
+        }
+    }));
   };
 
   const handleDistanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -125,22 +136,43 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
             <div className="space-y-6">
               <div className="p-6 bg-white rounded-2xl border border-stone-100 shadow-sm">
                 <h3 className="font-bold text-stone-400 mb-3 text-xs uppercase tracking-widest">จุดลงเวลา (Office Location)</h3>
-                <p className="text-sm text-stone-600 mb-4 bg-stone-50 p-4 rounded-xl border border-stone-100 font-mono text-center">
-                  {settings.officeLocation 
-                    ? `${settings.officeLocation.lat.toFixed(6)}, ${settings.officeLocation.lng.toFixed(6)}` 
-                    : 'ยังไม่ได้ตั้งค่า'}
-                </p>
+                
+                <div className="flex gap-3 mb-4">
+                    <div className="flex-1">
+                        <label className="text-[10px] font-bold text-stone-400 mb-1 block">ละติจูด (Lat)</label>
+                        <input 
+                            type="number"
+                            step="any"
+                            value={settings.officeLocation?.lat || ''}
+                            onChange={(e) => handleCoordinateChange('lat', e.target.value)}
+                            className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-800 font-mono text-sm focus:ring-2 focus:ring-purple-200 outline-none"
+                            placeholder="13.xxxxxx"
+                        />
+                    </div>
+                    <div className="flex-1">
+                        <label className="text-[10px] font-bold text-stone-400 mb-1 block">ลองจิจูด (Lng)</label>
+                        <input 
+                            type="number"
+                            step="any"
+                            value={settings.officeLocation?.lng || ''}
+                            onChange={(e) => handleCoordinateChange('lng', e.target.value)}
+                            className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-800 font-mono text-sm focus:ring-2 focus:ring-purple-200 outline-none"
+                            placeholder="100.xxxxxx"
+                        />
+                    </div>
+                </div>
+
                 <button
                   onClick={handleSetCurrentLocation}
                   disabled={loading}
-                  className="w-full bg-stone-900 text-white hover:bg-stone-800 py-3.5 px-4 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm shadow-lg shadow-stone-900/10"
+                  className="w-full bg-white border border-stone-200 text-stone-600 hover:bg-stone-50 py-3 px-4 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm"
                 >
                   {loading ? (
                     <span className="animate-pulse">Locating...</span>
                   ) : (
                     <>
                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                      ใชัพิกัดปัจจุบันของฉัน
+                      ดึงพิกัดปัจจุบันใส่ในช่อง
                     </>
                   )}
                 </button>

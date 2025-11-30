@@ -4,6 +4,11 @@ import { CheckInRecord, AppSettings } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
+// *** สำคัญ: ใส่ URL ของ Google Apps Script Web App ที่นี่ เพื่อให้เป็นค่าเริ่มต้นสำหรับทุกเครื่อง ***
+// วิธีการ: Deploy Apps Script > เลือก Web App > Who has access: Anyone > Copy URL
+// ตัวอย่าง: const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbx.../exec';
+const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
+
 export const saveRecord = (record: CheckInRecord) => {
   const records = getRecords();
   records.push(record);
@@ -11,8 +16,10 @@ export const saveRecord = (record: CheckInRecord) => {
   
   // Attempt to sync to Google Sheets if URL is present
   const settings = getSettings();
-  if (settings.googleSheetUrl) {
-    sendToGoogleSheets(record, settings.googleSheetUrl);
+  const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+  
+  if (targetUrl) {
+    sendToGoogleSheets(record, targetUrl);
   }
 };
 
@@ -25,23 +32,77 @@ export const clearRecords = () => {
   localStorage.removeItem(RECORDS_KEY);
 }
 
-export const saveSettings = (settings: AppSettings) => {
+export const saveSettings = async (settings: AppSettings) => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  
+  // Sync Global Settings to Cloud if URL is available
+  const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+  if (targetUrl && settings.officeLocation) {
+     try {
+         await fetch(targetUrl, {
+             method: 'POST',
+             mode: 'no-cors',
+             headers: { 'Content-Type': 'application/json' },
+             body: JSON.stringify({
+                 action: 'saveSettings',
+                 lat: settings.officeLocation.lat,
+                 lng: settings.officeLocation.lng,
+                 maxDistance: settings.maxDistanceMeters
+             })
+         });
+         console.log("Global settings synced to cloud");
+     } catch (e) {
+         console.error("Failed to sync settings to cloud", e);
+     }
+  }
 };
 
 export const getSettings = (): AppSettings => {
   const data = localStorage.getItem(SETTINGS_KEY);
-  // Default settings
-  return data ? JSON.parse(data) : {
-    officeLocation: null, // Must be set by user initially
+  let localSettings = data ? JSON.parse(data) : {
+    officeLocation: null,
     maxDistanceMeters: 10,
     googleSheetUrl: ''
   };
+
+  // If local doesn't have URL but code has default, use default
+  if (!localSettings.googleSheetUrl && DEFAULT_GOOGLE_SHEET_URL) {
+      localSettings.googleSheetUrl = DEFAULT_GOOGLE_SHEET_URL;
+  }
+  
+  return localSettings;
 };
+
+// Function called when App starts to get the "Official" location from Admin
+export const syncSettingsFromCloud = async (): Promise<boolean> => {
+    const currentSettings = getSettings();
+    const targetUrl = currentSettings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+
+    if (!targetUrl) return false;
+
+    try {
+        const response = await fetch(targetUrl);
+        const cloudConfig = await response.json();
+
+        if (cloudConfig && cloudConfig.officeLocation) {
+            const newSettings: AppSettings = {
+                ...currentSettings,
+                officeLocation: cloudConfig.officeLocation,
+                maxDistanceMeters: cloudConfig.maxDistanceMeters || 10,
+                googleSheetUrl: targetUrl // Ensure URL is saved
+            };
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+            console.log("Settings updated from cloud:", newSettings);
+            return true;
+        }
+    } catch (e) {
+        console.error("Could not fetch global settings", e);
+    }
+    return false;
+}
 
 export const exportToCSV = (records?: CheckInRecord[]): string => {
   const dataToExport = records || getRecords();
-  // Add Type and Reason to header
   const header = ['ID,Staff ID,Name,Role,Type,Reason,Timestamp,Date,Time,Status,Latitude,Longitude,Distance(m),AI Verification'];
   const rows = dataToExport.map(r => {
     const dateObj = new Date(r.timestamp);
@@ -78,16 +139,8 @@ export const exportToCSV = (records?: CheckInRecord[]): string => {
   return [header, ...rows].join('\n');
 };
 
-// Simple Fire-and-forget sync to Google Sheets Web App
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string) => {
   try {
-    // Note: Google Apps Script Web Apps require 'no-cors' for simple fetch from browser 
-    // or a proxy. For this demo, we assume the user sets up the script to accept POST.
-    // However, direct fetch to Google Scripts often has CORS issues. 
-    // The most reliable way without a proxy is submitting a hidden form or using 'no-cors' 
-    // which implies we won't know if it succeeded or failed in the UI.
-    
-    // Using no-cors mode (Opaque response)
     await fetch(url, {
       method: 'POST',
       mode: 'no-cors', 

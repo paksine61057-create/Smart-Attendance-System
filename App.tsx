@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import CheckInForm from './components/CheckInForm';
 import Dashboard from './components/Dashboard';
 import Settings from './components/Settings';
+import { syncSettingsFromCloud } from './services/storageService';
 
 function App() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -9,6 +11,14 @@ function App() {
   const [adminPassword, setAdminPassword] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [loginError, setLoginError] = useState('');
+
+  // Sync settings on load
+  useEffect(() => {
+    const initConfig = async () => {
+        await syncSettingsFromCloud();
+    };
+    initConfig();
+  }, []);
 
   const handleAdminLogin = (e: React.FormEvent) => {
     e.preventDefault();

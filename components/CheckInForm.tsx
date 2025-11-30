@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AppSettings, GeoLocation, CheckInRecord, AttendanceType, Staff } from '../types';
 import { getCurrentPosition, getDistanceFromLatLonInMeters } from '../services/geoService';
-import { saveRecord, getSettings } from '../services/storageService';
+import { saveRecord, getSettings, syncSettingsFromCloud } from '../services/storageService';
 import { analyzeCheckInImage } from '../services/geminiService';
 import { getStaffById } from '../services/staffService';
 
@@ -90,7 +90,18 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   }, [step]);
 
   const validateLocation = async () => {
-    if (!settings?.officeLocation) {
+    let currentSettings = settings;
+    
+    // If settings are missing, try to sync from cloud one last time
+    if (!currentSettings?.officeLocation) {
+        const synced = await syncSettingsFromCloud();
+        if (synced) {
+            currentSettings = getSettings();
+            setSettings(currentSettings);
+        }
+    }
+
+    if (!currentSettings?.officeLocation) {
       if (isSpecialRequest()) {
           // Special request can proceed without office location set, but warn
           return await getCurrentPosition().then(pos => ({ lat: pos.coords.latitude, lng: pos.coords.longitude })).catch(() => ({ lat: 0, lng: 0 }));
@@ -103,14 +114,14 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const dist = getDistanceFromLatLonInMeters(
         position.coords.latitude,
         position.coords.longitude,
-        settings.officeLocation.lat,
-        settings.officeLocation.lng
+        currentSettings.officeLocation.lat,
+        currentSettings.officeLocation.lng
       );
       setCurrentDistance(dist);
       
       // If special request (duty/leave), we ignore the max distance check
-      if (dist > settings.maxDistanceMeters && !isSpecialRequest()) {
-        setLocationError(`คุณอยู่ห่างจากจุดเช็คอิน ${Math.round(dist)} เมตร (ต้องไม่เกิน ${settings.maxDistanceMeters} เมตร)`);
+      if (dist > currentSettings.maxDistanceMeters && !isSpecialRequest()) {
+        setLocationError(`คุณอยู่ห่างจากจุดเช็คอิน ${Math.round(dist)} เมตร (ต้องไม่เกิน ${currentSettings.maxDistanceMeters} เมตร)`);
         return false;
       }
       return { lat: position.coords.latitude, lng: position.coords.longitude };
@@ -206,7 +217,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         }, 2000);
       }
     }
-  }, [currentUser, attendanceType, reason, currentDistance, isEarlyDeparture, isLateArrival, isSpecialRequest]);
+  }, [currentUser, attendanceType, reason, currentDistance, isEarlyDeparture, isLateArrival, isSpecialRequest, validateLocation, onSuccess]);
 
   if (step === 'info') {
     return (
