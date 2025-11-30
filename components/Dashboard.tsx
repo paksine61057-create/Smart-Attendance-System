@@ -449,7 +449,7 @@ const Dashboard: React.FC = () => {
                             <p className="text-xs text-stone-600 font-medium tracking-wide">
                                 {activeTab === 'monthly' 
                                     ? `รายงานสรุปการมาสายรายเดือน ประจำเดือน ${formatMonthYear(selectedMonth)}` 
-                                    : 'รายงานการมาปฏิบัติราชการประจำวัน'}
+                                    : `รายงานการมาปฏิบัติราชการ ประจำ${new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`}
                             </p>
                          </div>
                     </div>
