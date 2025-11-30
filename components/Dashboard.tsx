@@ -228,7 +228,7 @@ const Dashboard: React.FC = () => {
             top: 0;
             width: 210mm;
             min-height: 297mm;
-            padding: 15mm 15mm; /* Internal padding for content */
+            padding: 10mm 15mm; /* Internal padding for content */
             background: white;
             z-index: 9999;
             box-sizing: border-box;
@@ -441,80 +441,76 @@ const Dashboard: React.FC = () => {
             <div id="printable-report" className="overflow-x-auto p-4 md:p-0">
                 
                 {/* Print Header */}
-                <div className="hidden print:flex flex-col items-center mb-2 pt-0 border-b border-stone-800 pb-2">
-                    <div className="flex items-center gap-4 mb-1">
-                         <img src="https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png" className="w-14 h-14 object-contain grayscale-0" alt="Logo" />
-                         <div className="text-center">
-                            <h1 className="text-xl font-bold text-stone-900 leading-tight">โรงเรียนประจักษ์ศิลปาคม</h1>
-                            <p className="text-xs text-stone-600 font-medium tracking-wide">
-                                {activeTab === 'monthly' 
-                                    ? `รายงานสรุปการมาสายรายเดือน ประจำเดือน ${formatMonthYear(selectedMonth)}` 
-                                    : `รายงานการมาปฏิบัติราชการ ประจำ${new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`}
-                            </p>
-                         </div>
-                    </div>
+                <div className="hidden print:flex flex-col items-center justify-center mb-6">
+                     <img src="https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png" className="w-20 h-20 object-contain grayscale-0 mb-3" alt="Logo" />
+                     <h1 className="text-2xl font-bold text-black leading-tight">โรงเรียนประจักษ์ศิลปาคม</h1>
+                     <p className="text-sm text-black font-medium tracking-wide mt-1">
+                        {activeTab === 'monthly' 
+                            ? `รายงานสรุปการมาสายรายเดือน ประจำเดือน ${formatMonthYear(selectedMonth)}` 
+                            : `รายงานการมาปฏิบัติราชการ ประจำ${new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`}
+                     </p>
                 </div>
 
-                <table className="w-full text-left border-collapse border border-stone-300">
+                <table className="w-full text-left border-collapse border-b-2 border-t-2 border-black">
                     <thead>
-                        <tr className="bg-stone-800 text-white text-sm uppercase tracking-wider print:bg-stone-100 print:text-black print:border-b-2 print:border-stone-800">
+                        <tr className="text-black text-sm uppercase tracking-wider border-b-2 border-black">
                             {activeTab === 'monthly' ? (
                                 <>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[5%]">ลำดับ</th>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[30%]">ชื่อ-สกุล</th>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[20%]">ตำแหน่ง</th>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[10%]">จำนวนครั้ง</th>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[20%]">วันที่มาสาย</th>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[15%]">หมายเหตุ</th>
+                                    <th className="px-2 py-2 border-r border-black text-center w-[5%]">ลำดับ</th>
+                                    <th className="px-2 py-2 border-r border-black text-center w-[30%]">ชื่อ-สกุล</th>
+                                    <th className="px-2 py-2 border-r border-black text-center w-[20%]">ตำแหน่ง</th>
+                                    <th className="px-2 py-2 border-r border-black text-center w-[10%]">จำนวนครั้ง</th>
+                                    <th className="px-2 py-2 border-r border-black text-center w-[20%]">วันที่มาสาย</th>
+                                    <th className="px-2 py-2 text-center w-[15%]">หมายเหตุ</th>
                                 </>
                             ) : (
                                 <>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[5%]">ลำดับ</th>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[30%]">ชื่อ-สกุล</th>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[20%]">ตำแหน่ง</th>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[10%]">เวลามา</th>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[10%]">เวลากลับ</th>
-                                    <th className="px-2 py-1.5 border border-stone-300 text-center text-xs w-[25%]">หมายเหตุ</th>
+                                    <th className="px-2 py-2 border-r border-black text-center w-[5%]">ลำดับ</th>
+                                    <th className="px-2 py-2 border-r border-black text-center w-[30%]">ชื่อ-สกุล</th>
+                                    <th className="px-2 py-2 border-r border-black text-center w-[20%]">ตำแหน่ง</th>
+                                    <th className="px-2 py-2 border-r border-black text-center w-[10%]">เวลามา</th>
+                                    <th className="px-2 py-2 border-r border-black text-center w-[10%]">เวลากลับ</th>
+                                    <th className="px-2 py-2 text-center w-[25%]">หมายเหตุ</th>
                                 </>
                             )}
                         </tr>
                     </thead>
-                    <tbody className="text-sm print:text-xs">
+                    <tbody className="text-sm print:text-sm">
                         {activeTab === 'monthly' ? (
                             monthlyReportData.map((row, index) => (
-                                <tr key={row.staffId} className="print:hover:bg-transparent transition-colors">
-                                    <td className="px-2 py-1 border border-stone-300 text-stone-500 text-center font-mono">{index + 1}</td>
-                                    <td className="px-2 py-1 border border-stone-300 text-left pl-3">
-                                        <div className="font-bold text-stone-800 print:text-black">{row.name}</div>
+                                <tr key={row.staffId} className="print:hover:bg-transparent transition-colors border-b border-gray-300">
+                                    <td className="px-2 py-1.5 border-x border-gray-300 text-black text-center font-mono">{index + 1}</td>
+                                    <td className="px-2 py-1.5 border-r border-gray-300 text-left pl-3">
+                                        <div className="font-bold text-black">{row.name}</div>
                                     </td>
-                                    <td className="px-2 py-1 border border-stone-300 text-stone-600 print:text-black text-center">{row.role}</td>
-                                    <td className={`px-2 py-1 border border-stone-300 text-center font-bold ${row.lateCount > 0 ? 'text-red-600' : 'text-stone-300'}`}>
+                                    <td className="px-2 py-1.5 border-r border-gray-300 text-black text-center">{row.role}</td>
+                                    <td className={`px-2 py-1.5 border-r border-gray-300 text-center font-bold ${row.lateCount > 0 ? 'text-black' : 'text-gray-400'}`}>
                                         {row.lateCount > 0 ? row.lateCount : '-'}
                                     </td>
-                                    <td className="px-2 py-1 border border-stone-300 text-stone-600 print:text-black text-[10px] text-center">
+                                    <td className="px-2 py-1.5 border-r border-gray-300 text-black text-xs text-center">
                                         {row.dates || '-'}
                                     </td>
-                                    <td className="px-2 py-1 border border-stone-300 text-stone-500 print:text-black text-center">
+                                    <td className="px-2 py-1.5 border-r border-gray-300 text-black text-center">
                                         {row.note || ''}
                                     </td>
                                 </tr>
                             ))
                         ) : (
                             officialReportData.map((row, index) => (
-                                <tr key={row.staffId} className="print:hover:bg-transparent transition-colors">
-                                    <td className="px-2 py-1 border border-stone-300 text-stone-500 text-center font-mono">{index + 1}</td>
-                                    <td className="px-2 py-1 border border-stone-300 text-left pl-3">
-                                        <div className="font-bold text-stone-800 print:text-black">{row.name}</div>
+                                <tr key={row.staffId} className="print:hover:bg-transparent transition-colors border-b border-gray-300">
+                                    <td className="px-2 py-1.5 border-x border-gray-300 text-black text-center font-mono">{index + 1}</td>
+                                    <td className="px-2 py-1.5 border-r border-gray-300 text-left pl-3">
+                                        <div className="font-bold text-black">{row.name}</div>
                                     </td>
-                                    <td className="px-2 py-1 border border-stone-300 text-stone-600 print:text-black text-center">{row.role}</td>
-                                    <td className={`px-2 py-1 border border-stone-300 text-center font-mono font-bold ${row.arrivalStatus === 'Late' ? 'text-red-600 bg-red-50 print:bg-transparent' : row.arrivalTime !== '-' && row.arrivalStatus !== 'Leave' ? 'text-emerald-700' : row.arrivalStatus === 'Leave' ? 'text-blue-600' : 'text-stone-300'}`}>
+                                    <td className="px-2 py-1.5 border-r border-gray-300 text-black text-center">{row.role}</td>
+                                    <td className={`px-2 py-1.5 border-r border-gray-300 text-center font-mono font-bold text-black`}>
                                         {row.arrivalTime}
                                         {row.arrivalStatus === 'Late' && <span className="print:hidden ml-1">⚠️</span>}
                                     </td>
-                                    <td className={`px-2 py-1 border border-stone-300 text-center font-mono font-bold ${row.departureStatus === 'Early Leave' ? 'text-amber-600 bg-amber-50 print:bg-transparent' : row.departureTime !== '-' && row.departureStatus !== 'Leave' ? 'text-purple-700' : row.departureStatus === 'Leave' ? 'text-blue-600' : 'text-stone-300'}`}>
+                                    <td className={`px-2 py-1.5 border-r border-gray-300 text-center font-mono font-bold text-black`}>
                                         {row.departureTime}
                                     </td>
-                                    <td className="px-2 py-1 border border-stone-300 text-stone-500 print:text-black max-w-xs break-words text-center">
+                                    <td className="px-2 py-1.5 border-r border-gray-300 text-black max-w-xs break-words text-center">
                                         {row.note || ''}
                                     </td>
                                 </tr>
@@ -524,20 +520,20 @@ const Dashboard: React.FC = () => {
                 </table>
                 
                 {/* Print Footer / Signature Area */}
-                <div className="hidden print:flex justify-between items-start mt-6 px-8 break-inside-avoid">
+                <div className="hidden print:flex justify-between items-start mt-8 px-8 break-inside-avoid">
                     <div className="text-center w-48">
-                        <p className="text-xs font-bold mb-6">ลงชื่อ..........................................................</p>
-                        <p className="text-xs font-bold">เจ้าหน้าที่/หัวหน้าฝ่ายบุคคล</p>
-                        <p className="text-[10px] text-stone-500">ผู้ตรวจสอบ</p>
+                        <p className="text-sm font-bold mb-8">ลงชื่อ..........................................................</p>
+                        <p className="text-sm font-bold">เจ้าหน้าที่/หัวหน้าฝ่ายบุคคล</p>
+                        <p className="text-xs text-black mt-1">ผู้ตรวจสอบ</p>
                     </div>
                     <div className="text-center w-48">
-                         <p className="text-xs font-bold mb-6">ลงชื่อ..........................................................</p>
-                        <p className="text-xs font-bold">ผู้อำนวยการโรงเรียน</p>
-                        <p className="text-[10px] text-stone-500">ผู้รับรอง</p>
+                         <p className="text-sm font-bold mb-8">ลงชื่อ..........................................................</p>
+                        <p className="text-sm font-bold">ผู้อำนวยการโรงเรียน</p>
+                        <p className="text-xs text-black mt-1">ผู้รับรอง</p>
                     </div>
                 </div>
 
-                <div className="hidden print:block text-[8px] text-stone-400 mt-2 text-center">
+                <div className="hidden print:block text-[10px] text-gray-500 mt-4 text-center">
                     เอกสารนี้สร้างโดยระบบ SchoolCheckIn AI System | ข้อมูล ณ เวลา {new Date().toLocaleTimeString('th-TH')}
                 </div>
             </div>
