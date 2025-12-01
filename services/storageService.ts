@@ -101,6 +101,29 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
     return false;
 }
 
+// Function to fetch all records from Google Sheets (Cloud)
+export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
+    const settings = getSettings();
+    const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+
+    if (!targetUrl) return [];
+
+    try {
+        // Calling doGet with ?action=getRecords
+        const response = await fetch(`${targetUrl}?action=getRecords`);
+        const data = await response.json();
+        
+        if (Array.isArray(data)) {
+            console.log(`Fetched ${data.length} records from cloud.`);
+            return data as CheckInRecord[];
+        }
+        return [];
+    } catch (e) {
+        console.error("Failed to fetch global records", e);
+        return [];
+    }
+};
+
 export const exportToCSV = (records?: CheckInRecord[]): string => {
   const dataToExport = records || getRecords();
   const header = ['ID,Staff ID,Name,Role,Type,Reason,Timestamp,Date,Time,Status,Latitude,Longitude,Distance(m),AI Verification'];

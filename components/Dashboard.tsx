@@ -1,9 +1,9 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
-import { getRecords, clearRecords, exportToCSV } from '../services/storageService';
+import { getRecords, clearRecords, exportToCSV, fetchGlobalRecords } from '../services/storageService';
 import { CheckInRecord, Staff } from '../types';
 import { getAllStaff } from '../services/staffService';
 
@@ -11,6 +11,7 @@ const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'realtime' | 'official' | 'monthly'>('realtime');
   const [allRecords, setAllRecords] = useState<CheckInRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<CheckInRecord[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
   
   // Date states
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -22,12 +23,31 @@ const Dashboard: React.FC = () => {
   const [officialReportData, setOfficialReportData] = useState<any[]>([]);
   const [monthlyReportData, setMonthlyReportData] = useState<any[]>([]);
 
-  useEffect(() => {
-    // Load data
-    const records = getRecords();
-    setAllRecords(records);
-    setStaffList(getAllStaff());
+  // Function to load data from Cloud
+  const syncData = useCallback(async () => {
+      setIsSyncing(true);
+      try {
+          const cloudRecords = await fetchGlobalRecords();
+          if (cloudRecords.length > 0) {
+              setAllRecords(cloudRecords);
+          } else {
+              // Fallback to local if cloud is empty or error
+              const local = getRecords();
+              setAllRecords(local);
+          }
+      } catch (e) {
+          console.error("Sync error", e);
+          const local = getRecords();
+          setAllRecords(local);
+      } finally {
+          setIsSyncing(false);
+      }
   }, []);
+
+  useEffect(() => {
+    syncData(); // Load cloud data on mount
+    setStaffList(getAllStaff());
+  }, [syncData]);
 
   useEffect(() => {
     // 1. DAILY REPORT LOGIC
@@ -188,7 +208,7 @@ const Dashboard: React.FC = () => {
   };
 
   const handleClear = () => {
-    if(confirm("ยืนยันการลบข้อมูลทั้งหมด? (ไม่สามารถกู้คืนได้)")) {
+    if(confirm("ยืนยันการลบข้อมูล (เฉพาะในเครื่องนี้)?\n(ข้อมูลบน Cloud จะไม่ถูกลบ)")) {
       clearRecords();
       setAllRecords([]);
       setFilteredRecords([]);
@@ -249,6 +269,16 @@ const Dashboard: React.FC = () => {
         </div>
         
         <div className="flex flex-wrap gap-4 items-center">
+             {/* Sync Button */}
+             <button 
+                onClick={syncData}
+                disabled={isSyncing}
+                className="px-4 py-3 bg-white text-blue-600 border border-blue-100 rounded-xl font-bold text-sm shadow-sm hover:bg-blue-50 transition-all flex items-center gap-2"
+             >
+                <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                {isSyncing ? 'กำลังซิงค์...' : 'Sync ข้อมูลล่าสุด'}
+             </button>
+
              {/* Dynamic Date/Month Picker */}
             <div className="relative">
                 {activeTab === 'monthly' ? (
@@ -364,7 +394,7 @@ const Dashboard: React.FC = () => {
                     <span className="w-1.5 h-6 bg-emerald-400 rounded-full"></span>
                     Records (ล่าสุด)
                 </h3>
-                <button onClick={handleClear} className="text-[10px] font-bold text-red-400 bg-red-50 px-3 py-1 rounded-full hover:bg-red-100 border border-red-100">RESET</button>
+                <button onClick={handleClear} className="text-[10px] font-bold text-red-400 bg-red-50 px-3 py-1 rounded-full hover:bg-red-100 border border-red-100">CLEAR CACHE</button>
             </div>
             <div className="overflow-y-auto flex-1 p-4">
                 <table className="w-full text-sm text-left text-stone-600">
