@@ -6,8 +6,13 @@ const SETTINGS_KEY = 'school_checkin_settings';
 
 // *** สำคัญ: ใส่ URL ของ Google Apps Script Web App ที่นี่ เพื่อให้เป็นค่าเริ่มต้นสำหรับทุกเครื่อง ***
 // วิธีการ: Deploy Apps Script > เลือก Web App > Who has access: Anyone > Copy URL
-// ตัวอย่าง: const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbx.../exec';
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
+
+// พิกัดเริ่มต้น: โรงเรียนประจักษ์ศิลปาคม (Hardcoded)
+const HARDCODED_OFFICE_LOCATION = {
+    lat: 17.345854, 
+    lng: 102.834789
+};
 
 export const saveRecord = (record: CheckInRecord) => {
   const records = getRecords();
@@ -87,6 +92,7 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
         const cloudConfig = await response.json();
 
         if (cloudConfig && cloudConfig.officeLocation) {
+            // Cloud has data, use it
             const newSettings: AppSettings = {
                 ...currentSettings,
                 officeLocation: cloudConfig.officeLocation,
@@ -96,9 +102,37 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
             console.log("Settings updated from cloud:", newSettings);
             return true;
+        } else {
+             // Cloud is empty/null! Use Hardcoded Seed
+             console.log("Cloud has no settings. Seeding default location (Prajak Silpakom School)...");
+             const seedSettings: AppSettings = {
+                 ...currentSettings,
+                 officeLocation: HARDCODED_OFFICE_LOCATION,
+                 maxDistanceMeters: 20, // Default distance allowance
+                 googleSheetUrl: targetUrl
+             };
+             
+             // 1. Save locally
+             localStorage.setItem(SETTINGS_KEY, JSON.stringify(seedSettings));
+             
+             // 2. Upload to Cloud so it becomes the database record
+             await saveSettings(seedSettings);
+             return true;
         }
     } catch (e) {
         console.error("Could not fetch global settings", e);
+        
+        // Error fetching? Fallback to hardcoded locally if no location set
+        if (!currentSettings.officeLocation) {
+             const fallbackSettings: AppSettings = {
+                ...currentSettings,
+                officeLocation: HARDCODED_OFFICE_LOCATION,
+                maxDistanceMeters: 20,
+                googleSheetUrl: targetUrl
+            };
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(fallbackSettings));
+            return true;
+        }
     }
     return false;
 }
