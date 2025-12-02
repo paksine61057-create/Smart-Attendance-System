@@ -6,6 +6,12 @@ const SETTINGS_KEY = 'school_checkin_settings';
 
 // *** สำคัญ: ใส่ URL ของ Google Apps Script Web App ที่นี่ เพื่อให้เป็นค่าเริ่มต้นสำหรับทุกเครื่อง ***
 // วิธีการ: Deploy Apps Script > เลือก Web App > Who has access: Anyone > Copy URL
+// 
+// ⚠️ หากพบ Error "DriveApp Permission" หรือรูปไม่ขึ้น:
+// 1. ไปที่ Google Apps Script
+// 2. สร้างฟังก์ชันใหม่: function setupDrivePermission() { DriveApp.getRootFolder(); }
+// 3. กด Run ฟังก์ชันนี้เพื่อขอสิทธิ์
+// 4. Deploy ใหม่อีกครั้ง (New Version)
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
 
 // พิกัดเริ่มต้น: โรงเรียนประจักษ์ศิลปาคม (Hardcoded)
