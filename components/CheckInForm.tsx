@@ -55,6 +55,12 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         setSettings(getSettings());
     };
     initSettings();
+
+    // Load Saved Staff ID
+    const savedId = localStorage.getItem('school_checkin_saved_staff_id');
+    if (savedId) {
+        setStaffIdInput(savedId);
+    }
   }, []);
 
   // Auto-login check when typing ID
@@ -142,6 +148,10 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       alert("กรุณาระบุรหัสบุคลากรที่ถูกต้อง");
       return;
     }
+    
+    // SAVE STAFF ID LOCALLY
+    localStorage.setItem('school_checkin_saved_staff_id', currentUser.id);
+
     if (isEarlyDeparture() && !reason.trim()) {
       alert("กรุณาระบุเหตุผลที่กลับก่อนเวลา 16.00 น.");
       return;
@@ -254,7 +264,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         onChange={(e) => setStaffIdInput(e.target.value.toUpperCase())}
                         className={`w-full px-4 py-3 md:py-4 rounded-2xl focus:ring-4 outline-none transition-all font-bold text-lg text-center tracking-wider shadow-lg
                         ${currentUser 
-                            ? 'bg-white text-emerald-700 border-2 border-emerald-400 focus:ring-emerald-400/30' 
+                            ? 'bg-white text-emerald-700 border-4 border-emerald-400 focus:ring-emerald-400/30' 
                             : 'bg-white text-stone-700 border-4 border-amber-400 focus:border-amber-500 focus:ring-amber-400/50 placeholder-stone-400'}`}
                         placeholder="เช่น PJ001"
                         maxLength={5}
