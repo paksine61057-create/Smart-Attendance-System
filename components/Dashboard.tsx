@@ -198,13 +198,12 @@ const Dashboard: React.FC = () => {
         row.role,
         row.arrivalTime,
         row.departureTime,
-        row.hasImage ? 'Yes' : '-',
         row.note
      ]);
 
      autoTable(doc, {
         startY: 40,
-        head: [['No.', 'Name', 'Role', 'Arrival', 'Departure', 'Photo', 'Note']],
+        head: [['No.', 'Name', 'Role', 'Arrival', 'Departure', 'Note']],
         body: tableBody,
         theme: 'grid',
         styles: { fontSize: 9, font: 'helvetica' },
@@ -544,8 +543,7 @@ const Dashboard: React.FC = () => {
                                     <th className="px-2 py-1 border-r border-black text-center w-[20%]">ตำแหน่ง</th>
                                     <th className="px-2 py-1 border-r border-black text-center w-[10%]">เวลามา</th>
                                     <th className="px-2 py-1 border-r border-black text-center w-[10%]">เวลากลับ</th>
-                                    <th className="px-2 py-1 border-r border-black text-center w-[5%]">รูปถ่าย</th>
-                                    <th className="px-2 py-1 text-center w-[20%]">หมายเหตุ</th>
+                                    <th className="px-2 py-1 text-center w-[25%]">หมายเหตุ</th>
                                 </>
                             )}
                         </tr>
@@ -584,9 +582,6 @@ const Dashboard: React.FC = () => {
                                     </td>
                                     <td className={`px-2 py-0.5 border-r border-gray-300 text-center font-mono font-bold text-black`}>
                                         {row.departureTime}
-                                    </td>
-                                    <td className="px-2 py-0.5 border-r border-gray-300 text-center text-black">
-                                        {row.hasImage ? '✓' : ''}
                                     </td>
                                     <td className="px-2 py-0.5 border-r border-gray-300 text-black max-w-xs break-words text-center text-[9px]">
                                         {row.note || ''}
