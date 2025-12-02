@@ -222,6 +222,14 @@ const Dashboard: React.FC = () => {
     return date.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
   };
 
+  const openImage = (url?: string) => {
+      if (!url || url === '-' || url === 'undefined') {
+          alert("ไม่พบรูปภาพ หรือรูปภาพยังไม่ได้อัปโหลด");
+          return;
+      }
+      window.open(url, '_blank');
+  };
+
   return (
     <div className="w-full">
       <style>{`
@@ -399,7 +407,13 @@ const Dashboard: React.FC = () => {
             <div className="overflow-y-auto flex-1 p-4">
                 <table className="w-full text-sm text-left text-stone-600">
                 <thead className="text-xs text-stone-400 uppercase tracking-widest bg-stone-50/50 rounded-lg">
-                    <tr><th className="px-4 py-2 rounded-l-lg">Time</th><th className="px-4 py-2">Name</th><th className="px-4 py-2">Status</th><th className="px-4 py-2 rounded-r-lg">Note</th></tr>
+                    <tr>
+                        <th className="px-4 py-2 rounded-l-lg">Time</th>
+                        <th className="px-4 py-2">Name</th>
+                        <th className="px-4 py-2">Status</th>
+                        <th className="px-4 py-2">Note</th>
+                        <th className="px-4 py-2 rounded-r-lg text-center">หลักฐาน</th>
+                    </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-50">
                     {filteredRecords.map((record) => (
@@ -427,6 +441,19 @@ const Dashboard: React.FC = () => {
                             </span>
                         </td>
                         <td className="px-4 py-3 text-xs text-stone-400">{record.reason || '-'}</td>
+                        <td className="px-4 py-3 text-center">
+                            {(record.imageUrl && record.imageUrl.length > 20) ? (
+                                <button 
+                                    onClick={() => openImage(record.imageUrl)}
+                                    className="p-1.5 bg-indigo-50 text-indigo-500 rounded-lg hover:bg-indigo-100 transition-colors"
+                                    title="ดูรูปภาพ"
+                                >
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                </button>
+                            ) : (
+                                <span className="text-stone-300 text-[10px]">-</span>
+                            )}
+                        </td>
                     </tr>
                     ))}
                 </tbody>
