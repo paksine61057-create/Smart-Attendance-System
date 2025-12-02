@@ -173,11 +173,24 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const capturePhoto = useCallback(async () => {
     if (videoRef.current && canvasRef.current && currentUser) {
       const context = canvasRef.current.getContext('2d');
-      if (context) {
-        canvasRef.current.width = videoRef.current.videoWidth;
-        canvasRef.current.height = videoRef.current.videoHeight;
-        context.drawImage(videoRef.current, 0, 0);
-        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.8);
+      const video = videoRef.current;
+      
+      if (context && video.videoWidth) {
+        // RESIZE LOGIC: Reduce image size for reliable upload
+        const MAX_WIDTH = 640; // Max width 640px is sufficient for verification
+        const scale = MAX_WIDTH / video.videoWidth;
+        const width = MAX_WIDTH;
+        const height = video.videoHeight * scale;
+
+        canvasRef.current.width = width;
+        canvasRef.current.height = height;
+        
+        // Draw resized image
+        context.drawImage(video, 0, 0, width, height);
+        
+        // Get Base64 with reduced quality (0.6)
+        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.6);
+        
         setCapturedImage(imageBase64);
         setStep('verifying');
         
