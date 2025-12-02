@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type } from "@google/genai";
 import { CheckInRecord } from "../types";
 
@@ -49,7 +50,7 @@ export const generateDailyReportSummary = async (records: CheckInRecord[]): Prom
 
       Summary Requirements:
       1. Mention total check-ins (Arrivals vs Departures).
-      2. Highlight any Late arrivals (after 8:00) or Early Departures (before 16:30) and their reasons.
+      2. Highlight any Late arrivals (after 8:00) or Early Departures (before 16:00) and their reasons.
       3. Keep it formal and concise (max 3 sentences).
     `;
 

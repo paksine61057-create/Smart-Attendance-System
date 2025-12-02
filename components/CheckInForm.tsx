@@ -28,7 +28,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     if (attendanceType !== 'departure') return false;
     const now = new Date();
     const targetTime = new Date();
-    targetTime.setHours(16, 30, 0, 0); 
+    targetTime.setHours(16, 0, 0, 0); // Changed to 16:00
     return now < targetTime;
   }, [attendanceType]);
 
@@ -143,7 +143,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       return;
     }
     if (isEarlyDeparture() && !reason.trim()) {
-      alert("กรุณาระบุเหตุผลที่กลับก่อนเวลา 16.30 น.");
+      alert("กรุณาระบุเหตุผลที่กลับก่อนเวลา 16.00 น.");
       return;
     }
     if (isLateArrival() && !reason.trim()) {
@@ -184,7 +184,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
             status = now > startOfWork ? 'Late' : 'On Time';
         } else if (attendanceType === 'departure') {
             const endOfWork = new Date();
-            endOfWork.setHours(16, 30, 0, 0); 
+            endOfWork.setHours(16, 0, 0, 0); // Changed to 16:00
             status = now < endOfWork ? 'Early Leave' : 'Normal';
         } else if (attendanceType === 'duty') {
             status = 'Duty';
