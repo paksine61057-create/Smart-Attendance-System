@@ -81,7 +81,9 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
     if (!targetUrl) return false;
 
     try {
-        const response = await fetch(targetUrl);
+        // Add timestamp to prevent caching (Cache Busting)
+        const cacheBuster = new Date().getTime();
+        const response = await fetch(`${targetUrl}?t=${cacheBuster}`);
         const cloudConfig = await response.json();
 
         if (cloudConfig && cloudConfig.officeLocation) {
@@ -110,7 +112,8 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
 
     try {
         // Calling doGet with ?action=getRecords
-        const response = await fetch(`${targetUrl}?action=getRecords`);
+        const cacheBuster = new Date().getTime();
+        const response = await fetch(`${targetUrl}?action=getRecords&t=${cacheBuster}`);
         const data = await response.json();
         
         if (Array.isArray(data)) {

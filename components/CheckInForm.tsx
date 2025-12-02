@@ -49,7 +49,12 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    setSettings(getSettings());
+    // Force sync on mount to ensure we have the absolute latest coordinates from Admin
+    const initSettings = async () => {
+        await syncSettingsFromCloud();
+        setSettings(getSettings());
+    };
+    initSettings();
   }, []);
 
   // Auto-login check when typing ID
@@ -90,16 +95,12 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   }, [step]);
 
   const validateLocation = async () => {
-    let currentSettings = settings;
+    // 1. Force Sync again to be super safe
+    await syncSettingsFromCloud();
     
-    // If settings are missing, try to sync from cloud one last time
-    if (!currentSettings?.officeLocation) {
-        const synced = await syncSettingsFromCloud();
-        if (synced) {
-            currentSettings = getSettings();
-            setSettings(currentSettings);
-        }
-    }
+    // 2. Get fresh settings
+    const currentSettings = getSettings();
+    setSettings(currentSettings);
 
     if (!currentSettings?.officeLocation) {
       if (isSpecialRequest()) {
