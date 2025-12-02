@@ -73,6 +73,7 @@ const Dashboard: React.FC = () => {
         let note = '';
         let arrivalStatus = 'Absent';
         let departureStatus = '-';
+        let hasImage = false;
 
         if (dutyOrLeave) {
             // Map types to Thai
@@ -88,6 +89,7 @@ const Dashboard: React.FC = () => {
             note = dutyOrLeave.reason || '';
             arrivalStatus = 'Leave';
             departureStatus = 'Leave';
+            if (dutyOrLeave.imageUrl && dutyOrLeave.imageUrl.length > 20) hasImage = true;
         } else {
             const arrival = staffRecords.find(r => r.type === 'arrival');
             const departure = staffRecords.find(r => r.type === 'departure');
@@ -96,11 +98,13 @@ const Dashboard: React.FC = () => {
                 arrivalTime = new Date(arrival.timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
                 arrivalStatus = arrival.status;
                 if (arrival.status === 'Late') note += `สาย: ${arrival.reason || '-'} `;
+                if (arrival.imageUrl && arrival.imageUrl.length > 20) hasImage = true;
             }
             if (departure) {
                 departureTime = new Date(departure.timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
                 departureStatus = departure.status;
                 if (departure.status === 'Early Leave') note += `กลับก่อน: ${departure.reason || '-'} `;
+                if (departure.imageUrl && departure.imageUrl.length > 20) hasImage = true;
             }
         }
 
@@ -112,7 +116,8 @@ const Dashboard: React.FC = () => {
             arrivalStatus,
             departureTime,
             departureStatus,
-            note: note.trim()
+            note: note.trim(),
+            hasImage
         };
     });
     setOfficialReportData(dailyStaffData);
@@ -193,12 +198,13 @@ const Dashboard: React.FC = () => {
         row.role,
         row.arrivalTime,
         row.departureTime,
+        row.hasImage ? 'Yes' : '-',
         row.note
      ]);
 
      autoTable(doc, {
         startY: 40,
-        head: [['No.', 'Name', 'Role', 'Arrival', 'Departure', 'Note']],
+        head: [['No.', 'Name', 'Role', 'Arrival', 'Departure', 'Photo', 'Note']],
         body: tableBody,
         theme: 'grid',
         styles: { fontSize: 9, font: 'helvetica' },
@@ -229,7 +235,7 @@ const Dashboard: React.FC = () => {
       }
       // Handle error messages from Google Apps Script
       if (url.startsWith("Error") || url.startsWith("Exception")) {
-          alert("เกิดข้อผิดพลาดในการบันทึกรูปภาพที่ Server:\n" + url + "\n\n(กรุณาแจ้งแอดมินให้ตรวจสอบสิทธิ์ Google Drive)");
+          alert("เกิดข้อผิดพลาดในการบันทึกรูปภาพที่ Server:\n" + url + "\n\n(กรุณาแจ้งแอดมินให้ตรวจสอบสิทธิ์ Google Drive ใน Apps Script)");
           return;
       }
       window.open(url, '_blank');
@@ -417,7 +423,7 @@ const Dashboard: React.FC = () => {
                         <th className="px-4 py-2">Name</th>
                         <th className="px-4 py-2">Status</th>
                         <th className="px-4 py-2">Note</th>
-                        <th className="px-4 py-2 rounded-r-lg text-center">หลักฐาน</th>
+                        <th className="px-4 py-2 rounded-r-lg text-center w-[120px]">หลักฐาน</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-50">
@@ -450,10 +456,16 @@ const Dashboard: React.FC = () => {
                             {(record.imageUrl && record.imageUrl.length > 20) ? (
                                 <button 
                                     onClick={() => openImage(record.imageUrl)}
-                                    className={`p-1.5 rounded-lg transition-colors ${record.imageUrl?.startsWith('Error') || record.imageUrl?.startsWith('Exception') ? 'bg-red-50 text-red-500 hover:bg-red-100' : 'bg-indigo-50 text-indigo-500 hover:bg-indigo-100'}`}
-                                    title={record.imageUrl?.startsWith('Error') ? "มีข้อผิดพลาด" : "ดูรูปภาพ"}
+                                    className={`px-3 py-1.5 rounded-lg transition-colors text-[10px] font-bold flex items-center justify-center gap-1 w-full
+                                    ${record.imageUrl?.startsWith('Error') || record.imageUrl?.startsWith('Exception') 
+                                        ? 'bg-red-50 text-red-500 hover:bg-red-100 border border-red-200' 
+                                        : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200'}`}
                                 >
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                    {record.imageUrl?.startsWith('Error') || record.imageUrl?.startsWith('Exception') ? (
+                                        <><span>⚠️</span> มีปัญหา</>
+                                    ) : (
+                                        <><span>📷</span> ดูรูปภาพ</>
+                                    )}
                                 </button>
                             ) : (
                                 <span className="text-stone-300 text-[10px]">-</span>
@@ -532,7 +544,8 @@ const Dashboard: React.FC = () => {
                                     <th className="px-2 py-1 border-r border-black text-center w-[20%]">ตำแหน่ง</th>
                                     <th className="px-2 py-1 border-r border-black text-center w-[10%]">เวลามา</th>
                                     <th className="px-2 py-1 border-r border-black text-center w-[10%]">เวลากลับ</th>
-                                    <th className="px-2 py-1 text-center w-[25%]">หมายเหตุ</th>
+                                    <th className="px-2 py-1 border-r border-black text-center w-[5%]">รูปถ่าย</th>
+                                    <th className="px-2 py-1 text-center w-[20%]">หมายเหตุ</th>
                                 </>
                             )}
                         </tr>
@@ -571,6 +584,9 @@ const Dashboard: React.FC = () => {
                                     </td>
                                     <td className={`px-2 py-0.5 border-r border-gray-300 text-center font-mono font-bold text-black`}>
                                         {row.departureTime}
+                                    </td>
+                                    <td className="px-2 py-0.5 border-r border-gray-300 text-center text-black">
+                                        {row.hasImage ? '✓' : ''}
                                     </td>
                                     <td className="px-2 py-0.5 border-r border-gray-300 text-black max-w-xs break-words text-center text-[9px]">
                                         {row.note || ''}
