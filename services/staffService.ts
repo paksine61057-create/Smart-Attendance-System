@@ -34,7 +34,25 @@ const DEFAULT_STAFF_LIST: Staff[] = [
 export const getAllStaff = (): Staff[] => {
   const stored = localStorage.getItem(STAFF_STORAGE_KEY);
   if (stored) {
-    return JSON.parse(stored);
+    let list = JSON.parse(stored) as Staff[];
+    
+    // *** ระบบแก้คำผิดอัตโนมัติ (Auto-fix typo) ***
+    // ตรวจสอบว่ามีชื่อเก่าค้างอยู่หรือไม่ ถ้ามีให้แก้แล้วบันทึกทับทันที
+    let changed = false;
+    const pj023Index = list.findIndex(s => s.id === 'PJ023');
+    
+    // เช็คกรณีชื่อเป็น "ตรีนัทธ์ธนา" (แบบผิด)
+    if (pj023Index !== -1 && list[pj023Index].name.includes('ตรีนัทธ์ธนา')) {
+        list[pj023Index].name = 'นางสาวตรีนัทธิ์ธนา บุญโท';
+        changed = true;
+    }
+    
+    if (changed) {
+        localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(list));
+        console.log('Fixed typo for PJ023 in localStorage');
+    }
+
+    return list;
   }
   // Initialize default if empty
   localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(DEFAULT_STAFF_LIST));
