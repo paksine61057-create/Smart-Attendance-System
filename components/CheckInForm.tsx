@@ -12,7 +12,18 @@ interface CheckInFormProps {
 
 const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [step, setStep] = useState<'info' | 'camera' | 'verifying' | 'result'>('info');
-  const [attendanceType, setAttendanceType] = useState<AttendanceType>('arrival');
+  
+  // Auto-select Attendance Type based on time of day
+  // 05:00 - 12:00 -> Arrival
+  // Otherwise -> Departure
+  const [attendanceType, setAttendanceType] = useState<AttendanceType>(() => {
+    const currentHour = new Date().getHours();
+    if (currentHour >= 5 && currentHour < 12) {
+        return 'arrival';
+    } else {
+        return 'departure';
+    }
+  });
   
   // Login State
   const [staffIdInput, setStaffIdInput] = useState('');
@@ -310,28 +321,47 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         </div>
                     </div>
 
-                    {/* Main Actions */}
+                    {/* Main Actions - REDESIGNED */}
                     <div className="space-y-4">
-                        <div className="flex bg-black/20 p-1.5 rounded-2xl border border-white/10 shadow-inner gap-1">
+                        <div className="grid grid-cols-2 gap-4">
                             <button
-                            onClick={() => { setAttendanceType('arrival'); setReason(''); }}
-                            className={`flex-1 py-3 text-sm font-bold tracking-wide rounded-xl transition-all duration-300 ${
-                                attendanceType === 'arrival' 
-                                ? 'bg-white text-emerald-600 shadow-lg scale-[1.02] ring-2 ring-emerald-200' 
-                                : 'text-indigo-100 hover:text-white hover:bg-white/10'
-                            }`}
+                                onClick={() => { setAttendanceType('arrival'); setReason(''); }}
+                                className={`relative p-4 rounded-3xl transition-all duration-300 flex flex-col items-center justify-center gap-2 group overflow-hidden border-2
+                                ${attendanceType === 'arrival' 
+                                    ? 'bg-gradient-to-b from-emerald-100 to-teal-50 border-emerald-400 text-emerald-800 shadow-[0_0_20px_rgba(16,185,129,0.4)] scale-105 z-10' 
+                                    : 'bg-black/20 border-white/10 text-white/70 hover:bg-black/30 hover:text-white hover:border-white/30'
+                                }`}
                             >
-                            ลงเวลามา
+                                {attendanceType === 'arrival' && (
+                                    <div className="absolute top-2 right-2 text-emerald-500 animate-in zoom-in">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                                    </div>
+                                )}
+                                <div className={`p-3 rounded-full ${attendanceType === 'arrival' ? 'bg-emerald-200 text-emerald-700' : 'bg-white/10 text-white'}`}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.35 15.35l-3.3-3.3"/><path d="M9 12a3 3 0 1 0 6 0"/></svg>
+                                </div>
+                                <span className="font-bold text-base md:text-lg">ลงเวลามา</span>
+                                <span className={`text-[10px] ${attendanceType === 'arrival' ? 'text-emerald-600' : 'text-white/50'}`}>Arrival Check-in</span>
                             </button>
+
                             <button
-                            onClick={() => { setAttendanceType('departure'); setReason(''); }}
-                            className={`flex-1 py-3 text-sm font-bold tracking-wide rounded-xl transition-all duration-300 ${
-                                attendanceType === 'departure' 
-                                ? 'bg-white text-rose-600 shadow-lg scale-[1.02] ring-2 ring-rose-200' 
-                                : 'text-indigo-100 hover:text-white hover:bg-white/10'
-                            }`}
+                                onClick={() => { setAttendanceType('departure'); setReason(''); }}
+                                className={`relative p-4 rounded-3xl transition-all duration-300 flex flex-col items-center justify-center gap-2 group overflow-hidden border-2
+                                ${attendanceType === 'departure' 
+                                    ? 'bg-gradient-to-b from-rose-100 to-orange-50 border-rose-400 text-rose-800 shadow-[0_0_20px_rgba(244,63,94,0.4)] scale-105 z-10' 
+                                    : 'bg-black/20 border-white/10 text-white/70 hover:bg-black/30 hover:text-white hover:border-white/30'
+                                }`}
                             >
-                            ลงเวลากลับ
+                                {attendanceType === 'departure' && (
+                                    <div className="absolute top-2 right-2 text-rose-500 animate-in zoom-in">
+                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                                    </div>
+                                )}
+                                <div className={`p-3 rounded-full ${attendanceType === 'departure' ? 'bg-rose-200 text-rose-700' : 'bg-white/10 text-white'}`}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                                </div>
+                                <span className="font-bold text-base md:text-lg">ลงเวลากลับ</span>
+                                <span className={`text-[10px] ${attendanceType === 'departure' ? 'text-rose-600' : 'text-white/50'}`}>Departure Check-out</span>
                             </button>
                         </div>
                         
