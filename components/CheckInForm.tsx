@@ -36,7 +36,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     if (attendanceType !== 'arrival') return false;
     const now = new Date();
     const targetTime = new Date();
-    targetTime.setHours(8, 0, 0, 0); 
+    targetTime.setHours(8, 1, 0, 0); // Late if after 08:01
     return now > targetTime;
   }, [attendanceType]);
 
@@ -157,7 +157,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       return;
     }
     if (isLateArrival() && !reason.trim()) {
-      alert("กรุณาระบุเหตุผลที่มาสาย (หลัง 08.00 น.)");
+      alert("กรุณาระบุเหตุผลที่มาสาย (หลัง 08.01 น.)");
       return;
     }
     if (isSpecialRequest() && !reason.trim()) {
@@ -203,7 +203,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
         if (attendanceType === 'arrival') {
             const startOfWork = new Date();
-            startOfWork.setHours(8, 0, 0, 0); 
+            startOfWork.setHours(8, 1, 0, 0); // Late if after 08:01
             status = now > startOfWork ? 'Late' : 'On Time';
         } else if (attendanceType === 'departure') {
             const endOfWork = new Date();
@@ -275,10 +275,10 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         type="text" 
                         value={staffIdInput}
                         onChange={(e) => setStaffIdInput(e.target.value.toUpperCase())}
-                        className={`w-full px-4 py-3 md:py-4 rounded-2xl focus:ring-4 outline-none transition-all font-bold text-lg text-center tracking-wider shadow-lg
+                        className={`w-full px-4 py-3 md:py-4 rounded-2xl focus:ring-4 outline-none transition-all font-bold text-lg text-center tracking-wider shadow-lg bg-white
                         ${currentUser 
-                            ? 'bg-white text-emerald-700 border-4 border-emerald-400 focus:ring-emerald-400/30' 
-                            : 'bg-white text-stone-700 border-4 border-amber-400 focus:border-amber-500 focus:ring-amber-400/50 placeholder-stone-400'}`}
+                            ? 'text-emerald-700 border-4 border-orange-400 focus:ring-emerald-400/30' 
+                            : 'text-stone-700 border-4 border-orange-400 focus:border-amber-500 focus:ring-amber-400/50 placeholder-stone-400'}`}
                         placeholder="เช่น PJ001"
                         maxLength={5}
                     />
@@ -288,6 +288,13 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         </div>
                     )}
                  </div>
+                 {!currentUser && staffIdInput.length > 0 && (
+                     <div className="mt-2 bg-gradient-to-r from-orange-100 to-amber-100 p-2 rounded-xl border border-orange-300 shadow-md animate-in slide-in-from-top-2">
+                        <p className="text-center text-xs font-bold text-orange-700 flex items-center justify-center gap-1">
+                            <span>👉</span> กรุณากรอกรหัสประจำตัว 5 หลัก
+                        </p>
+                     </div>
+                 )}
               </div>
 
               {currentUser ? (
@@ -413,8 +420,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                     </div>
                 </div>
               ) : (
-                <div className="text-center p-6 border-2 border-dashed border-amber-300/70 rounded-2xl bg-amber-900/20 backdrop-blur-md">
-                    <p className="text-amber-100 font-bold text-sm drop-shadow-md tracking-wide">กรุณากรอกรหัสบุคลากรเพื่อเข้าสู่ระบบ</p>
+                <div className="text-center p-6 border-2 border-dashed border-white/30 rounded-2xl bg-white/10 backdrop-blur-md">
+                    <p className="text-indigo-100 font-bold text-sm drop-shadow-md tracking-wide">กรุณากรอกรหัสบุคลากรเพื่อเข้าสู่ระบบ</p>
                 </div>
               )}
             </div>
