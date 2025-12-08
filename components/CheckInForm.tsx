@@ -34,6 +34,10 @@ const CheckInForm: React.FC = ({ onSuccess }) => {
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
+
+  // UX Loading States
+  const [isValidating, setIsValidating] = useState(false);
+  const [isCameraLoading, setIsCameraLoading] = useState(false);
   
   const isEarlyDeparture = useCallback(() => {
     if (attendanceType !== 'departure') return false;
@@ -91,15 +95,22 @@ const CheckInForm: React.FC = ({ onSuccess }) => {
   useEffect(() => {
     let stream: MediaStream | null = null;
     if (step === 'camera') {
+      setIsCameraLoading(true);
       const startCamera = async () => {
         try {
           stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
+            // Wait for video to be ready before removing loading state
+            videoRef.current.onloadedmetadata = () => {
+                setIsCameraLoading(false);
+            };
           }
         } catch (err) {
           console.error("Camera error", err);
           setLocationError("ไม่สามารถเปิดกล้องได้");
+          setIsCameraLoading(false);
+          setStep('info');
         }
       };
       startCamera();
@@ -175,9 +186,15 @@ const CheckInForm: React.FC = ({ onSuccess }) => {
         alert("กรุณาระบุรายละเอียด/สถานที่ สำหรับการลาหรือไปราชการ");
         return;
     }
-    const loc = await validateLocation();
-    if (loc) {
-      setStep('camera');
+
+    setIsValidating(true); // START LOADING UI
+    try {
+        const loc = await validateLocation();
+        if (loc) {
+            setStep('camera');
+        }
+    } finally {
+        setIsValidating(false); // STOP LOADING UI
     }
   };
 
@@ -440,12 +457,23 @@ const CheckInForm: React.FC = ({ onSuccess }) => {
 
                         <button 
                             onClick={handleStartCheckIn}
-                            className="w-full py-4 bg-white text-indigo-700 rounded-2xl font-bold tracking-wide shadow-[0_10px_20px_-5px_rgba(255,255,255,0.3)] hover:shadow-[0_15px_30px_-5px_rgba(255,255,255,0.4)] hover:-translate-y-1 active:translate-y-0 active:scale-[0.99] transition-all duration-300 mt-2 text-base border border-white/50"
+                            disabled={isValidating}
+                            className="w-full py-4 bg-white text-indigo-700 rounded-2xl font-bold tracking-wide shadow-[0_10px_20px_-5px_rgba(255,255,255,0.3)] hover:shadow-[0_15px_30px_-5px_rgba(255,255,255,0.4)] hover:-translate-y-1 active:translate-y-0 active:scale-[0.99] transition-all duration-300 mt-2 text-base border border-white/50 disabled:opacity-80 disabled:cursor-wait"
                         >
-                            <span className="flex items-center justify-center gap-2">
-                            ถ่ายภาพยืนยัน
-                            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                            </span>
+                            {isValidating ? (
+                                <span className="flex items-center justify-center gap-2 animate-pulse">
+                                    <svg className="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                    </svg>
+                                    กำลังตรวจสอบพิกัด...
+                                </span>
+                            ) : (
+                                <span className="flex items-center justify-center gap-2">
+                                    ถ่ายภาพยืนยัน
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                </span>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -466,6 +494,14 @@ const CheckInForm: React.FC = ({ onSuccess }) => {
       <div className="max-w-md mx-auto bg-stone-900 rounded-[2.5rem] overflow-hidden shadow-2xl relative border-8 border-stone-100 ring-1 ring-stone-200">
         <video ref={videoRef} autoPlay playsInline className="w-full h-[600px] object-cover opacity-90" />
         <canvas ref={canvasRef} className="hidden" />
+        
+        {/* Loading Overlay for Camera */}
+        {isCameraLoading && (
+            <div className="absolute inset-0 bg-stone-900 flex flex-col items-center justify-center text-white z-20">
+                <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mb-4"></div>
+                <p className="font-bold text-sm">กำลังเปิดกล้อง...</p>
+            </div>
+        )}
         
         {/* Modern HUD Overlay */}
         <div className="absolute inset-0 pointer-events-none">
@@ -492,7 +528,7 @@ const CheckInForm: React.FC = ({ onSuccess }) => {
           )}
           <button 
             onClick={capturePhoto}
-            className="w-20 h-20 rounded-full bg-white/10 border border-white/30 backdrop-blur-sm flex items-center justify-center group hover:bg-white/20 transition-all duration-300"
+            className="w-20 h-20 rounded-full bg-white/10 border border-white/30 backdrop-blur-sm flex items-center justify-center group hover:bg-white/20 transition-all duration-100 active:scale-90"
           >
              <div className="w-16 h-16 rounded-full bg-white shadow-[0_0_20px_rgba(255,255,255,0.3)] group-hover:scale-95 transition-transform duration-300"></div>
           </button>
