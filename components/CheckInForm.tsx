@@ -10,7 +10,7 @@ interface CheckInFormProps {
   onSuccess: () => void;
 }
 
-const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
+const CheckInForm: React.FC = ({ onSuccess }) => {
   const [step, setStep] = useState<'info' | 'camera' | 'verifying' | 'result'>('info');
   
   // Auto-select Attendance Type based on time of day
@@ -348,20 +348,20 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                                 onClick={() => { setAttendanceType('departure'); setReason(''); }}
                                 className={`relative p-4 rounded-3xl transition-all duration-300 flex flex-col items-center justify-center gap-2 group overflow-hidden border-2
                                 ${attendanceType === 'departure' 
-                                    ? 'bg-gradient-to-b from-rose-100 to-orange-50 border-rose-400 text-rose-800 shadow-[0_0_20px_rgba(244,63,94,0.4)] scale-105 z-10' 
+                                    ? 'bg-gradient-to-b from-amber-100 to-orange-50 border-amber-400 text-amber-800 shadow-[0_0_20px_rgba(245,158,11,0.4)] scale-105 z-10' 
                                     : 'bg-black/20 border-white/10 text-white/70 hover:bg-black/30 hover:text-white hover:border-white/30'
                                 }`}
                             >
                                 {attendanceType === 'departure' && (
-                                    <div className="absolute top-2 right-2 text-rose-500 animate-in zoom-in">
+                                    <div className="absolute top-2 right-2 text-amber-500 animate-in zoom-in">
                                         <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                                     </div>
                                 )}
-                                <div className={`p-3 rounded-full ${attendanceType === 'departure' ? 'bg-rose-200 text-rose-700' : 'bg-white/10 text-white'}`}>
+                                <div className={`p-3 rounded-full ${attendanceType === 'departure' ? 'bg-amber-200 text-amber-700' : 'bg-white/10 text-white'}`}>
                                     <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                                 </div>
                                 <span className="font-bold text-base md:text-lg">ลงเวลากลับ</span>
-                                <span className={`text-[10px] ${attendanceType === 'departure' ? 'text-rose-600' : 'text-white/50'}`}>Departure Check-out</span>
+                                <span className={`text-[10px] ${attendanceType === 'departure' ? 'text-amber-600' : 'text-white/50'}`}>Departure Check-out</span>
                             </button>
                         </div>
                         
@@ -476,7 +476,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
         <div className="absolute top-8 left-0 right-0 flex justify-center flex-col items-center gap-2">
            <div className="bg-black/40 backdrop-blur-md px-5 py-2 rounded-full text-white/90 text-xs font-bold shadow-sm border border-white/10 flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full animate-pulse ${attendanceType === 'arrival' ? 'bg-emerald-400' : attendanceType === 'departure' ? 'bg-rose-400' : 'bg-blue-400'}`}></span>
+              <span className={`w-2 h-2 rounded-full animate-pulse ${attendanceType === 'arrival' ? 'bg-emerald-400' : attendanceType === 'departure' ? 'bg-amber-400' : 'bg-blue-400'}`}></span>
               Status: {attendanceType.replace('_', ' ').toUpperCase()}
            </div>
            {currentUser && (
