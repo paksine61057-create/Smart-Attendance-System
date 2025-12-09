@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AppSettings, GeoLocation, CheckInRecord, AttendanceType, Staff } from '../types';
 import { getCurrentPosition, getDistanceFromLatLonInMeters } from '../services/geoService';
@@ -8,6 +9,15 @@ import { getStaffById } from '../services/staffService';
 interface CheckInFormProps {
   onSuccess: () => void;
 }
+
+// Camera Filters Definition
+const CAMERA_FILTERS = [
+  { id: 'normal', name: 'ปกติ', css: 'none' },
+  { id: 'bright', name: 'สว่าง', css: 'brightness(1.2) contrast(1.1)' },
+  { id: 'soft', name: 'นวล', css: 'contrast(0.9) brightness(1.1) saturate(0.9)' },
+  { id: 'warm', name: 'อุ่น', css: 'sepia(0.2) saturate(1.1) brightness(1.05)' },
+  { id: 'bw', name: 'ขาวดำ', css: 'grayscale(1) contrast(1.2)' },
+];
 
 const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [step, setStep] = useState<'info' | 'camera' | 'verifying' | 'result'>('info');
@@ -37,6 +47,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   // UX Loading States
   const [isValidating, setIsValidating] = useState(false);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
+  
+  // Filter State
+  const [activeFilterId, setActiveFilterId] = useState('normal');
   
   const isEarlyDeparture = useCallback(() => {
     if (attendanceType !== 'departure') return false;
@@ -212,7 +225,15 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         canvasRef.current.width = width;
         canvasRef.current.height = height;
         
-        // Draw resized image
+        // APPLY FILTER TO CANVAS CONTEXT BEFORE DRAWING
+        const activeFilter = CAMERA_FILTERS.find(f => f.id === activeFilterId);
+        if (activeFilter && activeFilter.id !== 'normal') {
+            context.filter = activeFilter.css;
+        } else {
+            context.filter = 'none';
+        }
+        
+        // Draw resized image with filter
         context.drawImage(video, 0, 0, width, height);
         
         // Get Base64 with reduced quality (0.6)
@@ -268,7 +289,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         }, 2000);
       }
     }
-  }, [currentUser, attendanceType, reason, currentDistance, isEarlyDeparture, isLateArrival, isSpecialRequest, validateLocation, onSuccess]);
+  }, [currentUser, attendanceType, reason, currentDistance, isEarlyDeparture, isLateArrival, isSpecialRequest, validateLocation, onSuccess, activeFilterId]);
 
   if (step === 'info') {
     return (
@@ -491,7 +512,13 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   if (step === 'camera') {
     return (
       <div className="max-w-md mx-auto bg-stone-900 rounded-[2.5rem] overflow-hidden shadow-2xl relative border-8 border-stone-100 ring-1 ring-stone-200">
-        <video ref={videoRef} autoPlay playsInline className="w-full h-[600px] object-cover opacity-90" />
+        <video 
+            ref={videoRef} 
+            autoPlay 
+            playsInline 
+            className="w-full h-[600px] object-cover opacity-90 transition-all duration-300" 
+            style={{ filter: CAMERA_FILTERS.find(f => f.id === activeFilterId)?.css || 'none' }}
+        />
         <canvas ref={canvasRef} className="hidden" />
         
         {/* Loading Overlay for Camera */}
@@ -503,13 +530,13 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         )}
         
         {/* Modern HUD Overlay */}
-        <div className="absolute inset-0 pointer-events-none">
+        <div className="absolute inset-0 pointer-events-none z-10">
              {/* Simple Frame */}
              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-80 border border-white/20 rounded-3xl"></div>
              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-60 h-76 border border-white/10 rounded-2xl"></div>
         </div>
 
-        <div className="absolute top-8 left-0 right-0 flex justify-center flex-col items-center gap-2">
+        <div className="absolute top-8 left-0 right-0 flex justify-center flex-col items-center gap-2 z-10">
            <div className="bg-black/40 backdrop-blur-md px-5 py-2 rounded-full text-white/90 text-xs font-bold shadow-sm border border-white/10 flex items-center gap-2">
               <span className={`w-2 h-2 rounded-full animate-pulse ${attendanceType === 'arrival' ? 'bg-emerald-400' : attendanceType === 'departure' ? 'bg-amber-400' : 'bg-blue-400'}`}></span>
               Status: {attendanceType.replace('_', ' ').toUpperCase()}
@@ -519,9 +546,28 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
            )}
         </div>
 
-        <div className="absolute bottom-0 inset-x-0 p-8 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col items-center pb-12">
+        {/* Filter Selection Bar */}
+        <div className="absolute bottom-32 left-0 right-0 z-20 px-4">
+             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide justify-center">
+                 {CAMERA_FILTERS.map((filter) => (
+                     <button
+                        key={filter.id}
+                        onClick={() => setActiveFilterId(filter.id)}
+                        className={`flex flex-col items-center gap-1 min-w-[50px] transition-all duration-200 ${activeFilterId === filter.id ? 'scale-110 opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                     >
+                        <div className={`w-10 h-10 rounded-full border-2 overflow-hidden bg-gray-500 ${activeFilterId === filter.id ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white'}`}>
+                            {/* Preview Dot with Filter Applied */}
+                            <div className="w-full h-full bg-stone-300" style={{ filter: filter.css }}></div>
+                        </div>
+                        <span className="text-[10px] text-white font-medium shadow-black drop-shadow-md">{filter.name}</span>
+                     </button>
+                 ))}
+             </div>
+        </div>
+
+        <div className="absolute bottom-0 inset-x-0 p-8 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col items-center pb-12 z-20">
           {!isSpecialRequest() && (
-              <p className="text-white/80 mb-8 text-xs font-medium tracking-wider bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/5">
+              <p className="text-white/80 mb-6 text-xs font-medium tracking-wider bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/5">
                 Distance: <span className="font-bold text-white text-sm">{currentDistance ? Math.round(currentDistance) : '...'}</span> m
               </p>
           )}
