@@ -546,14 +546,15 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
            )}
         </div>
 
-        {/* Filter Selection Bar */}
-        <div className="absolute bottom-32 left-0 right-0 z-20 px-4">
+        {/* Filter Selection Bar - MOVED UP and INCREASED Z-INDEX */}
+        <div className="absolute bottom-36 left-0 right-0 z-30 px-4">
              <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide justify-center">
                  {CAMERA_FILTERS.map((filter) => (
                      <button
                         key={filter.id}
+                        type="button"
                         onClick={() => setActiveFilterId(filter.id)}
-                        className={`flex flex-col items-center gap-1 min-w-[50px] transition-all duration-200 ${activeFilterId === filter.id ? 'scale-110 opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                        className={`flex flex-col items-center gap-1 min-w-[50px] transition-all duration-200 cursor-pointer ${activeFilterId === filter.id ? 'scale-110 opacity-100' : 'opacity-60 hover:opacity-100'}`}
                      >
                         <div className={`w-10 h-10 rounded-full border-2 overflow-hidden bg-gray-500 ${activeFilterId === filter.id ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white'}`}>
                             {/* Preview Dot with Filter Applied */}
