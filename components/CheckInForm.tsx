@@ -10,13 +10,14 @@ interface CheckInFormProps {
   onSuccess: () => void;
 }
 
-// Camera Filters Definition
+// Camera Filters Definition - Photo Editing Styles
 const CAMERA_FILTERS = [
-  { id: 'normal', name: 'ปกติ', css: 'none' },
-  { id: 'bright', name: 'สว่าง', css: 'brightness(1.2) contrast(1.1)' },
-  { id: 'soft', name: 'นวล', css: 'contrast(0.9) brightness(1.1) saturate(0.9)' },
-  { id: 'warm', name: 'อุ่น', css: 'sepia(0.2) saturate(1.1) brightness(1.05)' },
-  { id: 'bw', name: 'ขาวดำ', css: 'grayscale(1) contrast(1.2)' },
+  { id: 'normal', name: 'ปกติ', css: 'none', color: '#9ca3af' },
+  { id: 'clear', name: 'หน้าใส', css: 'brightness(1.15) contrast(1.05) saturate(1.05)', color: '#fbcfe8' }, // Pinkish
+  { id: 'soft', name: 'ละมุน', css: 'brightness(1.1) contrast(0.9) saturate(0.9)', color: '#e5e7eb' }, // Soft Gray
+  { id: 'fresh', name: 'สดใส', css: 'brightness(1.05) contrast(1.1) saturate(1.3)', color: '#fcd34d' }, // Yellow
+  { id: 'film', name: 'ฟิล์ม', css: 'sepia(0.2) contrast(1.1) brightness(0.95) saturate(0.8)', color: '#d97706' }, // Amber
+  { id: 'chic', name: 'เท่', css: 'grayscale(1) contrast(1.2) brightness(1.1)', color: '#1f2937' }, // Dark
 ];
 
 const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
@@ -548,19 +549,21 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
         {/* Filter Selection Bar - MOVED UP and INCREASED Z-INDEX */}
         <div className="absolute bottom-36 left-0 right-0 z-30 px-4">
-             <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide justify-center">
+             <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide justify-center px-4">
                  {CAMERA_FILTERS.map((filter) => (
                      <button
                         key={filter.id}
                         type="button"
                         onClick={() => setActiveFilterId(filter.id)}
-                        className={`flex flex-col items-center gap-1 min-w-[50px] transition-all duration-200 cursor-pointer ${activeFilterId === filter.id ? 'scale-110 opacity-100' : 'opacity-60 hover:opacity-100'}`}
+                        className={`flex flex-col items-center gap-1 min-w-[50px] transition-all duration-200 cursor-pointer group ${activeFilterId === filter.id ? 'scale-110 opacity-100' : 'opacity-70 hover:opacity-100'}`}
                      >
-                        <div className={`w-10 h-10 rounded-full border-2 overflow-hidden bg-gray-500 ${activeFilterId === filter.id ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white'}`}>
-                            {/* Preview Dot with Filter Applied */}
-                            <div className="w-full h-full bg-stone-300" style={{ filter: filter.css }}></div>
+                        <div className={`w-12 h-12 rounded-full border-2 overflow-hidden shadow-lg relative ${activeFilterId === filter.id ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white'}`} style={{ backgroundColor: filter.color }}>
+                             {/* Small sparkle icon for effect */}
+                             {activeFilterId === filter.id && filter.id !== 'normal' && (
+                                 <span className="absolute inset-0 flex items-center justify-center text-xs animate-pulse">✨</span>
+                             )}
                         </div>
-                        <span className="text-[10px] text-white font-medium shadow-black drop-shadow-md">{filter.name}</span>
+                        <span className="text-[10px] text-white font-bold shadow-black drop-shadow-md bg-black/30 px-2 py-0.5 rounded-full backdrop-blur-sm">{filter.name}</span>
                      </button>
                  ))}
              </div>
