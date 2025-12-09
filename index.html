@@ -44,6 +44,24 @@
       .animate-sparkle {
         animation: sparkle 3s ease-in-out infinite;
       }
+
+      /* Pulse Ring Animations for Buttons */
+      @keyframes pulse-ring-green {
+        0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+        70% { box-shadow: 0 0 0 15px rgba(52, 211, 153, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+      }
+      @keyframes pulse-ring-amber {
+        0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.7); }
+        70% { box-shadow: 0 0 0 15px rgba(251, 191, 36, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+      }
+      .animate-pulse-ring-green {
+        animation: pulse-ring-green 2s infinite;
+      }
+      .animate-pulse-ring-amber {
+        animation: pulse-ring-amber 2s infinite;
+      }
     </style>
   <script type="importmap">
 {

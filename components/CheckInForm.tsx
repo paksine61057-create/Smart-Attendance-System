@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AppSettings, GeoLocation, CheckInRecord, AttendanceType, Staff } from '../types';
 import { getCurrentPosition, getDistanceFromLatLonInMeters } from '../services/geoService';
@@ -10,7 +9,7 @@ interface CheckInFormProps {
   onSuccess: () => void;
 }
 
-const CheckInForm: React.FC = ({ onSuccess }) => {
+const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [step, setStep] = useState<'info' | 'camera' | 'verifying' | 'result'>('info');
   
   // Auto-select Attendance Type based on time of day
@@ -262,7 +261,7 @@ const CheckInForm: React.FC = ({ onSuccess }) => {
           aiVerification: aiResult
         };
 
-        saveRecord(record);
+        await saveRecord(record);
         setStep('result');
         setTimeout(() => {
           onSuccess();
@@ -345,7 +344,7 @@ const CheckInForm: React.FC = ({ onSuccess }) => {
                                 onClick={() => { setAttendanceType('arrival'); setReason(''); }}
                                 className={`relative p-4 rounded-3xl transition-all duration-300 flex flex-col items-center justify-center gap-2 group overflow-hidden border-2
                                 ${attendanceType === 'arrival' 
-                                    ? 'bg-gradient-to-b from-emerald-100 to-teal-50 border-emerald-400 text-emerald-800 shadow-[0_0_20px_rgba(16,185,129,0.4)] scale-105 z-10' 
+                                    ? 'bg-gradient-to-b from-emerald-100 to-teal-50 border-emerald-400 text-emerald-800 shadow-[0_0_20px_rgba(16,185,129,0.4)] scale-105 z-10 animate-pulse-ring-green' 
                                     : 'bg-black/20 border-white/10 text-white/70 hover:bg-black/30 hover:text-white hover:border-white/30'
                                 }`}
                             >
@@ -365,7 +364,7 @@ const CheckInForm: React.FC = ({ onSuccess }) => {
                                 onClick={() => { setAttendanceType('departure'); setReason(''); }}
                                 className={`relative p-4 rounded-3xl transition-all duration-300 flex flex-col items-center justify-center gap-2 group overflow-hidden border-2
                                 ${attendanceType === 'departure' 
-                                    ? 'bg-gradient-to-b from-amber-100 to-orange-50 border-amber-400 text-amber-800 shadow-[0_0_20px_rgba(245,158,11,0.4)] scale-105 z-10' 
+                                    ? 'bg-gradient-to-b from-amber-100 to-orange-50 border-amber-400 text-amber-800 shadow-[0_0_20px_rgba(245,158,11,0.4)] scale-105 z-10 animate-pulse-ring-amber' 
                                     : 'bg-black/20 border-white/10 text-white/70 hover:bg-black/30 hover:text-white hover:border-white/30'
                                 }`}
                             >
