@@ -143,14 +143,29 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     const currentSettings = getSettings();
     setSettings(currentSettings);
 
+    // *** SPECIAL HANDLING FOR LEAVE/DUTY ***
+    // "ไม่ต้องใช้ gps" -> We allow check-in from anywhere and don't block if GPS is missing/slow.
+    if (isSpecialRequest()) {
+         try {
+             // Race GPS vs Timeout (3s) to avoid hanging
+             const positionPromise = getCurrentPosition();
+             const timeoutPromise = new Promise<GeolocationPosition>((_, reject) => 
+                 setTimeout(() => reject(new Error("GPS Timeout")), 3000)
+             );
+             const position = await Promise.race([positionPromise, timeoutPromise]);
+             return { lat: position.coords.latitude, lng: position.coords.longitude };
+         } catch (e) {
+             console.log("GPS skipped for special request (Timeout or Error)", e);
+             return { lat: 0, lng: 0 }; // Proceed with empty location
+         }
+    }
+
+    // *** NORMAL CHECK-IN (ARRIVAL/DEPARTURE) ***
     if (!currentSettings?.officeLocation) {
-      if (isSpecialRequest()) {
-          // Special request can proceed without office location set, but warn
-          return await getCurrentPosition().then(pos => ({ lat: pos.coords.latitude, lng: pos.coords.longitude })).catch(() => ({ lat: 0, lng: 0 }));
-      }
       setLocationError("ระบบยังไม่ได้รับการตั้งค่าพิกัดห้องบุคคล กรุณาติดต่อผู้ดูแล");
       return false;
     }
+    
     try {
       const position = await getCurrentPosition();
       const dist = getDistanceFromLatLonInMeters(
@@ -161,18 +176,13 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       );
       setCurrentDistance(dist);
       
-      // If special request (duty/leave), we ignore the max distance check
-      if (dist > currentSettings.maxDistanceMeters && !isSpecialRequest()) {
+      if (dist > currentSettings.maxDistanceMeters) {
         setLocationError(`คุณอยู่ห่างจากจุดเช็คอิน ${Math.round(dist)} เมตร (ต้องไม่เกิน ${currentSettings.maxDistanceMeters} เมตร)`);
         return false;
       }
       return { lat: position.coords.latitude, lng: position.coords.longitude };
     } catch (err) {
-      if (isSpecialRequest()) {
-          // Special request allows failure of GPS if needed, or we just put 0,0
-          return { lat: 0, lng: 0 };
-      }
-      setLocationError("ไม่สามารถระบุตำแหน่ง GPS ได้");
+      setLocationError("ไม่สามารถระบุตำแหน่ง GPS ได้ กรุณาเปิด GPS");
       return false;
     }
   };
@@ -243,9 +253,18 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         setCapturedImage(imageBase64);
         setStep('verifying');
         
-        const aiResult = await analyzeCheckInImage(imageBase64);
-        const loc = await validateLocation(); 
-        if (!loc && !isSpecialRequest()) return; 
+        // Parallel Verification
+        const aiPromise = analyzeCheckInImage(imageBase64);
+        // Re-validate location to get timestamped coordinates (or 0,0 for special)
+        const locPromise = validateLocation(); 
+        
+        const [aiResult, loc] = await Promise.all([aiPromise, locPromise]);
+        
+        // If normal check-in failed GPS on capture, stop
+        if (!loc && !isSpecialRequest()) {
+            setStep('camera'); // Go back
+            return; 
+        }
         
         const now = new Date();
         let status: any = 'Normal';
