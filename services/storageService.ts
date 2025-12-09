@@ -20,18 +20,88 @@ const HARDCODED_OFFICE_LOCATION = {
     lng: 102.834789
 };
 
-export const saveRecord = (record: CheckInRecord) => {
+// Helper to send data reliably using text/plain to avoid CORS preflight issues on GAS
+export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8', 
+      },
+      body: JSON.stringify(record)
+    });
+    
+    if (response.ok) {
+        // We can optionally read response text here
+        return true;
+    }
+    return false;
+  } catch (e) {
+    console.error("Failed to sync to sheets", e);
+    return false;
+  }
+};
+
+export const saveRecord = async (record: CheckInRecord) => {
+  // 1. Save Local first (mark as unsynced initially)
   const records = getRecords();
+  record.syncedToSheets = false; 
   records.push(record);
   localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
   
-  // Attempt to sync to Google Sheets if URL is present
+  // 2. Attempt to Sync to Cloud
   const settings = getSettings();
   const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
   
   if (targetUrl) {
-    sendToGoogleSheets(record, targetUrl);
+    const success = await sendToGoogleSheets(record, targetUrl);
+    if (success) {
+        // Update local record status to synced
+        const updatedRecords = getRecords();
+        const index = updatedRecords.findIndex(r => r.id === record.id);
+        if (index !== -1) {
+            updatedRecords[index].syncedToSheets = true;
+            localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedRecords));
+        }
+    }
   }
+};
+
+export const syncUnsyncedRecords = async () => {
+    const records = getRecords();
+    const unsynced = records.filter(r => !r.syncedToSheets);
+    
+    if (unsynced.length === 0) return;
+
+    console.log(`Found ${unsynced.length} unsynced records. Retrying upload...`);
+    const settings = getSettings();
+    const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+    
+    if (!targetUrl) return;
+
+    let syncedCount = 0;
+    for (const record of unsynced) {
+        const success = await sendToGoogleSheets(record, targetUrl);
+        if (success) {
+            record.syncedToSheets = true;
+            syncedCount++;
+        }
+    }
+    
+    if (syncedCount > 0) {
+        // Save updated statuses back to local storage
+        // We need to map the updated 'unsynced' objects back to the main array
+        // But since objects in 'unsynced' are references to objects in 'records' (if filter preserves ref),
+        // modifying them directly *might* work depending on JS engine, but safer to re-map by ID.
+        const allRecords = getRecords();
+        const updatedAll = allRecords.map(r => {
+            const syncedVersion = unsynced.find(u => u.id === r.id);
+            return syncedVersion ? syncedVersion : r;
+        });
+        localStorage.setItem(RECORDS_KEY, JSON.stringify(updatedAll));
+        console.log(`Successfully retried sync for ${syncedCount} records.`);
+    }
 };
 
 export const getRecords = (): CheckInRecord[] => {
@@ -52,8 +122,8 @@ export const saveSettings = async (settings: AppSettings) => {
      try {
          await fetch(targetUrl, {
              method: 'POST',
-             mode: 'no-cors',
-             headers: { 'Content-Type': 'application/json' },
+             redirect: 'follow',
+             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
              body: JSON.stringify({
                  action: 'saveSettings',
                  lat: settings.officeLocation.lat,
@@ -203,20 +273,4 @@ export const exportToCSV = (records?: CheckInRecord[]): string => {
     ].join(',');
   });
   return [header, ...rows].join('\n');
-};
-
-export const sendToGoogleSheets = async (record: CheckInRecord, url: string) => {
-  try {
-    await fetch(url, {
-      method: 'POST',
-      mode: 'no-cors', 
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(record)
-    });
-    console.log("Sent to Google Sheets");
-  } catch (e) {
-    console.error("Failed to sync to sheets", e);
-  }
 };

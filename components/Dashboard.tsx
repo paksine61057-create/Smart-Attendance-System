@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
-import { getRecords, clearRecords, exportToCSV, fetchGlobalRecords } from '../services/storageService';
+import { getRecords, clearRecords, exportToCSV, fetchGlobalRecords, syncUnsyncedRecords } from '../services/storageService';
 import { CheckInRecord, Staff } from '../types';
 import { getAllStaff } from '../services/staffService';
 
@@ -23,17 +23,40 @@ const Dashboard: React.FC = () => {
   const [officialReportData, setOfficialReportData] = useState<any[]>([]);
   const [monthlyReportData, setMonthlyReportData] = useState<any[]>([]);
 
-  // Function to load data from Cloud
+  // Function to load data from Cloud and Merge with Local
   const syncData = useCallback(async () => {
       setIsSyncing(true);
       try {
+          // 1. Attempt to retry syncing any pending local records
+          await syncUnsyncedRecords();
+
+          // 2. Fetch latest from Cloud
           const cloudRecords = await fetchGlobalRecords();
-          if (cloudRecords.length > 0) {
-              setAllRecords(cloudRecords);
+          
+          // 3. Get Local records
+          const localRecords = getRecords();
+
+          // 4. SMART MERGE: 
+          // Combine Cloud records with any Local records that haven't appeared in Cloud yet
+          // (Matching by timestamp + staffId is a safe heuristic if IDs differ)
+          const mergedRecords = [...cloudRecords];
+          
+          // Create a signature set for cloud records for quick lookup
+          // Signature: Timestamp_StaffId (Unique enough for this purpose)
+          const cloudSignatures = new Set(cloudRecords.map(r => `${r.timestamp}_${r.staffId}`));
+          
+          localRecords.forEach(local => {
+              const signature = `${local.timestamp}_${local.staffId}`;
+              // If this local record is NOT in the cloud list, add it to view
+              if (!cloudSignatures.has(signature)) {
+                  mergedRecords.push(local);
+              }
+          });
+
+          if (mergedRecords.length > 0) {
+              setAllRecords(mergedRecords);
           } else {
-              // Fallback to local if cloud is empty or error
-              const local = getRecords();
-              setAllRecords(local);
+              setAllRecords([]);
           }
       } catch (e) {
           console.error("Sync error", e);
@@ -45,7 +68,7 @@ const Dashboard: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    syncData(); // Load cloud data on mount
+    syncData(); // Load data on mount
     setStaffList(getAllStaff());
   }, [syncData]);
 
@@ -436,6 +459,10 @@ const Dashboard: React.FC = () => {
                                   'bg-blue-100 text-blue-600'}`}>
                                 {record.type.substr(0,3)}
                             </span>
+                            {/* Unsynced Indicator */}
+                            {!record.id.startsWith('sheet_') && (
+                                <span title="รอการส่งข้อมูล (Pending Sync)" className="inline-block w-2 h-2 bg-orange-400 rounded-full ml-1 animate-pulse"></span>
+                            )}
                         </td>
                         <td className="px-4 py-3">
                             <div className="font-bold text-stone-800 text-xs">{record.name}</div>
