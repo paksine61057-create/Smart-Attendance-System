@@ -191,9 +191,19 @@ const Dashboard: React.FC = () => {
             limitDay = 0; // Future month
         }
 
+        // *** SYSTEM START DATE: 11 Dec 2025 ***
+        // Month is 0-indexed in JS Date (0=Jan, 11=Dec)
+        const systemStartDate = new Date(2025, 11, 11); 
+        systemStartDate.setHours(0,0,0,0);
+
         for (let d = 1; d <= limitDay; d++) {
             const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
             const dateObj = new Date(dateStr);
+            dateObj.setHours(0,0,0,0);
+            
+            // 0. CHECK SYSTEM START DATE
+            if (dateObj < systemStartDate) continue;
+
             const dayOfWeek = dateObj.getDay(); // 0=Sun, 6=Sat
 
             // 1. Skip Weekend
@@ -202,7 +212,9 @@ const Dashboard: React.FC = () => {
             // 2. Skip Holiday
             if (getHoliday(dateObj)) continue;
 
-            // 3. Check if any "Arrival" or "Leave" record exists for this staff on this day
+            // 3. Logic: "Missing Morning/Leave" Check
+            // - Checks for: Arrival, Authorized Late, Duty, or any Leave.
+            // - IGNORES: Departure (if you only signed out but didn't sign in, it counts as missing).
             const hasRecord = allRecords.some(r => 
                 r.staffId === staff.id && 
                 new Date(r.timestamp).toISOString().split('T')[0] === dateStr &&

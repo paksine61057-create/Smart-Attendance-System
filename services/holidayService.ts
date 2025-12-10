@@ -11,6 +11,7 @@ const SPECIAL_HOLIDAYS_KEY = 'school_checkin_special_holidays';
 // 1. วันหยุดคงที่ (Fixed Holidays) - ตรงกันทุกปี
 const FIXED_HOLIDAYS_BASE = [
   { date: '01-01', name: 'วันขึ้นปีใหม่' },
+  { date: '01-16', name: 'วันครู' }, // เพิ่มวันครู สำหรับโรงเรียน
   { date: '04-06', name: 'วันจักรี' },
   { date: '04-13', name: 'วันสงกรานต์' },
   { date: '04-14', name: 'วันสงกรานต์' },
@@ -28,8 +29,9 @@ const FIXED_HOLIDAYS_BASE = [
 ];
 
 // 2. วันหยุดตามปฏิทินจันทรคติ (Dynamic)
+// หมายเหตุ: ปี ค.ศ. 2025 ตรงกับ พ.ศ. 2568
 const DYNAMIC_HOLIDAYS: Record<number, { date: string, name: string }[]> = {
-  2025: [
+  2025: [ // พ.ศ. 2568
     { date: '02-12', name: 'วันมาฆบูชา' },
     { date: '04-07', name: 'วันหยุดชดเชยวันจักรี' },
     { date: '04-16', name: 'วันหยุดชดเชยวันสงกรานต์' },
@@ -39,12 +41,10 @@ const DYNAMIC_HOLIDAYS: Record<number, { date: string, name: string }[]> = {
     { date: '07-10', name: 'วันอาสาฬหบูชา' },
     { date: '07-11', name: 'วันเข้าพรรษา' },
     { date: '08-12', name: 'วันแม่แห่งชาติ' },
-    { date: '12-31', name: 'วันสิ้นปี' },
+    // วันหยุดอื่นๆ ที่เป็น Fixed จะถูกดึงมาจาก FIXED_HOLIDAYS_BASE
   ],
-  2026: [ 
-    { date: '01-01', name: 'วันขึ้นปีใหม่' },
+  2026: [ // พ.ศ. 2569
     { date: '03-03', name: 'วันมาฆบูชา' },
-    { date: '04-06', name: 'วันจักรี' },
     { date: '05-26', name: 'วันวิสาขบูชา' },
     { date: '07-29', name: 'วันอาสาฬหบูชา' },
     { date: '07-30', name: 'วันเข้าพรรษา' },
