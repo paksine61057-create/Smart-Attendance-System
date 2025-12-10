@@ -10,14 +10,14 @@ interface CheckInFormProps {
   onSuccess: () => void;
 }
 
-// Camera Filters Definition - Photo Editing Styles
+// Camera Filters Definition - Optimized for Skin Smoothing (Beauty)
 const CAMERA_FILTERS = [
   { id: 'normal', name: 'ปกติ', css: 'none', color: '#9ca3af' },
-  { id: 'clear', name: 'หน้าใส', css: 'brightness(1.15) contrast(1.05) saturate(1.05)', color: '#fbcfe8' }, // Pinkish
-  { id: 'soft', name: 'ละมุน', css: 'brightness(1.1) contrast(0.9) saturate(0.9)', color: '#e5e7eb' }, // Soft Gray
-  { id: 'fresh', name: 'สดใส', css: 'brightness(1.05) contrast(1.1) saturate(1.3)', color: '#fcd34d' }, // Yellow
-  { id: 'film', name: 'ฟิล์ม', css: 'sepia(0.2) contrast(1.1) brightness(0.95) saturate(0.8)', color: '#d97706' }, // Amber
-  { id: 'chic', name: 'เท่', css: 'grayscale(1) contrast(1.2) brightness(1.1)', color: '#1f2937' }, // Dark
+  { id: 'beauty', name: 'ผิวเนียน', css: 'brightness(1.15) contrast(0.95) saturate(1.05) hue-rotate(-2deg)', color: '#f472b6' }, // New Beauty Mode
+  { id: 'clear', name: 'หน้าใส', css: 'brightness(1.2) contrast(0.9) saturate(1.0)', color: '#fbcfe8' }, // High brightness, low contrast = smooth
+  { id: 'soft', name: 'ละมุน', css: 'brightness(1.1) contrast(0.85) saturate(0.9) sepia(0.1)', color: '#e5e7eb' }, // Soft focus feel
+  { id: 'fresh', name: 'สดใส', css: 'brightness(1.05) contrast(1.1) saturate(1.3)', color: '#fcd34d' }, // Vivid
+  { id: 'chic', name: 'เท่', css: 'grayscale(1) contrast(1.2) brightness(1.1)', color: '#1f2937' }, // Dark B&W
 ];
 
 const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
