@@ -1,11 +1,14 @@
 
+import { SpecialHoliday } from '../types';
+
 export interface Holiday {
   date: string; // MM-DD for fixed, YYYY-MM-DD for specific
   name: string;
 }
 
+const SPECIAL_HOLIDAYS_KEY = 'school_checkin_special_holidays';
+
 // 1. วันหยุดคงที่ (Fixed Holidays) - ตรงกันทุกปี
-// รูปแบบ: MM-DD (เดือน-วัน)
 const FIXED_HOLIDAYS_BASE = [
   { date: '01-01', name: 'วันขึ้นปีใหม่' },
   { date: '04-06', name: 'วันจักรี' },
@@ -24,8 +27,7 @@ const FIXED_HOLIDAYS_BASE = [
   { date: '12-31', name: 'วันสิ้นปี' }
 ];
 
-// 2. วันหยุดตามปฏิทินจันทรคติ & วันหยุดชดเชยเฉพาะปี (Dynamic Holidays)
-// ต้องระบุปี YYYY-MM-DD
+// 2. วันหยุดตามปฏิทินจันทรคติ (Dynamic)
 const DYNAMIC_HOLIDAYS: Record<number, { date: string, name: string }[]> = {
   2025: [
     { date: '02-12', name: 'วันมาฆบูชา' },
@@ -36,17 +38,45 @@ const DYNAMIC_HOLIDAYS: Record<number, { date: string, name: string }[]> = {
     { date: '05-12', name: 'วันหยุดชดเชยวันวิสาขบูชา' },
     { date: '07-10', name: 'วันอาสาฬหบูชา' },
     { date: '07-11', name: 'วันเข้าพรรษา' },
-    { date: '08-12', name: 'วันแม่แห่งชาติ' }, // ระบุเผื่อไว้
+    { date: '08-12', name: 'วันแม่แห่งชาติ' },
     { date: '12-31', name: 'วันสิ้นปี' },
   ],
-  2026: [ // ข้อมูลปีหน้า (2569)
+  2026: [ 
     { date: '01-01', name: 'วันขึ้นปีใหม่' },
     { date: '03-03', name: 'วันมาฆบูชา' },
     { date: '04-06', name: 'วันจักรี' },
-    { date: '05-26', name: 'วันวิสาขบูชา' }, // โดยประมาณ
-    { date: '07-29', name: 'วันอาสาฬหบูชา' }, // โดยประมาณ
+    { date: '05-26', name: 'วันวิสาขบูชา' },
+    { date: '07-29', name: 'วันอาสาฬหบูชา' },
     { date: '07-30', name: 'วันเข้าพรรษา' },
   ]
+};
+
+export const getSpecialHolidays = (): SpecialHoliday[] => {
+  const data = localStorage.getItem(SPECIAL_HOLIDAYS_KEY);
+  return data ? JSON.parse(data) : [];
+};
+
+export const addSpecialHoliday = (date: string, name: string) => {
+  const list = getSpecialHolidays();
+  // Prevent duplicate dates
+  if (list.some(h => h.date === date)) {
+     return false; 
+  }
+  const newHoliday: SpecialHoliday = {
+    id: crypto.randomUUID(),
+    date, 
+    name
+  };
+  list.push(newHoliday);
+  list.sort((a, b) => a.date.localeCompare(b.date)); // Sort by date
+  localStorage.setItem(SPECIAL_HOLIDAYS_KEY, JSON.stringify(list));
+  return true;
+};
+
+export const removeSpecialHoliday = (id: string) => {
+  const list = getSpecialHolidays();
+  const newList = list.filter(h => h.id !== id);
+  localStorage.setItem(SPECIAL_HOLIDAYS_KEY, JSON.stringify(newList));
 };
 
 export const getHoliday = (date: Date): string | null => {
@@ -57,13 +87,18 @@ export const getHoliday = (date: Date): string | null => {
   const currentFullDate = `${year}-${month}-${day}`;
   const currentShortDate = `${month}-${day}`;
 
-  // 1. ตรวจสอบวันหยุดคงที่ (ใช้ได้ทุกปี)
+  // 1. ตรวจสอบวันหยุดพิเศษ (Special Holidays - Admin Defined)
+  const specialHolidays = getSpecialHolidays();
+  const special = specialHolidays.find(h => h.date === currentFullDate);
+  if (special) return special.name;
+
+  // 2. ตรวจสอบวันหยุดคงที่ (Fixed)
   const fixedHoliday = FIXED_HOLIDAYS_BASE.find(h => h.date === currentShortDate);
   if (fixedHoliday) {
     return fixedHoliday.name;
   }
 
-  // 2. ตรวจสอบวันหยุดเฉพาะปี
+  // 3. ตรวจสอบวันหยุดตามปฏิทิน (Dynamic)
   if (DYNAMIC_HOLIDAYS[year]) {
     const dynamicHoliday = DYNAMIC_HOLIDAYS[year].find(h => `${year}-${h.date}` === currentFullDate || h.date === currentShortDate);
     if (dynamicHoliday) {

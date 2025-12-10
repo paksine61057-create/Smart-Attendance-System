@@ -1,16 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { AppSettings, GeoLocation, Staff } from '../types';
-import { getSettings, saveSettings } from '../services/storageService';
+import { AppSettings, GeoLocation, Staff, SpecialHoliday } from '../types';
+import { getSettings, saveSettings, clearRecords } from '../services/storageService';
 import { getCurrentPosition } from '../services/geoService';
 import { getAllStaff, addStaff, removeStaff } from '../services/staffService';
+import { getSpecialHolidays, addSpecialHoliday, removeSpecialHoliday } from '../services/holidayService';
 
 interface SettingsProps {
   onClose: () => void;
 }
 
 const Settings: React.FC<SettingsProps> = ({ onClose }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'staff'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'staff' | 'holidays'>('general');
   const [settings, setSettingsState] = useState<AppSettings>(getSettings());
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
@@ -20,8 +21,14 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const [newStaff, setNewStaff] = useState<Staff>({ id: '', name: '', role: '' });
   const [staffError, setStaffError] = useState('');
 
+  // Holiday Management State
+  const [holidayList, setHolidayList] = useState<SpecialHoliday[]>([]);
+  const [newHolidayDate, setNewHolidayDate] = useState('');
+  const [newHolidayName, setNewHolidayName] = useState('');
+
   useEffect(() => {
     setStaffList(getAllStaff());
+    setHolidayList(getSpecialHolidays());
   }, []);
 
   const handleSetCurrentLocation = async () => {
@@ -40,7 +47,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
       };
       
       setSettingsState(newSettings);
-      // saveSettings(newSettings); // Don't save immediately, wait for user to click Save
       setMsg('ดึงพิกัดปัจจุบันเรียบร้อย');
     } catch (err) {
       setMsg('ไม่พบสัญญาณ - โปรดเปิด GPS');
@@ -91,6 +97,36 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     }
   };
 
+  const handleAddHoliday = () => {
+    if (!newHolidayDate || !newHolidayName) {
+        alert('กรุณากรอกวันที่และชื่อวันหยุด');
+        return;
+    }
+    const success = addSpecialHoliday(newHolidayDate, newHolidayName);
+    if (success) {
+        setHolidayList(getSpecialHolidays());
+        setNewHolidayName('');
+        setNewHolidayDate('');
+    } else {
+        alert('วันที่นี้มีอยู่ในรายการแล้ว');
+    }
+  };
+
+  const handleRemoveHoliday = (id: string) => {
+      if (confirm('ลบวันหยุดนี้?')) {
+          removeSpecialHoliday(id);
+          setHolidayList(getSpecialHolidays());
+      }
+  };
+
+  const handleClearAllRecords = () => {
+    if (confirm('⚠️ คำเตือน: คุณต้องการลบข้อมูลการลงเวลาทั้งหมดในเครื่องนี้ใช่หรือไม่?\n\n(การกระทำนี้จะล้างข้อมูลเก่าทั้งหมด เพื่อเริ่มใช้งานใหม่)')) {
+        clearRecords();
+        alert('ล้างข้อมูลเรียบร้อยแล้ว');
+        window.location.reload(); // Reload to reflect changes
+    }
+  };
+
   const saveAndClose = () => {
     saveSettings(settings);
     onClose();
@@ -114,25 +150,32 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-stone-100 px-6 pt-2">
+        <div className="flex border-b border-stone-100 px-6 pt-2 overflow-x-auto">
           <button 
             onClick={() => setActiveTab('general')}
-            className={`pb-3 px-4 text-sm font-bold transition-all relative ${activeTab === 'general' ? 'text-purple-600' : 'text-stone-400 hover:text-stone-600'}`}
+            className={`pb-3 px-4 text-sm font-bold transition-all relative whitespace-nowrap ${activeTab === 'general' ? 'text-purple-600' : 'text-stone-400 hover:text-stone-600'}`}
           >
-            ทั่วไป (General)
+            ทั่วไป
             {activeTab === 'general' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 rounded-t-full"></div>}
           </button>
           <button 
             onClick={() => setActiveTab('staff')}
-            className={`pb-3 px-4 text-sm font-bold transition-all relative ${activeTab === 'staff' ? 'text-purple-600' : 'text-stone-400 hover:text-stone-600'}`}
+            className={`pb-3 px-4 text-sm font-bold transition-all relative whitespace-nowrap ${activeTab === 'staff' ? 'text-purple-600' : 'text-stone-400 hover:text-stone-600'}`}
           >
-            จัดการบุคลากร (Staff)
+            บุคลากร
             {activeTab === 'staff' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 rounded-t-full"></div>}
+          </button>
+          <button 
+            onClick={() => setActiveTab('holidays')}
+            className={`pb-3 px-4 text-sm font-bold transition-all relative whitespace-nowrap ${activeTab === 'holidays' ? 'text-purple-600' : 'text-stone-400 hover:text-stone-600'}`}
+          >
+            วันหยุดพิเศษ
+            {activeTab === 'holidays' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-purple-600 rounded-t-full"></div>}
           </button>
         </div>
         
         <div className="overflow-y-auto p-6 flex-1 bg-stone-50/30">
-          {activeTab === 'general' ? (
+          {activeTab === 'general' && (
             <div className="space-y-6">
               <div className="p-6 bg-white rounded-2xl border border-stone-100 shadow-sm">
                 <h3 className="font-bold text-stone-400 mb-3 text-xs uppercase tracking-widest">จุดลงเวลา (Office Location)</h3>
@@ -199,11 +242,25 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                     placeholder="https://script.google.com/macros/s/..."
                     className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl focus:ring-2 focus:ring-purple-200 focus:border-purple-300 outline-none text-xs text-stone-600"
                     />
-                    <p className="text-[10px] text-stone-400 mt-1">ใช้ Webhook URL จากการ Deploy Web App ใน Google Apps Script</p>
                  </div>
               </div>
+
+              {/* Danger Zone */}
+              <div className="p-6 bg-red-50 rounded-2xl border border-red-100 shadow-sm">
+                 <h3 className="font-bold text-red-400 mb-3 text-xs uppercase tracking-widest">จัดการข้อมูล (Data Management)</h3>
+                 <p className="text-xs text-red-700 mb-4">หากต้องการเริ่มใช้งานจริงวันพรุ่งนี้ สามารถกดปุ่มนี้เพื่อลบข้อมูลการทดสอบทั้งหมดในเครื่องนี้</p>
+                 <button 
+                    onClick={handleClearAllRecords}
+                    className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-md transition-all flex items-center justify-center gap-2"
+                 >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18"></path><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path></svg>
+                    ล้างข้อมูลการลงเวลาทั้งหมด (Reset Data)
+                 </button>
+              </div>
             </div>
-          ) : (
+          )}
+
+          {activeTab === 'staff' && (
              <div className="space-y-6">
                 <div className="p-4 bg-white rounded-2xl border border-stone-100 shadow-sm">
                     <h3 className="font-bold text-stone-400 mb-3 text-xs uppercase tracking-widest">เพิ่มบุคลากรใหม่</h3>
@@ -266,6 +323,67 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                 </div>
              </div>
           )}
+
+          {activeTab === 'holidays' && (
+             <div className="space-y-6">
+                <div className="p-4 bg-white rounded-2xl border border-stone-100 shadow-sm">
+                    <h3 className="font-bold text-stone-400 mb-3 text-xs uppercase tracking-widest">เพิ่มวันหยุดพิเศษ / ปิดเทอม</h3>
+                    <p className="text-xs text-stone-500 mb-3">ระบบจะไม่นับว่าขาดงานในวันที่ระบุในนี้ (รวมถึงวันหยุดราชการปกติ)</p>
+                    <div className="flex gap-3">
+                        <input 
+                            type="date" 
+                            value={newHolidayDate}
+                            onChange={e => setNewHolidayDate(e.target.value)}
+                            className="p-3 bg-stone-50 border rounded-xl text-sm flex-1"
+                        />
+                         <input 
+                            type="text" 
+                            placeholder="ชื่อวันหยุด (เช่น ปิดเทอม, ไหว้ครู)" 
+                            value={newHolidayName}
+                            onChange={e => setNewHolidayName(e.target.value)}
+                            className="p-3 bg-stone-50 border rounded-xl text-sm flex-[2]"
+                        />
+                    </div>
+                    <button onClick={handleAddHoliday} className="mt-3 w-full py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm font-bold">
+                        + เพิ่มวันหยุด
+                    </button>
+                </div>
+
+                <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                            <thead className="text-xs text-stone-500 uppercase bg-stone-50 border-b border-stone-100">
+                                <tr>
+                                    <th className="px-4 py-3">วันที่</th>
+                                    <th className="px-4 py-3">ชื่อวันหยุด</th>
+                                    <th className="px-4 py-3 text-right">ลบ</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-stone-100">
+                                {holidayList.length === 0 && (
+                                    <tr>
+                                        <td colSpan={3} className="px-4 py-8 text-center text-stone-400 text-xs">ยังไม่มีวันหยุดพิเศษที่เพิ่มเอง</td>
+                                    </tr>
+                                )}
+                                {holidayList.map((h) => (
+                                    <tr key={h.id} className="hover:bg-stone-50">
+                                        <td className="px-4 py-3 font-mono text-stone-800">
+                                            {new Date(h.date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
+                                        </td>
+                                        <td className="px-4 py-3 text-stone-600 font-bold">{h.name}</td>
+                                        <td className="px-4 py-3 text-right">
+                                            <button onClick={() => handleRemoveHoliday(h.id)} className="text-red-400 hover:text-red-600 p-1">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+             </div>
+          )}
         </div>
 
         <div className="p-6 bg-white border-t border-stone-100">
@@ -273,7 +391,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
             onClick={saveAndClose}
             className="w-full px-6 py-3.5 bg-stone-900 text-white rounded-xl hover:bg-stone-800 font-bold text-sm tracking-wide transition-all shadow-lg hover:shadow-xl"
           >
-            บันทึกการตั้งค่า
+            บันทึกและปิดหน้าต่าง
           </button>
         </div>
       </div>

@@ -40,3 +40,9 @@ export interface DailySummary {
   late: number;
   aiSummary: string;
 }
+
+export interface SpecialHoliday {
+  id: string;
+  date: string; // YYYY-MM-DD
+  name: string;
+}
