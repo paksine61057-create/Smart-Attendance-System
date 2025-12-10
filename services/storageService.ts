@@ -68,6 +68,58 @@ export const saveRecord = async (record: CheckInRecord) => {
   }
 };
 
+export const updateRecord = async (originalRecord: CheckInRecord, newTimeStr: string): Promise<{ success: boolean, newTimestamp?: number, newStatus?: string }> => {
+    // newTimeStr format "HH:mm"
+    const originalDate = new Date(originalRecord.timestamp);
+    const [hours, minutes] = newTimeStr.split(':').map(Number);
+    const newDate = new Date(originalDate);
+    newDate.setHours(hours, minutes, 0, 0);
+    const newTimestamp = newDate.getTime();
+
+    // Recalculate status based on logic
+    let newStatus = originalRecord.status;
+    const type = originalRecord.type;
+
+    if (type === 'arrival') {
+        const threshold = new Date(newDate);
+        threshold.setHours(8, 1, 0, 0); // 08:01
+        newStatus = newDate > threshold ? 'Late' : 'On Time';
+    } else if (type === 'departure') {
+        const threshold = new Date(newDate);
+        threshold.setHours(16, 0, 0, 0); // 16:00
+        newStatus = newDate < threshold ? 'Early Leave' : 'Normal';
+    }
+    // For leaves/duty, status usually remains the same description (e.g. 'Duty')
+
+    const settings = getSettings();
+    const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+
+    if (targetUrl) {
+         try {
+             // Send special 'editRecord' action
+             await fetch(targetUrl, {
+                 method: 'POST',
+                 redirect: 'follow',
+                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+                 body: JSON.stringify({
+                     action: 'editRecord',
+                     staffId: originalRecord.staffId,
+                     originalTimestamp: originalRecord.timestamp,
+                     newTimestamp: newTimestamp,
+                     status: newStatus,
+                     type: type,
+                     reason: originalRecord.reason
+                 })
+             });
+             return { success: true, newTimestamp, newStatus };
+         } catch (e) {
+             console.error("Failed to update record", e);
+             return { success: false };
+         }
+    }
+    return { success: false };
+};
+
 export const syncUnsyncedRecords = async () => {
     const records = getRecords();
     const unsynced = records.filter(r => !r.syncedToSheets);
@@ -90,10 +142,6 @@ export const syncUnsyncedRecords = async () => {
     }
     
     if (syncedCount > 0) {
-        // Save updated statuses back to local storage
-        // We need to map the updated 'unsynced' objects back to the main array
-        // But since objects in 'unsynced' are references to objects in 'records' (if filter preserves ref),
-        // modifying them directly *might* work depending on JS engine, but safer to re-map by ID.
         const allRecords = getRecords();
         const updatedAll = allRecords.map(r => {
             const syncedVersion = unsynced.find(u => u.id === r.id);
