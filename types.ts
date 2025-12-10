@@ -22,7 +22,7 @@ export interface CheckInRecord {
   reason?: string; // Reason for early departure or leave details
   location: GeoLocation;
   distanceFromBase: number; // in meters
-  status: 'On Time' | 'Late' | 'Normal' | 'Early Leave' | 'Duty' | 'Sick Leave' | 'Personal Leave' | 'Other Leave' | 'Authorized Late';
+  status: 'On Time' | 'Late' | 'Normal' | 'Early Leave' | 'Duty' | 'Sick Leave' | 'Personal Leave' | 'Other Leave' | 'Authorized Late' | 'Admin Assist';
   imageUrl?: string; // base64
   aiVerification?: string; // Gemini's comment on the image
   syncedToSheets?: boolean;

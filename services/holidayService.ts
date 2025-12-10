@@ -25,7 +25,7 @@ const FIXED_HOLIDAYS_BASE = [
 ];
 
 // 2. วันหยุดตามปฏิทินจันทรคติ & วันหยุดชดเชยเฉพาะปี (Dynamic Holidays)
-// ต้องระบุปี YYYY-MM-DD (เพิ่มข้อมูลปี 2026 ให้ล่วงหน้า)
+// ต้องระบุปี YYYY-MM-DD
 const DYNAMIC_HOLIDAYS: Record<number, { date: string, name: string }[]> = {
   2025: [
     { date: '02-12', name: 'วันมาฆบูชา' },
@@ -36,10 +36,13 @@ const DYNAMIC_HOLIDAYS: Record<number, { date: string, name: string }[]> = {
     { date: '05-12', name: 'วันหยุดชดเชยวันวิสาขบูชา' },
     { date: '07-10', name: 'วันอาสาฬหบูชา' },
     { date: '07-11', name: 'วันเข้าพรรษา' },
+    { date: '08-12', name: 'วันแม่แห่งชาติ' }, // ระบุเผื่อไว้
+    { date: '12-31', name: 'วันสิ้นปี' },
   ],
   2026: [ // ข้อมูลปีหน้า (2569)
+    { date: '01-01', name: 'วันขึ้นปีใหม่' },
     { date: '03-03', name: 'วันมาฆบูชา' },
-    { date: '04-06', name: 'วันจักรี' }, // ตรงวันจันทร์ ไม่ต้องชดเชย
+    { date: '04-06', name: 'วันจักรี' },
     { date: '05-26', name: 'วันวิสาขบูชา' }, // โดยประมาณ
     { date: '07-29', name: 'วันอาสาฬหบูชา' }, // โดยประมาณ
     { date: '07-30', name: 'วันเข้าพรรษา' },
@@ -60,21 +63,13 @@ export const getHoliday = (date: Date): string | null => {
     return fixedHoliday.name;
   }
 
-  // 2. ตรวจสอบวันหยุดเฉพาะปี (เช่น วันพระใหญ่ หรือวันชดเชยที่ประกาศล่วงหน้า)
+  // 2. ตรวจสอบวันหยุดเฉพาะปี
   if (DYNAMIC_HOLIDAYS[year]) {
-    const dynamicHoliday = DYNAMIC_HOLIDAYS[year].find(h => h.date === currentShortDate);
+    const dynamicHoliday = DYNAMIC_HOLIDAYS[year].find(h => `${year}-${h.date}` === currentFullDate || h.date === currentShortDate);
     if (dynamicHoliday) {
       return dynamicHoliday.name;
     }
   }
-
-  // 3. (Optional) Logic คำนวณชดเชยอัตโนมัติสำหรับวันหยุดคงที่
-  // ถ้าวันหยุดราชการตรงกับเสาร์/อาทิตย์ -> วันจันทร์มักเป็นวันหยุดชดเชย
-  // ตรวจสอบว่า "เมื่อวาน" หรือ "เมื่อวานซืน" เป็นวันหยุดคงที่ และเป็น เสาร์/อาทิตย์ หรือไม่
-  /* 
-     หมายเหตุ: การเปิดใช้ Logic นี้อาจมีความเสี่ยงผิดพลาดหากรัฐบาลประกาศไม่หยุดชดเชย 
-     ดังนั้นวิธีที่แม่นยำที่สุดคือการใส่ข้อมูลใน DYNAMIC_HOLIDAYS แบบข้อ 2
-  */
 
   return null;
 };
