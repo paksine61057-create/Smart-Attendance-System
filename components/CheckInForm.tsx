@@ -5,6 +5,7 @@ import { getCurrentPosition, getDistanceFromLatLonInMeters } from '../services/g
 import { saveRecord, getSettings, syncSettingsFromCloud } from '../services/storageService';
 import { analyzeCheckInImage } from '../services/geminiService';
 import { getStaffById } from '../services/staffService';
+import { getHoliday } from '../services/holidayService';
 
 interface CheckInFormProps {
   onSuccess: () => void;
@@ -51,6 +52,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   
   // Filter State
   const [activeFilterId, setActiveFilterId] = useState('normal');
+
+  // Holiday State
+  const [todayHoliday, setTodayHoliday] = useState<string | null>(null);
   
   const isEarlyDeparture = useCallback(() => {
     if (attendanceType !== 'departure') return false;
@@ -94,6 +98,10 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     if (savedId) {
         setStaffIdInput(savedId);
     }
+
+    // Check Holiday
+    const holiday = getHoliday(new Date());
+    setTodayHoliday(holiday);
   }, []);
 
   // Auto-login check when typing ID
@@ -338,6 +346,18 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
               </h2>
               <p className="text-indigo-100 text-xs md:text-sm mt-1 font-medium opacity-90">ระบบลงเวลาบุคลากร โรงเรียนประจักษ์ศิลปาคม</p>
             </div>
+
+            {/* HOLIDAY BANNER */}
+            {todayHoliday && (
+                <div className="mb-6 p-3 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center gap-2 animate-pulse shadow-lg backdrop-blur-md">
+                     <span className="text-2xl">🎉</span>
+                     <div className="text-center">
+                         <p className="text-[10px] text-indigo-100 uppercase tracking-widest font-bold">Today is a holiday</p>
+                         <p className="text-sm md:text-base font-bold text-white drop-shadow-md">{todayHoliday}</p>
+                     </div>
+                     <span className="text-2xl">🇹🇭</span>
+                </div>
+            )}
             
             {!settings?.officeLocation && (
               <div className="bg-white text-amber-600 p-3 rounded-2xl mb-6 text-xs md:text-sm border-l-4 border-amber-500 flex items-center gap-2 shadow-lg animate-pulse">
