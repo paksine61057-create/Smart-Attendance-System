@@ -43,6 +43,34 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
   }
 };
 
+export const updateRecord = async (originalTimestamp: number, staffId: string, newData: any) => {
+  const settings = getSettings();
+  const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+
+  if (!targetUrl) return false;
+
+  try {
+    const payload = {
+      action: 'editRecord',
+      originalTimestamp: originalTimestamp,
+      staffId: staffId,
+      ...newData
+    };
+
+    const response = await fetch(targetUrl, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    
+    return response.ok;
+  } catch (e) {
+    console.error("Failed to update record", e);
+    return false;
+  }
+};
+
 export const saveRecord = async (record: CheckInRecord) => {
   // 1. Save Local first (mark as unsynced initially)
   const records = getRecords();
@@ -68,58 +96,6 @@ export const saveRecord = async (record: CheckInRecord) => {
   }
 };
 
-export const updateRecord = async (originalRecord: CheckInRecord, newTimeStr: string): Promise<{ success: boolean, newTimestamp?: number, newStatus?: string }> => {
-    // newTimeStr format "HH:mm"
-    const originalDate = new Date(originalRecord.timestamp);
-    const [hours, minutes] = newTimeStr.split(':').map(Number);
-    const newDate = new Date(originalDate);
-    newDate.setHours(hours, minutes, 0, 0);
-    const newTimestamp = newDate.getTime();
-
-    // Recalculate status based on logic
-    let newStatus = originalRecord.status;
-    const type = originalRecord.type;
-
-    if (type === 'arrival') {
-        const threshold = new Date(newDate);
-        threshold.setHours(8, 1, 0, 0); // 08:01
-        newStatus = newDate > threshold ? 'Late' : 'On Time';
-    } else if (type === 'departure') {
-        const threshold = new Date(newDate);
-        threshold.setHours(16, 0, 0, 0); // 16:00
-        newStatus = newDate < threshold ? 'Early Leave' : 'Normal';
-    }
-    // For leaves/duty, status usually remains the same description (e.g. 'Duty')
-
-    const settings = getSettings();
-    const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-
-    if (targetUrl) {
-         try {
-             // Send special 'editRecord' action
-             await fetch(targetUrl, {
-                 method: 'POST',
-                 redirect: 'follow',
-                 headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-                 body: JSON.stringify({
-                     action: 'editRecord',
-                     staffId: originalRecord.staffId,
-                     originalTimestamp: originalRecord.timestamp,
-                     newTimestamp: newTimestamp,
-                     status: newStatus,
-                     type: type,
-                     reason: originalRecord.reason
-                 })
-             });
-             return { success: true, newTimestamp, newStatus };
-         } catch (e) {
-             console.error("Failed to update record", e);
-             return { success: false };
-         }
-    }
-    return { success: false };
-};
-
 export const syncUnsyncedRecords = async () => {
     const records = getRecords();
     const unsynced = records.filter(r => !r.syncedToSheets);
@@ -142,6 +118,7 @@ export const syncUnsyncedRecords = async () => {
     }
     
     if (syncedCount > 0) {
+        // Save updated statuses back to local storage
         const allRecords = getRecords();
         const updatedAll = allRecords.map(r => {
             const syncedVersion = unsynced.find(u => u.id === r.id);
@@ -298,6 +275,7 @@ export const exportToCSV = (records?: CheckInRecord[]): string => {
         case 'sick_leave': typeLabel = 'ลาป่วย'; break;
         case 'personal_leave': typeLabel = 'ลากิจ'; break;
         case 'other_leave': typeLabel = 'ลาอื่นๆ'; break;
+        case 'authorized_late': typeLabel = 'ขออนุญาตเข้าสาย'; break;
         default: typeLabel = r.type;
     }
 

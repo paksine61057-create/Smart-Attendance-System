@@ -68,9 +68,14 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     return now > targetTime;
   }, [attendanceType]);
 
-  // Check if type allows remote check-in
+  // Check if type allows remote check-in (NO GPS REQUIRED)
   const isSpecialRequest = useCallback(() => {
       return ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(attendanceType);
+  }, [attendanceType]);
+  
+  // Check if type is Authorized Late (GPS REQUIRED + REASON REQUIRED)
+  const isAuthorizedLate = useCallback(() => {
+      return attendanceType === 'authorized_late';
   }, [attendanceType]);
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -145,6 +150,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
     // *** SPECIAL HANDLING FOR LEAVE/DUTY ***
     // "ไม่ต้องใช้ gps" -> We allow check-in from anywhere and don't block if GPS is missing/slow.
+    // NOTE: 'authorized_late' IS NOT in isSpecialRequest(), so it WILL perform the GPS check below.
     if (isSpecialRequest()) {
          try {
              // Race GPS vs Timeout (3s) to avoid hanging
@@ -160,7 +166,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
          }
     }
 
-    // *** NORMAL CHECK-IN (ARRIVAL/DEPARTURE) ***
+    // *** NORMAL CHECK-IN (ARRIVAL/DEPARTURE) + AUTHORIZED LATE ***
     if (!currentSettings?.officeLocation) {
       setLocationError("ระบบยังไม่ได้รับการตั้งค่าพิกัดห้องบุคคล กรุณาติดต่อผู้ดูแล");
       return false;
@@ -207,6 +213,10 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     }
     if (isSpecialRequest() && !reason.trim()) {
         alert("กรุณาระบุรายละเอียด/สถานที่ สำหรับการลาหรือไปราชการ");
+        return;
+    }
+    if (isAuthorizedLate() && !reason.trim()) {
+        alert("กรุณาระบุเหตุผลการขออนุญาตเข้าสาย");
         return;
     }
 
@@ -260,7 +270,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         
         const [aiResult, loc] = await Promise.all([aiPromise, locPromise]);
         
-        // If normal check-in failed GPS on capture, stop
+        // If normal/authorized check-in failed GPS on capture, stop
         if (!loc && !isSpecialRequest()) {
             setStep('camera'); // Go back
             return; 
@@ -285,6 +295,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
             status = 'Personal Leave';
         } else if (attendanceType === 'other_leave') {
             status = 'Other Leave';
+        } else if (attendanceType === 'authorized_late') {
+            status = 'Authorized Late';
         }
 
         const record: CheckInRecord = {
@@ -293,7 +305,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
           name: currentUser.name,
           role: currentUser.role,
           type: attendanceType,
-          reason: (isEarlyDeparture() || isLateArrival() || isSpecialRequest()) ? reason : undefined,
+          reason: (isEarlyDeparture() || isLateArrival() || isSpecialRequest() || isAuthorizedLate()) ? reason : undefined,
           timestamp: now.getTime(),
           location: (loc || { lat: 0, lng: 0 }) as GeoLocation,
           distanceFromBase: currentDistance || 0,
@@ -309,7 +321,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         }, 2000);
       }
     }
-  }, [currentUser, attendanceType, reason, currentDistance, isEarlyDeparture, isLateArrival, isSpecialRequest, validateLocation, onSuccess, activeFilterId]);
+  }, [currentUser, attendanceType, reason, currentDistance, isEarlyDeparture, isLateArrival, isSpecialRequest, isAuthorizedLate, validateLocation, onSuccess, activeFilterId]);
 
   if (step === 'info') {
     return (
@@ -422,8 +434,18 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                             </button>
                         </div>
                         
-                        {/* Leave / Duty Options (No GPS) */}
+                        {/* Leave / Duty Options */}
                         <div className="grid grid-cols-2 gap-2">
+                             <button
+                                onClick={() => { setAttendanceType('authorized_late'); setReason(''); }}
+                                className={`col-span-2 py-3 text-[10px] md:text-xs font-bold rounded-xl transition-all border flex items-center justify-center gap-2 ${
+                                    attendanceType === 'authorized_late' 
+                                    ? 'bg-white text-indigo-700 border-white shadow-md transform scale-105' 
+                                    : 'bg-white/5 text-white/80 border-white/10 hover:bg-white/10'
+                                }`}
+                             >
+                                 ⏰ ขออนุญาตเข้าสาย
+                             </button>
                              <button
                                 onClick={() => { setAttendanceType('duty'); setReason(''); }}
                                 className={`py-2 text-[10px] md:text-xs font-bold rounded-xl transition-all border ${
@@ -469,13 +491,16 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         {/* Reason / Details Field */}
                         {((attendanceType === 'departure' && isEarlyDeparture()) || 
                           (attendanceType === 'arrival' && isLateArrival()) ||
-                          isSpecialRequest()) && (
+                          isSpecialRequest() || 
+                          isAuthorizedLate()) && (
                             <div className={`animate-in fade-in slide-in-from-top-2 p-4 rounded-2xl shadow-lg border-2 ${
                                 isSpecialRequest() ? 'bg-white text-blue-800 border-blue-200' : 
+                                isAuthorizedLate() ? 'bg-white text-indigo-800 border-indigo-200' :
                                 attendanceType === 'arrival' ? 'bg-white text-amber-700 border-amber-200' : 'bg-white text-red-700 border-red-200'
                             }`}>
                             <label className="block text-[10px] font-bold mb-2 uppercase tracking-wider flex items-center gap-2 drop-shadow-none">
                                 {isSpecialRequest() ? '📝 รายละเอียด / สถานที่' : 
+                                 isAuthorizedLate() ? '⏰ ระบุเหตุผลการขออนุญาต' :
                                  attendanceType === 'arrival' ? '⚠️ ระบุสาเหตุที่มาสาย' : '⚠️ ระบุสาเหตุที่กลับก่อนเวลา'}
                             </label>
                             <textarea 

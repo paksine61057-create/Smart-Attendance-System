@@ -13,11 +13,6 @@ const Dashboard: React.FC = () => {
   const [filteredRecords, setFilteredRecords] = useState<CheckInRecord[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   
-  // Edit State
-  const [editingRecord, setEditingRecord] = useState<CheckInRecord | null>(null);
-  const [editTime, setEditTime] = useState('');
-  const [isSavingEdit, setIsSavingEdit] = useState(false);
-  
   // Date states
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
@@ -27,6 +22,11 @@ const Dashboard: React.FC = () => {
   // Consolidated Data for Reports
   const [officialReportData, setOfficialReportData] = useState<any[]>([]);
   const [monthlyReportData, setMonthlyReportData] = useState<any[]>([]);
+
+  // Edit Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingRecord, setEditingRecord] = useState<CheckInRecord | null>(null);
+  const [editNewTime, setEditNewTime] = useState('');
 
   // Function to load data from Cloud and Merge with Local
   const syncData = useCallback(async () => {
@@ -43,11 +43,16 @@ const Dashboard: React.FC = () => {
 
           // 4. SMART MERGE: 
           // Combine Cloud records with any Local records that haven't appeared in Cloud yet
+          // (Matching by timestamp + staffId is a safe heuristic if IDs differ)
           const mergedRecords = [...cloudRecords];
+          
+          // Create a signature set for cloud records for quick lookup
+          // Signature: Timestamp_StaffId (Unique enough for this purpose)
           const cloudSignatures = new Set(cloudRecords.map(r => `${r.timestamp}_${r.staffId}`));
           
           localRecords.forEach(local => {
               const signature = `${local.timestamp}_${local.staffId}`;
+              // If this local record is NOT in the cloud list, add it to view
               if (!cloudSignatures.has(signature)) {
                   mergedRecords.push(local);
               }
@@ -114,13 +119,15 @@ const Dashboard: React.FC = () => {
             departureStatus = 'Leave';
             if (dutyOrLeave.imageUrl && dutyOrLeave.imageUrl.length > 20) hasImage = true;
         } else {
-            const arrival = staffRecords.find(r => r.type === 'arrival');
+            const arrival = staffRecords.find(r => r.type === 'arrival' || r.type === 'authorized_late');
             const departure = staffRecords.find(r => r.type === 'departure');
 
             if (arrival) {
                 arrivalTime = new Date(arrival.timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
                 arrivalStatus = arrival.status;
                 if (arrival.status === 'Late') note += `สาย: ${arrival.reason || '-'} `;
+                else if (arrival.status === 'Authorized Late') note += `อนุญาตเข้าสาย: ${arrival.reason || '-'} `;
+                
                 if (arrival.imageUrl && arrival.imageUrl.length > 20) hasImage = true;
             }
             if (departure) {
@@ -173,7 +180,7 @@ const Dashboard: React.FC = () => {
 
   }, [selectedDate, selectedMonth, allRecords]);
 
-  const onTimeCount = filteredRecords.filter(r => r.status === 'On Time').length;
+  const onTimeCount = filteredRecords.filter(r => r.status === 'On Time' || r.status === 'Authorized Late').length;
   const lateCount = filteredRecords.filter(r => r.status === 'Late').length;
   const earlyLeaveCount = filteredRecords.filter(r => r.status === 'Early Leave').length;
   const dutyCount = filteredRecords.filter(r => ['Duty', 'Sick Leave', 'Personal Leave', 'Other Leave'].includes(r.status)).length;
@@ -262,36 +269,54 @@ const Dashboard: React.FC = () => {
       window.open(url, '_blank');
   };
 
-  const handleEditClick = (record: CheckInRecord) => {
-      const date = new Date(record.timestamp);
-      // Format HH:mm for input
-      const hh = date.getHours().toString().padStart(2, '0');
-      const mm = date.getMinutes().toString().padStart(2, '0');
-      setEditTime(`${hh}:${mm}`);
-      setEditingRecord(record);
+  const openEditModal = (record: CheckInRecord) => {
+    setEditingRecord(record);
+    // Set initial time from record
+    const date = new Date(record.timestamp);
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    setEditNewTime(`${hours}:${minutes}`);
+    setShowEditModal(true);
   };
 
   const handleSaveEdit = async () => {
-      if (!editingRecord || !editTime) return;
-      setIsSavingEdit(true);
-      
-      const result = await updateRecord(editingRecord, editTime);
-      
-      if (result.success && result.newTimestamp && result.newStatus) {
-          // Update local UI immediately
-          const updatedRecords = allRecords.map(r => {
-             if (r.id === editingRecord.id) {
-                 return { ...r, timestamp: result.newTimestamp!, status: result.newStatus as any };
-             }
-             return r;
-          });
-          setAllRecords(updatedRecords);
-          setEditingRecord(null);
-          alert("แก้ไขข้อมูลเรียบร้อย (Updated)");
-      } else {
-          alert("เกิดข้อผิดพลาดในการแก้ไข (Update Failed)");
-      }
-      setIsSavingEdit(false);
+    if (!editingRecord || !editNewTime) return;
+    
+    // Construct new timestamp
+    const [hours, minutes] = editNewTime.split(':').map(Number);
+    const newDate = new Date(editingRecord.timestamp);
+    newDate.setHours(hours, minutes);
+    const newTimestamp = newDate.getTime();
+
+    // Recalculate Status
+    let newStatus = editingRecord.status;
+    if (editingRecord.type === 'arrival') {
+        const threshold = new Date(newTimestamp);
+        threshold.setHours(8, 1, 0, 0);
+        newStatus = newDate > threshold ? 'Late' : 'On Time';
+    } else if (editingRecord.type === 'departure') {
+        const threshold = new Date(newTimestamp);
+        threshold.setHours(16, 0, 0, 0);
+        newStatus = newDate < threshold ? 'Early Leave' : 'Normal';
+    }
+
+    // Call API to update
+    const success = await updateRecord(editingRecord.timestamp, editingRecord.staffId || '', {
+        newTimestamp: newTimestamp,
+        type: editingRecord.type,
+        status: newStatus,
+        reason: editingRecord.reason // Keep existing reason or add UI to edit reason too
+    });
+
+    if (success) {
+        alert("แก้ไขข้อมูลเรียบร้อย (กรุณากด Sync เพื่อดูข้อมูลล่าสุด)");
+        setShowEditModal(false);
+        setEditingRecord(null);
+        // Optimistically update local view or just trigger sync
+        syncData(); 
+    } else {
+        alert("เกิดข้อผิดพลาดในการแก้ไขข้อมูล");
+    }
   };
 
   return (
@@ -300,7 +325,7 @@ const Dashboard: React.FC = () => {
         @media print {
           @page {
             size: A4;
-            margin: 0;
+            margin: 0; /* IMPT: Removes browser headers/footers */
           }
           body {
             margin: 0;
@@ -320,7 +345,7 @@ const Dashboard: React.FC = () => {
             top: 0;
             width: 210mm;
             min-height: 297mm;
-            padding: 5mm 15mm; 
+            padding: 5mm 15mm; /* Reduced top padding to move content up */
             background: white;
             z-index: 9999;
             box-sizing: border-box;
@@ -330,43 +355,26 @@ const Dashboard: React.FC = () => {
           }
         }
       `}</style>
-      
-      {/* Edit Record Modal */}
-      {editingRecord && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 no-print">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-sm shadow-2xl animate-in zoom-in-95">
-                  <h3 className="text-lg font-bold text-stone-800 mb-4 flex items-center gap-2">
-                      <span className="p-2 bg-indigo-100 text-indigo-600 rounded-full">✎</span>
-                      แก้ไขเวลา (Edit Time)
-                  </h3>
+
+      {/* Edit Modal */}
+      {showEditModal && editingRecord && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 no-print">
+              <div className="bg-white p-6 rounded-2xl shadow-xl w-80">
+                  <h3 className="font-bold text-lg mb-4">แก้ไขเวลาลงชื่อ</h3>
                   <div className="mb-4">
-                      <label className="block text-xs font-bold text-stone-500 mb-1">ชื่อบุคลากร</label>
-                      <div className="p-3 bg-stone-50 rounded-xl text-stone-700 font-medium text-sm">{editingRecord.name}</div>
-                  </div>
-                  <div className="mb-6">
-                      <label className="block text-xs font-bold text-stone-500 mb-1">เวลาใหม่ (HH:mm)</label>
+                      <p className="text-sm text-stone-500 mb-1">ชื่อ: {editingRecord.name}</p>
+                      <p className="text-sm text-stone-500 mb-4">ประเภท: {editingRecord.type}</p>
+                      <label className="block text-xs font-bold mb-1">เวลาใหม่</label>
                       <input 
                         type="time" 
-                        value={editTime} 
-                        onChange={(e) => setEditTime(e.target.value)}
-                        className="w-full p-4 bg-stone-50 border border-stone-200 rounded-xl text-2xl font-mono text-center font-bold focus:ring-2 focus:ring-indigo-200 outline-none"
+                        value={editNewTime}
+                        onChange={(e) => setEditNewTime(e.target.value)}
+                        className="w-full p-2 border rounded-lg text-lg font-bold text-center"
                       />
-                      <p className="text-[10px] text-stone-400 mt-2 text-center">ระบบจะคำนวณสถานะ (สาย/ปกติ) ใหม่ให้อัตโนมัติ</p>
                   </div>
-                  <div className="flex gap-3">
-                      <button 
-                        onClick={() => setEditingRecord(null)}
-                        className="flex-1 py-3 text-stone-500 font-bold bg-stone-100 hover:bg-stone-200 rounded-xl transition-colors"
-                      >
-                          ยกเลิก
-                      </button>
-                      <button 
-                        onClick={handleSaveEdit}
-                        disabled={isSavingEdit}
-                        className="flex-1 py-3 text-white font-bold bg-indigo-600 hover:bg-indigo-700 rounded-xl transition-colors flex items-center justify-center gap-2"
-                      >
-                          {isSavingEdit ? 'Saving...' : 'บันทึก'}
-                      </button>
+                  <div className="flex gap-2">
+                      <button onClick={() => setShowEditModal(false)} className="flex-1 py-2 bg-stone-100 rounded-lg text-sm font-bold">ยกเลิก</button>
+                      <button onClick={handleSaveEdit} className="flex-1 py-2 bg-blue-600 text-white rounded-lg text-sm font-bold">บันทึก</button>
                   </div>
               </div>
           </div>
@@ -382,6 +390,7 @@ const Dashboard: React.FC = () => {
         </div>
         
         <div className="flex flex-wrap gap-4 items-center">
+             {/* Sync Button */}
              <button 
                 onClick={syncData}
                 disabled={isSyncing}
@@ -391,6 +400,7 @@ const Dashboard: React.FC = () => {
                 {isSyncing ? 'กำลังซิงค์...' : 'Sync ข้อมูลล่าสุด'}
              </button>
 
+             {/* Dynamic Date/Month Picker */}
             <div className="relative">
                 {activeTab === 'monthly' ? (
                     <input 
@@ -411,6 +421,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex flex-wrap gap-2 mb-6 border-b border-stone-200/50 pb-2 no-print bg-white/40 p-2 rounded-2xl backdrop-blur-sm">
           <button 
             onClick={() => setActiveTab('realtime')}
@@ -514,7 +525,8 @@ const Dashboard: React.FC = () => {
                         <th className="px-4 py-2">Name</th>
                         <th className="px-4 py-2">Status</th>
                         <th className="px-4 py-2">Note</th>
-                        <th className="px-4 py-2 rounded-r-lg text-center">จัดการ</th>
+                        <th className="px-4 py-2 text-center w-[120px]">หลักฐาน</th>
+                        <th className="px-4 py-2 rounded-r-lg text-center w-[60px]">Edit</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-50">
@@ -528,6 +540,7 @@ const Dashboard: React.FC = () => {
                                   'bg-blue-100 text-blue-600'}`}>
                                 {record.type.substr(0,3)}
                             </span>
+                            {/* Unsynced Indicator */}
                             {!record.id.startsWith('sheet_') && (
                                 <span title="รอการส่งข้อมูล (Pending Sync)" className="inline-block w-2 h-2 bg-orange-400 rounded-full ml-1 animate-pulse"></span>
                             )}
@@ -541,35 +554,35 @@ const Dashboard: React.FC = () => {
                                 ${record.status === 'Late' ? 'bg-red-50 text-red-500' : 
                                   record.status === 'Early Leave' ? 'bg-amber-50 text-amber-500' : 
                                   ['Duty', 'Sick Leave', 'Personal Leave', 'Other Leave'].includes(record.status) ? 'bg-blue-50 text-blue-600' :
+                                  record.status === 'Authorized Late' ? 'bg-indigo-50 text-indigo-600' :
                                   'bg-emerald-50 text-emerald-600'}`}>
                                 {record.status}
                             </span>
                         </td>
                         <td className="px-4 py-3 text-xs text-stone-400">{record.reason || '-'}</td>
-                        <td className="px-4 py-3 text-center flex items-center justify-end gap-2">
-                             {/* Edit Button */}
-                             <button 
-                                onClick={() => handleEditClick(record)}
-                                className="p-1.5 bg-stone-100 text-stone-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-stone-200"
-                                title="แก้ไขเวลา"
-                             >
-                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                             </button>
-
+                        <td className="px-4 py-3 text-center">
                             {(record.imageUrl && record.imageUrl.length > 20) ? (
                                 <button 
                                     onClick={() => openImage(record.imageUrl)}
-                                    className={`p-1.5 rounded-lg transition-colors text-[10px] font-bold
+                                    className={`px-3 py-1.5 rounded-lg transition-colors text-[10px] font-bold flex items-center justify-center gap-1 w-full
                                     ${record.imageUrl?.startsWith('Error') || record.imageUrl?.startsWith('Exception') 
                                         ? 'bg-red-50 text-red-500 hover:bg-red-100 border border-red-200' 
                                         : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100 border border-indigo-200'}`}
-                                    title="ดูรูปภาพ"
                                 >
-                                    {record.imageUrl?.startsWith('Error') || record.imageUrl?.startsWith('Exception') ? '⚠️' : '📷'}
+                                    {record.imageUrl?.startsWith('Error') || record.imageUrl?.startsWith('Exception') ? (
+                                        <><span>⚠️</span> มีปัญหา</>
+                                    ) : (
+                                        <><span>📷</span> ดูรูปภาพ</>
+                                    )}
                                 </button>
                             ) : (
-                                <span className="w-6"></span>
+                                <span className="text-stone-300 text-[10px]">-</span>
                             )}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                            <button onClick={() => openEditModal(record)} className="text-stone-400 hover:text-blue-500">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                            </button>
                         </td>
                     </tr>
                     ))}
@@ -580,7 +593,7 @@ const Dashboard: React.FC = () => {
         </div>
       </>
       ) : (
-        /* PRINTABLE REPORTS */
+        /* PRINTABLE REPORTS (Daily or Monthly) */
         <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden min-h-[600px] flex flex-col">
             <div className="p-8 border-b border-stone-100 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-stone-50/30 no-print">
                 <div className="p-4 bg-white rounded-xl border border-stone-200 shadow-sm">
@@ -611,7 +624,10 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
             
+            {/* Printable Area - Designed for A4 Print */}
             <div id="printable-report" className="overflow-x-auto p-4 md:p-0">
+                
+                {/* Print Header */}
                 <div className="hidden print:flex flex-col items-center justify-center mb-4">
                      <img src="https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png" className="w-16 h-16 object-contain grayscale-0 mb-1" alt="Logo" />
                      <h1 className="text-xl font-bold text-black leading-tight">โรงเรียนประจักษ์ศิลปาคม</h1>
@@ -690,6 +706,7 @@ const Dashboard: React.FC = () => {
                     </tbody>
                 </table>
                 
+                {/* Print Footer / Signature Area */}
                 <div className="hidden print:flex justify-between items-start mt-4 px-8 break-inside-avoid">
                     <div className="text-center w-48">
                         <p className="text-xs font-bold mb-6">ลงชื่อ..........................................................</p>
