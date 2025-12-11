@@ -164,12 +164,18 @@ const Dashboard: React.FC = () => {
 
     // 2. MONTHLY REPORT LOGIC
     const monthlyStaffData = allStaff.map(staff => {
+        // *** SYSTEM START DATE: 11 Dec 2025 ***
+        // Month is 0-indexed in JS Date (0=Jan, 11=Dec)
+        const systemStartDate = new Date(2025, 11, 11); 
+        systemStartDate.setHours(0,0,0,0);
+
         // Late Records
         const lateRecords = allRecords.filter(r => 
             r.staffId === staff.id &&
             r.status === 'Late' &&
             r.type === 'arrival' &&
-            new Date(r.timestamp).toISOString().startsWith(selectedMonth)
+            new Date(r.timestamp).toISOString().startsWith(selectedMonth) &&
+            new Date(r.timestamp) >= systemStartDate // Filter out late records before system start
         );
         lateRecords.sort((a, b) => a.timestamp - b.timestamp);
         const lateDays = lateRecords.map(r => new Date(r.timestamp).getDate()).join(', ');
@@ -190,11 +196,6 @@ const Dashboard: React.FC = () => {
         } else if (y > currentYear || (y === currentYear && m > currentMonth)) {
             limitDay = 0; // Future month
         }
-
-        // *** SYSTEM START DATE: 11 Dec 2025 ***
-        // Month is 0-indexed in JS Date (0=Jan, 11=Dec)
-        const systemStartDate = new Date(2025, 11, 11); 
-        systemStartDate.setHours(0,0,0,0);
 
         for (let d = 1; d <= limitDay; d++) {
             const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
