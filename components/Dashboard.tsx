@@ -3,7 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
-import { getRecords, clearRecords, exportToCSV, fetchGlobalRecords, syncUnsyncedRecords, updateRecord, saveRecord } from '../services/storageService';
+import { getRecords, clearRecords, exportToCSV, fetchGlobalRecords, syncUnsyncedRecords, updateRecord, saveRecord, deleteRecord } from '../services/storageService';
 import { CheckInRecord, Staff, GeoLocation, AttendanceType } from '../types';
 import { getAllStaff } from '../services/staffService';
 import { getHoliday } from '../services/holidayService';
@@ -308,6 +308,15 @@ const Dashboard: React.FC = () => {
       setAllRecords([]);
       setFilteredRecords([]);
     }
+  };
+
+  const handleDelete = async (record: CheckInRecord) => {
+      // Prompt confirm with the specific text requested
+      if(confirm(`คุณต้องการลบข้อมูลนี้ใช่หรือไม่?\n\nชื่อ: ${record.name}\nเวลา: ${new Date(record.timestamp).toLocaleTimeString('th-TH')}`)) {
+          await deleteRecord(record);
+          alert('ลบรายการเรียบร้อย');
+          syncData();
+      }
   };
 
   const formatMonthYear = (ym: string) => {
@@ -729,7 +738,7 @@ const Dashboard: React.FC = () => {
                         <th className="px-4 py-2 text-center">Status</th>
                         <th className="px-4 py-2 text-center">Note</th>
                         <th className="px-4 py-2 text-center w-[120px]">หลักฐาน</th>
-                        <th className="px-4 py-2 text-center w-[60px]">Edit</th>
+                        <th className="px-4 py-2 text-center w-[140px]">Actions</th>
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-stone-50">
@@ -766,9 +775,15 @@ const Dashboard: React.FC = () => {
                             ) : <span className="text-stone-300 text-[10px]">-</span>}
                         </td>
                         <td className="px-4 py-3 text-center">
-                            <button onClick={() => openEditModal(record)} className="text-stone-400 hover:text-blue-500">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
-                            </button>
+                           <div className="flex items-center justify-center gap-4">
+                                <button onClick={() => openEditModal(record)} className="p-2 bg-stone-50 text-stone-500 hover:text-blue-600 hover:bg-blue-100 rounded-lg transition-all" title="แก้ไข">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path></svg>
+                                </button>
+                                <div className="w-px h-6 bg-stone-200"></div>
+                                <button onClick={() => handleDelete(record)} className="p-2 bg-red-50 text-red-400 hover:text-red-600 hover:bg-red-100 rounded-lg transition-all" title="ลบรายการ">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                </button>
+                           </div>
                         </td>
                     </tr>
                     ))}

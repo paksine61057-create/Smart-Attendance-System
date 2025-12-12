@@ -71,6 +71,38 @@ export const updateRecord = async (originalTimestamp: number, staffId: string, n
   }
 };
 
+export const deleteRecord = async (record: CheckInRecord) => {
+  // 1. Remove from Local Storage
+  const records = getRecords();
+  const newRecords = records.filter(r => r.id !== record.id);
+  localStorage.setItem(RECORDS_KEY, JSON.stringify(newRecords));
+
+  // 2. Send delete request to Cloud
+  const settings = getSettings();
+  const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+
+  if (targetUrl) {
+      try {
+        await fetch(targetUrl, {
+            method: 'POST',
+            redirect: 'follow',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({
+                action: 'deleteRecord',
+                id: record.id,
+                staffId: record.staffId,
+                timestamp: record.timestamp
+            })
+        });
+        return true;
+      } catch (e) {
+          console.error("Failed to delete from cloud", e);
+          return false;
+      }
+  }
+  return true;
+};
+
 export const saveRecord = async (record: CheckInRecord) => {
   // 1. Save Local first (mark as unsynced initially)
   const records = getRecords();
