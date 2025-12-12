@@ -4,7 +4,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recha
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
 import { getRecords, clearRecords, exportToCSV, fetchGlobalRecords, syncUnsyncedRecords, updateRecord, saveRecord } from '../services/storageService';
-import { CheckInRecord, Staff, GeoLocation } from '../types';
+import { CheckInRecord, Staff, GeoLocation, AttendanceType } from '../types';
 import { getAllStaff } from '../services/staffService';
 import { getHoliday } from '../services/holidayService';
 
@@ -29,6 +29,16 @@ const Dashboard: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingRecord, setEditingRecord] = useState<CheckInRecord | null>(null);
   const [editNewTime, setEditNewTime] = useState('');
+
+  // Admin Manual Check-in State
+  const [showAdminCheckInModal, setShowAdminCheckInModal] = useState(false);
+  const [adminForm, setAdminForm] = useState({
+      staffId: '',
+      date: new Date().toISOString().split('T')[0],
+      time: new Date().toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}),
+      type: 'arrival' as AttendanceType,
+      reason: ''
+  });
 
   // Function to load data from Cloud and Merge with Local
   const syncData = useCallback(async () => {
@@ -394,6 +404,62 @@ const Dashboard: React.FC = () => {
       syncData();
   };
 
+  const handleManualAdminCheckInSubmit = async () => {
+    if (!adminForm.staffId || !adminForm.date || !adminForm.time) {
+        alert("กรุณากรอกข้อมูลให้ครบถ้วน");
+        return;
+    }
+
+    const staff = staffList.find(s => s.id === adminForm.staffId);
+    if (!staff) return;
+
+    // Construct Timestamp
+    const dateTimeStr = `${adminForm.date}T${adminForm.time}`;
+    const timestamp = new Date(dateTimeStr).getTime();
+    const dateObj = new Date(timestamp);
+
+    // Determine Status Logic
+    let status: any = 'Normal';
+    if (adminForm.type === 'arrival') {
+        const threshold = new Date(dateObj);
+        threshold.setHours(8, 1, 0, 0);
+        status = dateObj > threshold ? 'Late' : 'On Time';
+    } else if (adminForm.type === 'departure') {
+        const threshold = new Date(dateObj);
+        threshold.setHours(16, 0, 0, 0);
+        status = dateObj < threshold ? 'Early Leave' : 'Normal';
+    } else if (adminForm.type === 'duty') {
+        status = 'Duty';
+    } else if (adminForm.type === 'sick_leave') {
+        status = 'Sick Leave';
+    } else if (adminForm.type === 'personal_leave') {
+        status = 'Personal Leave';
+    } else if (adminForm.type === 'other_leave') {
+        status = 'Other Leave';
+    } else if (adminForm.type === 'authorized_late') {
+        status = 'Authorized Late';
+    }
+
+    const record: CheckInRecord = {
+        id: crypto.randomUUID(),
+        staffId: staff.id,
+        name: staff.name,
+        role: staff.role,
+        type: adminForm.type,
+        status: status,
+        reason: adminForm.reason || 'Admin Manual Entry',
+        timestamp: timestamp,
+        location: { lat: 0, lng: 0 } as GeoLocation,
+        distanceFromBase: 0,
+        aiVerification: 'Admin Manual Entry' // Flag to identify admin record
+    };
+
+    await saveRecord(record);
+    alert(`บันทึกข้อมูลเรียบร้อย: ${staff.name}`);
+    setShowAdminCheckInModal(false);
+    syncData();
+  };
+
   return (
     <div className="w-full">
       <style>{`
@@ -425,6 +491,99 @@ const Dashboard: React.FC = () => {
           </div>
       )}
 
+      {/* Admin Manual Check-in Modal */}
+      {showAdminCheckInModal && (
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-md flex items-center justify-center z-50 no-print animate-in fade-in duration-200">
+              <div className="bg-white p-6 rounded-3xl shadow-2xl w-full max-w-md relative overflow-hidden">
+                  <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-blue-500 to-purple-600"></div>
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="font-bold text-xl text-stone-800 flex items-center gap-2">
+                          <span className="p-2 bg-blue-100 text-blue-600 rounded-lg">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                          </span>
+                          ลงเวลาแทนบุคลากร
+                      </h3>
+                      <button onClick={() => setShowAdminCheckInModal(false)} className="text-stone-400 hover:text-stone-600">
+                          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                      </button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                      <div>
+                          <label className="block text-xs font-bold text-stone-500 mb-1 uppercase">บุคลากร</label>
+                          <select 
+                            value={adminForm.staffId} 
+                            onChange={e => setAdminForm({...adminForm, staffId: e.target.value})}
+                            className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-200"
+                          >
+                              <option value="">-- เลือกรายชื่อ --</option>
+                              {staffList.map(s => (
+                                  <option key={s.id} value={s.id}>{s.name} ({s.role})</option>
+                              ))}
+                          </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                          <div>
+                                <label className="block text-xs font-bold text-stone-500 mb-1 uppercase">วันที่</label>
+                                <input 
+                                    type="date" 
+                                    value={adminForm.date} 
+                                    onChange={e => setAdminForm({...adminForm, date: e.target.value})}
+                                    className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-center font-bold"
+                                />
+                          </div>
+                          <div>
+                                <label className="block text-xs font-bold text-stone-500 mb-1 uppercase">เวลา</label>
+                                <input 
+                                    type="time" 
+                                    value={adminForm.time} 
+                                    onChange={e => setAdminForm({...adminForm, time: e.target.value})}
+                                    className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-center font-bold"
+                                />
+                          </div>
+                      </div>
+
+                      <div>
+                          <label className="block text-xs font-bold text-stone-500 mb-1 uppercase">ประเภทการลงเวลา</label>
+                          <select 
+                            value={adminForm.type} 
+                            onChange={e => setAdminForm({...adminForm, type: e.target.value as AttendanceType})}
+                            className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-200 font-medium"
+                          >
+                              <option value="arrival">🟢 มาทำงาน (Arrival)</option>
+                              <option value="departure">🟠 กลับบ้าน (Departure)</option>
+                              <option value="authorized_late">⏰ ขออนุญาตเข้าสาย</option>
+                              <option value="duty">🏛️ ไปราชการ</option>
+                              <option value="sick_leave">🤒 ลาป่วย</option>
+                              <option value="personal_leave">📝 ลากิจ</option>
+                              <option value="other_leave">🏳️ ลาอื่นๆ</option>
+                          </select>
+                      </div>
+
+                      <div>
+                          <label className="block text-xs font-bold text-stone-500 mb-1 uppercase">เหตุผล / หมายเหตุ</label>
+                          <input 
+                              type="text" 
+                              value={adminForm.reason} 
+                              onChange={e => setAdminForm({...adminForm, reason: e.target.value})}
+                              placeholder="ระบุเหตุผล (ถ้ามี)"
+                              className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-200"
+                          />
+                      </div>
+
+                      <button 
+                        onClick={handleManualAdminCheckInSubmit}
+                        className="w-full py-3.5 mt-2 bg-stone-900 text-white rounded-xl font-bold shadow-lg hover:bg-stone-800 transition-all flex items-center justify-center gap-2"
+                      >
+                          <span>บันทึกข้อมูล</span>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg>
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 no-print">
         <div className="bg-white/60 backdrop-blur-sm p-4 rounded-2xl border border-white shadow-sm">
@@ -435,6 +594,10 @@ const Dashboard: React.FC = () => {
           <p className="text-stone-500 text-sm font-medium mt-1 pl-4">ระบบบริหารจัดการข้อมูลการลงเวลา</p>
         </div>
         <div className="flex flex-wrap gap-4 items-center">
+             <button onClick={() => setShowAdminCheckInModal(true)} className="px-4 py-3 bg-indigo-600 text-white border border-indigo-500 rounded-xl font-bold text-sm shadow-md hover:bg-indigo-700 transition-all flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                ลงเวลาแทน
+             </button>
              <button onClick={syncData} disabled={isSyncing} className="px-4 py-3 bg-white text-blue-600 border border-blue-100 rounded-xl font-bold text-sm shadow-sm hover:bg-blue-50 transition-all flex items-center gap-2">
                 <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                 {isSyncing ? 'กำลังซิงค์...' : 'Sync ข้อมูลล่าสุด'}
