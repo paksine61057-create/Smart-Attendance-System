@@ -348,7 +348,8 @@ const Dashboard: React.FC = () => {
     if (editingRecord.type === 'arrival') {
         const threshold = new Date(newTimestamp);
         threshold.setHours(8, 1, 0, 0);
-        newStatus = newDate > threshold ? 'Late' : 'On Time';
+        // Changed to >= for strict 08:01 Late policy
+        newStatus = newDate >= threshold ? 'Late' : 'On Time';
     } else if (editingRecord.type === 'departure') {
         const threshold = new Date(newTimestamp);
         threshold.setHours(16, 0, 0, 0);
@@ -423,7 +424,8 @@ const Dashboard: React.FC = () => {
     if (adminForm.type === 'arrival') {
         const threshold = new Date(dateObj);
         threshold.setHours(8, 1, 0, 0);
-        status = dateObj > threshold ? 'Late' : 'On Time';
+        // Changed to >= for strict 08:01 Late policy
+        status = dateObj >= threshold ? 'Late' : 'On Time';
     } else if (adminForm.type === 'departure') {
         const threshold = new Date(dateObj);
         threshold.setHours(16, 0, 0, 0);

@@ -25,11 +25,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [step, setStep] = useState<'info' | 'camera' | 'verifying' | 'result'>('info');
   
   // Auto-select Attendance Type based on time of day
-  // 05:00 - 12:00 -> Arrival
+  // Modified: 00:00 - 12:00 -> Arrival (Default) covers checking in before 07:00
   // Otherwise -> Departure
   const [attendanceType, setAttendanceType] = useState<AttendanceType>(() => {
     const currentHour = new Date().getHours();
-    if (currentHour >= 5 && currentHour < 12) {
+    if (currentHour < 12) {
         return 'arrival';
     } else {
         return 'departure';
@@ -68,8 +68,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     if (attendanceType !== 'arrival') return false;
     const now = new Date();
     const targetTime = new Date();
-    targetTime.setHours(8, 1, 0, 0); // Late if after 08:01
-    return now > targetTime;
+    targetTime.setHours(8, 1, 0, 0); // Late if 08:01 onwards
+    return now >= targetTime; // Changed to >= for strict 08:01 start
   }, [attendanceType]);
 
   // Check if type allows remote check-in (NO GPS REQUIRED)
@@ -216,7 +216,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       return;
     }
     if (isLateArrival() && !reason.trim()) {
-      alert("กรุณาระบุเหตุผลที่มาสาย (หลัง 08.01 น.)");
+      alert("กรุณาระบุเหตุผลที่มาสาย (ตั้งแต่ 08.01 น.)");
       return;
     }
     if (isSpecialRequest() && !reason.trim()) {
@@ -289,8 +289,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
         if (attendanceType === 'arrival') {
             const startOfWork = new Date();
-            startOfWork.setHours(8, 1, 0, 0); // Late if after 08:01
-            status = now > startOfWork ? 'Late' : 'On Time';
+            startOfWork.setHours(8, 1, 0, 0); // Late if 08:01 onwards
+            // 08:01:00 is LATE.
+            status = now >= startOfWork ? 'Late' : 'On Time';
         } else if (attendanceType === 'departure') {
             const endOfWork = new Date();
             endOfWork.setHours(16, 0, 0, 0); // Changed to 16:00
