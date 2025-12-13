@@ -313,9 +313,21 @@ const Dashboard: React.FC = () => {
   const handleDelete = async (record: CheckInRecord) => {
       // Prompt confirm with the specific text requested
       if(confirm(`คุณต้องการลบข้อมูลนี้ใช่หรือไม่?\n\nชื่อ: ${record.name}\nเวลา: ${new Date(record.timestamp).toLocaleTimeString('th-TH')}`)) {
-          await deleteRecord(record);
-          alert('ลบรายการเรียบร้อย');
-          syncData();
+          
+          // 1. Optimistic Update: Remove from UI immediately so user sees it gone
+          const newAllRecords = allRecords.filter(r => r.id !== record.id);
+          setAllRecords(newAllRecords);
+
+          // 2. Perform deletion in background
+          try {
+             await deleteRecord(record);
+             // We do NOT call syncData() here intentionally.
+             // Calling syncData() immediately might fetch the record back if Cloud deletion is slow or fails.
+             // We trust the local action for the current session.
+          } catch (e) {
+             console.error("Delete failed", e);
+             alert('เกิดข้อผิดพลาดในการลบข้อมูลบน Cloud (ข้อมูลในเครื่องถูกลบแล้ว)');
+          }
       }
   };
 
