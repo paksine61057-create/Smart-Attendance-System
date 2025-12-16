@@ -9,15 +9,25 @@ import { getAllStaff } from '../services/staffService';
 import { getHoliday } from '../services/holidayService';
 
 const Dashboard: React.FC = () => {
+  // Helper to get Local Date String (YYYY-MM-DD) correctly
+  // This prevents issues where check-ins before 07:00 AM (Thai Time) are treated as previous day (UTC)
+  const getLocalYYYYMMDD = (dateInput: Date | number | string) => {
+      const d = new Date(dateInput);
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${year}-${month}-${day}`;
+  };
+
   const [activeTab, setActiveTab] = useState<'realtime' | 'official' | 'monthly'>('realtime');
   const [allRecords, setAllRecords] = useState<CheckInRecord[]>([]);
   const [filteredRecords, setFilteredRecords] = useState<CheckInRecord[]>([]);
   const [missingStaff, setMissingStaff] = useState<Staff[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   
-  // Date states
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().slice(0, 7)); // YYYY-MM
+  // Date states - Initialize with Local Time
+  const [selectedDate, setSelectedDate] = useState<string>(getLocalYYYYMMDD(new Date()));
+  const [selectedMonth, setSelectedMonth] = useState<string>(getLocalYYYYMMDD(new Date()).slice(0, 7)); // YYYY-MM
 
   const [staffList, setStaffList] = useState<Staff[]>([]);
 
@@ -34,7 +44,7 @@ const Dashboard: React.FC = () => {
   const [showAdminCheckInModal, setShowAdminCheckInModal] = useState(false);
   const [adminForm, setAdminForm] = useState({
       staffId: '',
-      date: new Date().toISOString().split('T')[0],
+      date: getLocalYYYYMMDD(new Date()),
       time: new Date().toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}),
       type: 'arrival' as AttendanceType,
       reason: ''
@@ -88,7 +98,8 @@ const Dashboard: React.FC = () => {
     let todaysRecords: CheckInRecord[] = [];
     if (allRecords.length > 0) {
         todaysRecords = allRecords.filter(r => {
-            const rDate = new Date(r.timestamp).toISOString().split('T')[0];
+            // Use Local Time for filtering
+            const rDate = getLocalYYYYMMDD(r.timestamp);
             return rDate === selectedDate;
         }).sort((a, b) => a.timestamp - b.timestamp);
         setFilteredRecords(todaysRecords);
@@ -99,7 +110,8 @@ const Dashboard: React.FC = () => {
     const allStaff = getAllStaff();
 
     // CALCULATE MISSING STAFF (Who hasn't checked in for Arrival/Duty today?)
-    if (selectedDate === new Date().toISOString().split('T')[0]) {
+    // Compare against Local Time date
+    if (selectedDate === getLocalYYYYMMDD(new Date())) {
         const checkedInStaffIds = new Set(todaysRecords
             .filter(r => ['arrival', 'authorized_late', 'duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type))
             .map(r => r.staffId));
@@ -184,7 +196,7 @@ const Dashboard: React.FC = () => {
             r.staffId === staff.id &&
             r.status === 'Late' &&
             r.type === 'arrival' &&
-            new Date(r.timestamp).toISOString().startsWith(selectedMonth) &&
+            getLocalYYYYMMDD(r.timestamp).startsWith(selectedMonth) && // Use Local Date for month check
             new Date(r.timestamp) >= systemStartDate // Filter out late records before system start
         );
         lateRecords.sort((a, b) => a.timestamp - b.timestamp);
@@ -228,7 +240,7 @@ const Dashboard: React.FC = () => {
             // - IGNORES: Departure (if you only signed out but didn't sign in, it counts as missing).
             const hasRecord = allRecords.some(r => 
                 r.staffId === staff.id && 
-                new Date(r.timestamp).toISOString().split('T')[0] === dateStr &&
+                getLocalYYYYMMDD(r.timestamp) === dateStr && // Use Local Date Comparison
                 (r.type === 'arrival' || r.type === 'authorized_late' || r.type === 'duty' || r.type === 'sick_leave' || r.type === 'personal_leave' || r.type === 'other_leave')
             );
 
