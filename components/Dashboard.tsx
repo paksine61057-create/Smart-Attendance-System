@@ -27,17 +27,11 @@ const Dashboard: React.FC = () => {
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [officialReportData, setOfficialReportData] = useState<any[]>([]);
   const [monthlyReportData, setMonthlyReportData] = useState<any[]>([]);
-  const [showEditModal, setShowEditModal] = useState(false);
-  const [editingRecord, setEditingRecord] = useState<CheckInRecord | null>(null);
-  const [editNewTime, setEditNewTime] = useState('');
+  
+  // Image Preview State
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+
   const [showAdminCheckInModal, setShowAdminCheckInModal] = useState(false);
-  const [adminForm, setAdminForm] = useState({
-      staffId: '',
-      date: getLocalYYYYMMDD(new Date()),
-      time: new Date().toLocaleTimeString('en-GB', {hour: '2-digit', minute:'2-digit'}),
-      type: 'arrival' as AttendanceType,
-      reason: ''
-  });
 
   const syncData = useCallback(async () => {
       setIsSyncing(true);
@@ -83,14 +77,17 @@ const Dashboard: React.FC = () => {
     const dailyStaffData = allStaff.map(staff => {
         const staffRecords = todaysRecords.filter(r => r.staffId === staff.id);
         const dutyOrLeave = staffRecords.find(r => ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type));
-        let arrivalTime = '-', departureTime = '-', note = '', arrivalStatus = 'Absent', departureStatus = '-', hasImage = false;
+        let arrivalTime = '-', departureTime = '-', note = '', arrivalStatus = 'Absent', departureStatus = '-', hasImage = false, imageUrl = '';
 
         if (dutyOrLeave) {
             let label = dutyOrLeave.type === 'duty' ? 'ไปราชการ' : dutyOrLeave.type === 'sick_leave' ? 'ลาป่วย' : dutyOrLeave.type === 'personal_leave' ? 'ลากิจ' : 'ลาอื่นๆ';
             arrivalTime = departureTime = label;
             note = dutyOrLeave.reason || '';
             arrivalStatus = departureStatus = 'Leave';
-            if (dutyOrLeave.imageUrl && dutyOrLeave.imageUrl.length > 20) hasImage = true;
+            if (dutyOrLeave.imageUrl && dutyOrLeave.imageUrl.length > 20) {
+                hasImage = true;
+                imageUrl = dutyOrLeave.imageUrl;
+            }
         } else {
             const arrival = staffRecords.find(r => r.type === 'arrival' || r.type === 'authorized_late');
             const departure = staffRecords.find(r => r.type === 'departure');
@@ -100,16 +97,23 @@ const Dashboard: React.FC = () => {
                 if (arrival.status === 'Late') note += `สาย: ${arrival.reason || '-'} `;
                 else if (arrival.status === 'Authorized Late') note += `อนุญาตเข้าสาย: ${arrival.reason || '-'} `;
                 else if (arrival.status === 'Admin Assist') note += `(Admin ลงให้) `;
-                if (arrival.imageUrl && arrival.imageUrl.length > 20) hasImage = true;
+                if (arrival.imageUrl && arrival.imageUrl.length > 20) {
+                    hasImage = true;
+                    imageUrl = arrival.imageUrl;
+                }
             }
             if (departure) {
                 departureTime = new Date(departure.timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
                 departureStatus = departure.status;
                 if (departure.status === 'Early Leave') note += `กลับก่อน: ${departure.reason || '-'} `;
-                if (departure.imageUrl && departure.imageUrl.length > 20) hasImage = true;
+                // If arrival didn't have image but departure does, use that
+                if (!hasImage && departure.imageUrl && departure.imageUrl.length > 20) {
+                    hasImage = true;
+                    imageUrl = departure.imageUrl;
+                }
             }
         }
-        return { staffId: staff.id, name: staff.name, role: staff.role, arrivalTime, arrivalStatus, departureTime, departureStatus, note: note.trim(), hasImage };
+        return { staffId: staff.id, name: staff.name, role: staff.role, arrivalTime, arrivalStatus, departureTime, departureStatus, note: note.trim(), hasImage, imageUrl };
     });
     setOfficialReportData(dailyStaffData);
 
@@ -131,7 +135,7 @@ const Dashboard: React.FC = () => {
             if (dateObj < systemStartDate || dateObj.getDay() === 0 || dateObj.getDay() === 6 || getHoliday(dateObj)) continue;
             if (!allRecords.some(r => r.staffId === staff.id && getLocalYYYYMMDD(r.timestamp) === dateStr && (r.type === 'arrival' || r.type === 'authorized_late' || r.type === 'duty' || r.type === 'sick_leave' || r.type === 'personal_leave' || r.type === 'other_leave'))) notSignedInCount++;
         }
-        return { staffId: staff.id, name: staff.name, role: staff.role, lateCount: lateRecords.length, lateDates: lateDays, notSignedInCount: notSignedInCount, note: '' };
+        return { staffId: staff.id, name: staff.name, role: staff.role, lateCount: lateRecords.length, lateDays: lateDays, notSignedInCount: notSignedInCount, note: '' };
     });
     setMonthlyReportData(monthlyStaffData);
   }, [selectedDate, selectedMonth, allRecords]);
@@ -207,11 +211,7 @@ const Dashboard: React.FC = () => {
 
   const openImage = (url?: string) => {
     if (url) {
-      const win = window.open();
-      if (win) {
-        win.document.write(`<img src="${url}" style="max-width:100%; height:auto;" />`);
-        win.document.close();
-      }
+        setPreviewImage(url);
     }
   };
 
@@ -246,6 +246,33 @@ const Dashboard: React.FC = () => {
           th { background-color: #f2f2f2 !important; -webkit-print-color-adjust: exact; }
         }
       `}</style>
+
+      {/* Image Preview Modal (Lightbox) */}
+      {previewImage && (
+        <div 
+            className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300 no-print"
+            onClick={() => setPreviewImage(null)}
+        >
+            <div className="relative max-w-2xl w-full flex flex-col items-center">
+                <button 
+                    onClick={() => setPreviewImage(null)}
+                    className="absolute -top-12 right-0 text-white hover:text-rose-400 transition-colors bg-white/10 p-2 rounded-full backdrop-blur-md"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+                <div className="p-2 bg-white rounded-[2rem] shadow-[0_0_80px_rgba(255,255,255,0.2)] border-8 border-rose-50 overflow-hidden relative">
+                    <img 
+                        src={previewImage} 
+                        alt="Check-in Evidence" 
+                        className="w-full h-auto rounded-[1.5rem] object-contain max-h-[75vh]" 
+                        onClick={(e) => e.stopPropagation()}
+                    />
+                    <div className="absolute top-4 right-4 text-4xl animate-sway">🎅</div>
+                </div>
+                <p className="text-white font-black mt-6 tracking-widest uppercase bg-rose-600/80 px-6 py-2 rounded-full">Evidence Found ❄️</p>
+            </div>
+        </div>
+      )}
 
       {/* Interactive Festive Dashboard Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 no-print">
@@ -393,7 +420,7 @@ const Dashboard: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-5 text-center">
                                     {(record.imageUrl && record.imageUrl.length > 20) ? (
-                                        <button onClick={() => openImage(record.imageUrl)} className="px-4 py-2 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-stone-800 transition-all flex items-center justify-center gap-2 mx-auto">
+                                        <button onClick={() => openImage(record.imageUrl)} className="px-4 py-2 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-stone-800 transition-all flex items-center justify-center gap-2 mx-auto shadow-md hover:scale-105 active:scale-95">
                                             รูปภาพ
                                         </button>
                                     ) : <span className="text-stone-300 font-black">-</span>}
@@ -462,11 +489,12 @@ const Dashboard: React.FC = () => {
                             ) : (
                                 <>
                                     <th className="px-3 py-3 border border-black text-center w-[5%]">ลำดับ</th>
-                                    <th className="px-3 py-3 border border-black w-[40%]">ชื่อ-นามสกุล</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[15%]">ตำแหน่ง</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[12%]">เวลามา</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[12%]">เวลากลับ</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[16%]">หมายเหตุ</th>
+                                    <th className="px-3 py-3 border border-black w-[32%]">ชื่อ-นามสกุล</th>
+                                    <th className="px-3 py-3 border border-black text-center w-[13%]">ตำแหน่ง</th>
+                                    <th className="px-3 py-3 border border-black text-center w-[10%]">เวลามา</th>
+                                    <th className="px-3 py-3 border border-black text-center w-[10%]">เวลากลับ</th>
+                                    <th className="px-3 py-3 border border-black text-center w-[18%]">หมายเหตุ</th>
+                                    <th className="px-3 py-3 border border-black text-center w-[12%] no-print">รูปภาพ</th>
                                 </>
                             )}
                         </tr>
@@ -492,7 +520,17 @@ const Dashboard: React.FC = () => {
                                     <td className="px-3 py-2 border-r border-gray-300 text-center">{row.role}</td>
                                     <td className={`px-3 py-2 border-r border-gray-300 text-center font-bold font-mono ${row.arrivalStatus === 'Late' ? 'text-red-600' : 'text-black'}`}>{row.arrivalTime}</td>
                                     <td className="px-3 py-2 border-r border-gray-300 text-center font-bold font-mono">{row.departureTime}</td>
-                                    <td className="px-3 py-2 text-center text-[10px]">{row.note || ''}</td>
+                                    <td className="px-3 py-2 border-r border-gray-300 text-center text-[10px]">{row.note || ''}</td>
+                                    <td className="px-3 py-2 text-center no-print">
+                                        {row.hasImage ? (
+                                            <button 
+                                                onClick={() => openImage(row.imageUrl)} 
+                                                className="text-[9px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-md border border-rose-100 hover:bg-rose-100 transition-colors uppercase"
+                                            >
+                                                ดูรูป ❄️
+                                            </button>
+                                        ) : '-'}
+                                    </td>
                                 </tr>
                             ))
                         )}
