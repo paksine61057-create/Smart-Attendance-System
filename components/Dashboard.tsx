@@ -12,7 +12,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 type TabType = 'today' | 'official' | 'monthly' | 'manual';
 
 const SCHOOL_LOGO_URL = 'https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png';
-const CUTOFF_TIMESTAMP = new Date(2025, 11, 12).getTime();
+const CUTOFF_TIMESTAMP = new Date(2025, 11, 1).getTime();
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('today');
@@ -33,10 +33,12 @@ const Dashboard: React.FC = () => {
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   });
 
-  // Sync manualDate when global selectedDate changes but only if user hasn't touched it or tab switches
+  // Sync manualDate when tab switches to manual
   useEffect(() => {
-    setManualDate(selectedDate);
-  }, [selectedDate, activeTab]);
+    if (activeTab === 'manual') {
+      setManualDate(selectedDate);
+    }
+  }, [activeTab]);
 
   const staffList = useMemo(() => getAllStaff(), []);
 
@@ -50,14 +52,20 @@ const Dashboard: React.FC = () => {
       ]);
       const mergedMap = new Map<string, CheckInRecord>();
       const getSig = (r: CheckInRecord) => `${r.timestamp}_${String(r.staffId || '').toUpperCase().trim()}`;
+      
       cloud.forEach(r => mergedMap.set(getSig(r), r));
       local.forEach(l => {
         const sig = getSig(l);
-        if (!mergedMap.has(sig)) mergedMap.set(sig, l);
-        else if ((l.imageUrl || "").length > (mergedMap.get(sig)!.imageUrl || "").length) {
-          mergedMap.set(sig, { ...mergedMap.get(sig)!, imageUrl: l.imageUrl });
+        if (!mergedMap.has(sig)) {
+          mergedMap.set(sig, l);
+        } else {
+          const existing = mergedMap.get(sig)!;
+          if ((l.imageUrl || "").length > (existing.imageUrl || "").length) {
+            mergedMap.set(sig, { ...existing, imageUrl: l.imageUrl });
+          }
         }
       });
+      
       const filtered = Array.from(mergedMap.values()).filter(r => r.timestamp >= CUTOFF_TIMESTAMP);
       setAllRecords(filtered);
     } catch (e) {
@@ -68,10 +76,12 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => { syncData(); }, [syncData]);
 
+  // กรองข้อมูลตามวันที่เลือก (selectedDate)
   const filteredToday = useMemo(() => {
     return allRecords.filter(r => {
       const d = new Date(r.timestamp);
-      return d.toISOString().split('T')[0] === selectedDate;
+      const dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return dateString === selectedDate;
     }).sort((a, b) => b.timestamp - a.timestamp);
   }, [allRecords, selectedDate]);
 
@@ -160,8 +170,12 @@ const Dashboard: React.FC = () => {
 
   const monthlyLatenessData = useMemo(() => {
     const [year, month] = selectedDate.split('-').map(Number);
-    const currentMonthPrefix = selectedDate.substring(0, 7);
-    const monthlyRecords = allRecords.filter(r => new Date(r.timestamp).toISOString().startsWith(currentMonthPrefix));
+    const currentMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+    const monthlyRecords = allRecords.filter(r => {
+        const d = new Date(r.timestamp);
+        const prefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return prefix === currentMonthPrefix;
+    });
     const now = new Date();
     const isCurrentMonth = (year === now.getFullYear() && (month - 1) === now.getMonth());
     const lastDayToCount = isCurrentMonth ? now.getDate() : new Date(year, month, 0).getDate();
@@ -173,7 +187,7 @@ const Dashboard: React.FC = () => {
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
       const holiday = getHoliday(dateObj);
       if (!isWeekend && !holiday) {
-        workingDays.push(dateObj.toISOString().split('T')[0]);
+        workingDays.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
       }
     }
     return staffList.map((staff, index) => {
@@ -186,7 +200,8 @@ const Dashboard: React.FC = () => {
       let absentCount = 0;
       workingDays.forEach(wDate => {
         const hasArrivalOrEquivalent = staffRecords.some(r => {
-            const rDate = new Date(r.timestamp).toISOString().split('T')[0];
+            const d = new Date(r.timestamp);
+            const rDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             return rDate === wDate && ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type);
         });
         if (!hasArrivalOrEquivalent) absentCount++;
@@ -202,19 +217,15 @@ const Dashboard: React.FC = () => {
     });
   }, [allRecords, selectedDate, staffList]);
 
-  // Handle Export PDF - Strictly 1 Page
   const handleExportPDF = (type: 'daily' | 'monthly') => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const data = type === 'daily' ? officialData : monthlyLatenessData;
-    
     const title = type === 'daily' 
         ? `รายงานการปฏิบัติงานประจำวัน วันที่ ${new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`
         : `รายงานการมาสายประจำเดือน ${new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}`;
-
     const headers = type === 'daily' 
         ? [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'เวลามา', 'เวลากลับ', 'หมายเหตุ']]
         : [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'ไม่ลงเวลา', 'มาสาย', 'วันที่มาสาย']];
-
     const body = data.map(d => {
         if (type === 'daily') {
             const row = d as any;
@@ -224,62 +235,31 @@ const Dashboard: React.FC = () => {
             return [row.no, row.name, row.role, row.absentCount, row.lateCount, row.lateDates];
         }
     });
-
-    // Header
     doc.setFontSize(12);
     doc.text('โรงเรียนประจักษ์ศิลปาคม', 105, 12, { align: 'center' });
     doc.setFontSize(9);
     doc.text(title, 105, 18, { align: 'center' });
-
     (doc as any).autoTable({
         startY: 22,
         head: headers,
         body: body,
         theme: 'grid',
-        styles: {
-            fontSize: 8.5,
-            cellPadding: 1.0,
-            halign: 'center',
-            valign: 'middle',
-            lineWidth: 0.1,
-            overflow: 'linebreak'
-        },
-        headStyles: {
-            fillColor: [190, 18, 60],
-            textColor: [255, 255, 255],
-            fontStyle: 'bold'
-        },
-        columnStyles: {
-            0: { cellWidth: 10 },
-            1: { halign: 'left', cellWidth: 32, overflow: 'hidden' }, 
-            2: { halign: 'center', cellWidth: 30, overflow: 'hidden' }, 
-            3: { cellWidth: 14 },
-            4: { cellWidth: 14 }
-        },
-        margin: { left: 15, right: 15, top: 15, bottom: 25 }, // เว้นที่ด้านล่างให้ลายเซ็น
-        pageBreak: 'avoid', // พยายามไม่ให้ขึ้นหน้าใหม่ในแต่ละแถว
+        styles: { fontSize: 8.5, cellPadding: 1.0, halign: 'center', valign: 'middle', lineWidth: 0.1, overflow: 'linebreak' },
+        headStyles: { fillColor: [190, 18, 60], textColor: [255, 255, 255], fontStyle: 'bold' },
+        columnStyles: { 0: { cellWidth: 10 }, 1: { halign: 'left', cellWidth: 32, overflow: 'hidden' }, 2: { halign: 'center', cellWidth: 30, overflow: 'hidden' }, 3: { cellWidth: 14 }, 4: { cellWidth: 14 } },
+        margin: { left: 15, right: 15, top: 15, bottom: 25 }, 
+        pageBreak: 'avoid',
     });
-
-    // Enforce 1-Page Limit: ลบหน้าที่เกินออกทั้งหมด (ถ้ามี)
     let pageCount = doc.getNumberOfPages();
-    while (pageCount > 1) {
-        doc.deletePage(pageCount);
-        pageCount = doc.getNumberOfPages();
-    }
-
-    // Draw Signature - วาดในหน้าแรกหน้าเดียว
+    while (pageCount > 1) { doc.deletePage(pageCount); pageCount = doc.getNumberOfPages(); }
     doc.setPage(1); 
     const finalY = (doc as any).lastAutoTable.finalY;
-    // หากตารางยาวเกินไป ให้วางลายเซ็นไว้ที่ตำแหน่งเกือบล่างสุดของหน้า 1
     const sigY = Math.min(finalY + 8, 282); 
-    
     doc.setFontSize(9);
     doc.text('(ลงชื่อ)...........................................................', 68, sigY, { align: 'center' });
     doc.text('กลุ่มบริหารงานบุคคล', 68, sigY + 5.5, { align: 'center' });
-
     doc.text('(ลงชื่อ)...........................................................', 142, sigY, { align: 'center' });
     doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 142, sigY + 5.5, { align: 'center' });
-
     doc.save(`report_${type}_${selectedDate}.pdf`);
   };
 
@@ -301,7 +281,7 @@ const Dashboard: React.FC = () => {
       aiVerification: 'Admin Direct Authorized'
     };
     await saveRecord(record);
-    syncData();
+    await syncData();
   };
 
   const handleAiSummary = async () => {
@@ -339,10 +319,16 @@ const Dashboard: React.FC = () => {
       distanceFromBase: 0,
       aiVerification: 'Admin Authorized'
     };
+    
     await saveRecord(record);
     setManualReason('');
-    alert('บันทึกสำเร็จ');
-    syncData();
+    
+    // สำคัญ: อัปเดตวันที่หลักของระบบเพื่อให้ข้อมูลที่บันทึกโชว์ทันที
+    setSelectedDate(manualDate);
+    
+    alert(`บันทึกข้อมูลเรียบร้อยสำหรับวันที่ ${new Date(manualDate).toLocaleDateString('th-TH')}`);
+    
+    await syncData();
     setActiveTab('today');
   };
 
@@ -367,16 +353,19 @@ const Dashboard: React.FC = () => {
           <button onClick={syncData} disabled={isSyncing} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-bold text-sm transition-all flex items-center gap-2">
             {isSyncing ? '...' : '🔄 Sync Cloud'}
           </button>
-          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="px-5 py-3 rounded-2xl bg-white border-none font-bold text-rose-700 shadow-lg text-sm outline-none cursor-pointer" />
+          <div className="flex flex-col">
+            <label className="text-[10px] text-white/60 font-black uppercase mb-1 ml-1">เลือกวันที่แสดงผล</label>
+            <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="px-5 py-3 rounded-2xl bg-white border-none font-bold text-rose-700 shadow-lg text-sm outline-none cursor-pointer" />
+          </div>
         </div>
       </div>
 
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-print">
         {[
-          { id: 'today', label: 'รายการวันนี้', emoji: '📅' },
-          { id: 'official', label: 'ตารางสรุปประจำวัน', emoji: '📜' },
-          { id: 'monthly', label: 'ตารางสรุปประจำเดือน', emoji: '📊' },
-          { id: 'manual', label: 'ลงเวลาแทน', emoji: '✍️' }
+          { id: 'today', label: 'รายการประจำวัน', emoji: '📅' },
+          { id: 'official', label: 'สรุปการปฏิบัติงาน', emoji: '📜' },
+          { id: 'monthly', label: 'สรุปมาสายรายเดือน', emoji: '📊' },
+          { id: 'manual', label: 'ลงเวลาแทนบุคลากร', emoji: '✍️' }
         ].map(tab => (
           <button
             key={tab.id}
@@ -421,14 +410,14 @@ const Dashboard: React.FC = () => {
               <div className="flex-1">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                   <div>
-                    <h3 className="text-2xl font-black text-stone-800">บันทึกการลงเวลาล่าสุด 🎁</h3>
-                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">ข้อมูลการลงเวลาล่าสุด</p>
+                    <h3 className="text-2xl font-black text-stone-800">
+                      ข้อมูลวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })} 🎁
+                    </h3>
+                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">Attendance Records List</p>
                   </div>
-                  <div className="flex gap-2">
-                    <button onClick={handleAiSummary} disabled={isGeneratingAi || filteredToday.length === 0} className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50">
-                      {isGeneratingAi ? '...' : '✨ AI วิเคราะห์'}
-                    </button>
-                  </div>
+                  <button onClick={handleAiSummary} disabled={isGeneratingAi || filteredToday.length === 0} className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50">
+                    {isGeneratingAi ? '...' : '✨ AI วิเคราะห์'}
+                  </button>
                 </div>
 
                 {aiSummary && (
@@ -451,7 +440,11 @@ const Dashboard: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-50">
-                      {filteredToday.map(r => (
+                      {filteredToday.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="p-20 text-center text-stone-400 font-bold italic">ไม่พบข้อมูลการลงเวลาในวันที่เลือก ❄️</td>
+                        </tr>
+                      ) : filteredToday.map(r => (
                         <tr key={r.id} className="hover:bg-rose-50/20 transition-colors group">
                           <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</td>
                           <td className="p-5 font-bold text-stone-400">{r.staffId || '-'}</td>
@@ -484,8 +477,8 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="w-full lg:w-80 flex flex-col gap-6">
-                <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 no-print flex-1 overflow-hidden flex flex-col">
+              <div className="w-full lg:w-80">
+                <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 no-print flex flex-col max-h-[700px]">
                     <h4 className="font-black text-stone-800 mb-6 flex items-center justify-between shrink-0">
                       ยังไม่ลงชื่อ ⛄
                       <span className="bg-rose-500 text-white text-[10px] px-3 py-1 rounded-full">{dailyAnalysis.absentCount}</span>
@@ -498,25 +491,11 @@ const Dashboard: React.FC = () => {
                               <div className="grid grid-cols-3 gap-1.5">
                                   <button onClick={() => handleQuickLeave(s, 'personal_leave')} className="py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[9px] font-black transition-colors border border-amber-100">ลากิจ</button>
                                   <button onClick={() => handleQuickLeave(s, 'sick_leave')} className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[9px] font-black transition-colors border border-rose-100">ลาป่วย</button>
-                                  <button onClick={() => handleQuickLeave(s, 'duty')} className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black transition-colors border border-blue-100">ไปราชการ</button>
+                                  <button onClick={() => handleQuickLeave(s, 'duty')} className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black transition-colors border border-blue-100">ราชการ</button>
                               </div>
                           </div>
                       ))}
                     </div>
-                </div>
-                <div className="bg-white p-8 rounded-[3rem] border-4 border-rose-50 shadow-xl no-print">
-                   <h4 className="font-black text-stone-800 mb-6 text-center text-sm uppercase tracking-widest">สัดส่วนการมาปฏิบัติงาน</h4>
-                   <div className="h-64 w-full">
-                     <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie data={chartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
-                            {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
-                          </Pie>
-                          <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontWeight: 'bold' }} />
-                          <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
-                        </PieChart>
-                     </ResponsiveContainer>
-                   </div>
                 </div>
               </div>
             </div>
@@ -529,15 +508,13 @@ const Dashboard: React.FC = () => {
                 <button onClick={() => handleExportPDF('daily')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg font-black text-[9px] shadow-lg">PDF</button>
                 <button onClick={() => window.print()} className="bg-white hover:bg-stone-50 text-stone-700 px-3 py-1.5 rounded-lg font-black text-[9px] shadow-lg border border-stone-200">Print</button>
              </div>
-
-             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[6mm] md:px-[15mm] py-[5mm] md:py-[8mm] min-h-[297mm] flex flex-col border border-stone-200">
+             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[6mm] md:px-[15mm] py-[5mm] md:py-[8mm] min-h-[297mm] border border-stone-200">
                 <div className="flex flex-col items-center text-center mb-5">
                    <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-10 h-10 md:w-14 md:h-14 object-contain mb-1.5" />
                    <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">รายงานการมาปฏิบัติงานของครูและบุคลากรทางการศึกษา</h1>
                    <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
                    <h2 className="text-[9px] font-bold text-stone-700">ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</h2>
                 </div>
-                
                 <div className="mt-1 overflow-x-auto">
                    <table className="w-full border-collapse border border-stone-400">
                       <thead>
@@ -564,8 +541,7 @@ const Dashboard: React.FC = () => {
                       </tbody>
                    </table>
                 </div>
-
-                <div className="mt-8 flex justify-between px-10 py-2 border-t border-transparent">
+                <div className="mt-8 flex justify-between px-10 py-2">
                    <div className="text-center">
                       <p className="text-[9px] text-stone-800 mb-1.5 font-bold">(ลงชื่อ)...........................................................</p>
                       <p className="text-[9px] font-black text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
@@ -582,17 +558,15 @@ const Dashboard: React.FC = () => {
         {activeTab === 'monthly' && (
           <div className="p-0 md:p-3 bg-stone-100 min-h-screen relative overflow-auto">
              <div className="no-print absolute top-2 right-4 z-50 flex items-center gap-2 bg-white/80 p-1.5 rounded-lg shadow-sm border border-stone-100 backdrop-blur-sm">
-                <input type="month" value={selectedDate.substring(0, 7)} onChange={e => setSelectedDate(e.target.value + "-12")} className="bg-stone-100 border-none rounded-lg p-0.5 text-[10px] font-bold text-stone-700 cursor-pointer" />
                 <button onClick={() => handleExportPDF('monthly')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-md font-black text-[9px] shadow-sm">PDF</button>
              </div>
-             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[6mm] md:px-[15mm] py-[5mm] md:py-[8mm] min-h-[297mm] flex flex-col border border-stone-200">
+             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[6mm] md:px-[15mm] py-[5mm] md:py-[8mm] min-h-[297mm] border border-stone-200">
                 <div className="flex flex-col items-center text-center mb-5">
                    <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-10 h-10 md:w-14 md:h-14 object-contain mb-1.5" />
                    <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">รายงานการมาสายของครูและบุคลากรทางการศึกษา</h1>
                    <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
                    <h2 className="text-[9px] font-bold text-stone-700">ประจำเดือน {new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</h2>
                 </div>
-                
                 <div className="mt-1 overflow-x-auto">
                    <table className="w-full border-collapse border border-stone-400">
                       <thead>
@@ -619,8 +593,7 @@ const Dashboard: React.FC = () => {
                       </tbody>
                    </table>
                 </div>
-
-                <div className="mt-8 flex justify-between px-10 py-2 border-t border-transparent">
+                <div className="mt-8 flex justify-between px-10 py-2">
                    <div className="text-center">
                       <p className="text-[9px] text-stone-800 mb-1.5 font-bold">(ลงชื่อ)...........................................................</p>
                       <p className="text-[9px] font-black text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
@@ -636,7 +609,7 @@ const Dashboard: React.FC = () => {
 
         {activeTab === 'manual' && (
           <div className="p-10 max-w-2xl mx-auto no-print">
-             <div className="text-center mb-10"><span className="text-6xl mb-4 inline-block">✍️</span><h3 className="text-2xl font-black text-stone-800">ลงเวลาทดแทน (Admin Entry)</h3><p className="text-stone-400 text-xs font-bold mt-2 italic">กรณีบุคลากรติดภารกิจ หรือมีปัญหาเรื่องอุปกรณ์บันทึกภาพ</p></div>
+             <div className="text-center mb-10"><span className="text-6xl mb-4 inline-block">✍️</span><h3 className="text-2xl font-black text-stone-800">ลงเวลาทดแทนย้อนหลัง</h3><p className="text-stone-400 text-xs font-bold mt-2 italic">แอดมินสามารถระบุวันที่และเวลาที่ต้องการบันทึกย้อนหลังได้ที่นี่</p></div>
              <form onSubmit={handleManualCheckIn} className="space-y-6 bg-stone-50 p-10 rounded-[3rem] border-2 border-stone-100 shadow-xl">
                 <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เลือกบุคลากรที่ต้องการบันทึก</label><select value={manualStaffId} onChange={e => setManualStaffId(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm" required><option value="">-- ค้นหารายชื่อบุคลากร --</option>{staffList.map(s => <option key={s.id} value={s.id}>{s.id} : {s.name}</option>)}</select></div>
                 
@@ -646,7 +619,7 @@ const Dashboard: React.FC = () => {
                    <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ระบุเวลา (Time)</label><input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm h-[52px]" required /></div>
                 </div>
                 <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เหตุผลในการลงเวลาแทน</label><textarea value={manualReason} onChange={e => setManualReason(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none h-32 shadow-sm" placeholder="ระบุเหตุผล เช่น ติดราชการภายนอก, ลืมบันทึกเวลา..." /></div>
-                <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl shadow-rose-200 active:scale-95 transition-all text-lg">บันทึกข้อมูลเข้าระบบ 🎉</button>
+                <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl shadow-rose-200 active:scale-95 transition-all text-lg">บันทึกข้อมูลย้อนหลัง 🎉</button>
              </form>
           </div>
         )}
