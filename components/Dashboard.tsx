@@ -53,7 +53,6 @@ const Dashboard: React.FC = () => {
           mergedMap.set(sig, { ...mergedMap.get(sig)!, imageUrl: l.imageUrl });
         }
       });
-      // Apply Filter: Only December 12, 2025 onwards (from Thai 2568)
       const filtered = Array.from(mergedMap.values()).filter(r => r.timestamp >= CUTOFF_TIMESTAMP);
       setAllRecords(filtered);
     } catch (e) {
@@ -74,12 +73,8 @@ const Dashboard: React.FC = () => {
   const officialData = useMemo(() => {
     return staffList.map((staff, index) => {
       const records = filteredToday.filter(r => r.staffId === staff.id);
-      
-      // Separate records by type (Arrival now includes Authorized Late records for time display)
       const arrival = records.find(r => r.type === 'arrival' || r.type === 'authorized_late');
       const departure = records.find(r => r.type === 'departure');
-      
-      // Find the first special status record (Duty or Leave, excluding authorized_late as it behaves like arrival)
       const special = records.find(r => ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type));
 
       let arrivalValue = '-';
@@ -96,7 +91,6 @@ const Dashboard: React.FC = () => {
       };
 
       if (special) {
-        // If a special status exists (Duty/Leave), it overrides specific arrival/departure times in the primary view
         const thaiStatus = statusMap[special.status] || special.status;
         arrivalValue = thaiStatus;
         departureValue = thaiStatus;
@@ -105,7 +99,6 @@ const Dashboard: React.FC = () => {
         if (arrival) {
           const time = new Date(arrival.timestamp);
           arrivalValue = time.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-          
           if (arrival.type === 'authorized_late' || arrival.status === 'Authorized Late') {
              remark = 'อนุญาตสาย' + (arrival.reason ? ` (${arrival.reason})` : '');
           } else if (arrival.status === 'Late') {
@@ -117,7 +110,6 @@ const Dashboard: React.FC = () => {
         if (departure) {
           const time = new Date(departure.timestamp);
           departureValue = time.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-          
           if (departure.status === 'Early Leave') {
             const leaveMsg = 'กลับก่อน' + (departure.reason ? ` (${departure.reason})` : '');
             remark = remark ? `${remark}, ${leaveMsg}` : leaveMsg;
@@ -141,7 +133,6 @@ const Dashboard: React.FC = () => {
   const dailyAnalysis = useMemo(() => {
     const presentIds = new Set(filteredToday.filter(r => ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type)).map(r => r.staffId));
     const absentStaff = staffList.filter(s => !presentIds.has(s.id));
-    
     return {
       present: filteredToday.filter(r => r.type === 'arrival' || r.type === 'duty' || r.type === 'authorized_late').length,
       late: filteredToday.filter(r => r.status === 'Late').length,
@@ -166,36 +157,27 @@ const Dashboard: React.FC = () => {
     const [year, month] = selectedDate.split('-').map(Number);
     const currentMonthPrefix = selectedDate.substring(0, 7);
     const monthlyRecords = allRecords.filter(r => new Date(r.timestamp).toISOString().startsWith(currentMonthPrefix));
-    
     const now = new Date();
     const isCurrentMonth = (year === now.getFullYear() && (month - 1) === now.getMonth());
     const lastDayToCount = isCurrentMonth ? now.getDate() : new Date(year, month, 0).getDate();
-    
     const workingDays: string[] = [];
     for (let d = 1; d <= lastDayToCount; d++) {
       const dateObj = new Date(year, month - 1, d);
       if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
-
       const dayOfWeek = dateObj.getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sun=0, Sat=6
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
       const holiday = getHoliday(dateObj);
-      
       if (!isWeekend && !holiday) {
         workingDays.push(dateObj.toISOString().split('T')[0]);
       }
     }
-    
     return staffList.map((staff, index) => {
       const staffRecords = monthlyRecords.filter(r => r.staffId === staff.id);
-      
-      // Late count (specific status 'Late')
       const lateRecords = staffRecords.filter(r => r.status === 'Late');
       const lateDates = lateRecords.map(r => {
         const d = new Date(r.timestamp);
         return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
       }).join(', ');
-
-      // Absent count (Missing 'Arrival' or equivalent accounting for check-in on working days)
       let absentCount = 0;
       workingDays.forEach(wDate => {
         const hasArrivalOrEquivalent = staffRecords.some(r => {
@@ -204,7 +186,6 @@ const Dashboard: React.FC = () => {
         });
         if (!hasArrivalOrEquivalent) absentCount++;
       });
-
       return {
         no: index + 1,
         name: staff.name,
@@ -216,11 +197,85 @@ const Dashboard: React.FC = () => {
     });
   }, [allRecords, selectedDate, staffList]);
 
+  // Helper for Export PDF with Auto-Scaling to One Page
+  const handleExportPDF = (type: 'daily' | 'monthly') => {
+    const doc = new jsPDF('p', 'mm', 'a4');
+    const data = type === 'daily' ? officialData : monthlyLatenessData;
+    const rowCount = data.length;
+    
+    // Auto-scale font and padding based on row count to ensure 1-page fit
+    // Target ~250mm of table height max (excluding header/footer)
+    let fontSize = 10;
+    let cellPadding = 3;
+    
+    if (rowCount > 25) {
+      fontSize = Math.max(7, 10 - Math.floor((rowCount - 25) / 5));
+      cellPadding = Math.max(1.5, 3 - ((rowCount - 25) / 10));
+    }
+
+    const title = type === 'daily' 
+        ? `รายงานการมาปฏิบัติงานประจำวันที่ ${new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`
+        : `รายงานการมาสายประจำเดือน ${new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}`;
+
+    // Note: Standard jsPDF fonts don't support Thai well. 
+    // This implementation assumes the environment has a compatible font or we use the browser's native print-to-pdf via window.print() for high fidelity.
+    // However, we provide the structured autoTable logic for layout handling.
+    
+    const headers = type === 'daily' 
+        ? [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'เวลามา', 'เวลากลับ', 'หมายเหตุ']]
+        : [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'ไม่ลงเวลา', 'มาสาย', 'วันที่มาสาย']];
+
+    const body = data.map(d => {
+        if (type === 'daily') {
+            const row = d as any;
+            return [row.no, row.name, row.role, row.arrival, row.departure, row.remark];
+        } else {
+            const row = d as any;
+            return [row.no, row.name, row.role, row.absentCount, row.lateCount, row.lateDates];
+        }
+    });
+
+    // Simple Header
+    doc.setFontSize(14);
+    doc.text('โรงเรียนประจักษ์ศิลปาคม', 105, 20, { align: 'center' });
+    doc.setFontSize(11);
+    doc.text(title, 105, 28, { align: 'center' });
+
+    (doc as any).autoTable({
+        startY: 35,
+        head: headers,
+        body: body,
+        theme: 'grid',
+        styles: {
+            fontSize: fontSize,
+            cellPadding: cellPadding,
+            halign: 'center',
+            valign: 'middle',
+            font: 'helvetica' // Thai support limitation in standard jsPDF without custom .ttf
+        },
+        headStyles: {
+            fillColor: [225, 29, 72],
+            textColor: [255, 255, 255]
+        },
+        columnStyles: {
+            1: { halign: 'left' }
+        },
+        margin: { top: 35, bottom: 20 },
+        didDrawPage: (data: any) => {
+            // Footer
+            const pageHeight = doc.internal.pageSize.height;
+            doc.setFontSize(8);
+            doc.text(`Generated by SchoolCheckIn AI - ${new Date().toLocaleString('th-TH')}`, 105, pageHeight - 10, { align: 'center' });
+        }
+    });
+
+    doc.save(`report_${type}_${selectedDate}.pdf`);
+  };
+
   const handleQuickLeave = async (staff: Staff, type: AttendanceType) => {
     const [year, month, day] = selectedDate.split('-').map(Number);
     const now = new Date();
     const timestamp = new Date(year, month - 1, day, now.getHours(), now.getMinutes()).getTime();
-    
     const record: CheckInRecord = {
       id: crypto.randomUUID(),
       staffId: staff.id,
@@ -234,7 +289,6 @@ const Dashboard: React.FC = () => {
       distanceFromBase: 0,
       aiVerification: 'Admin Direct Authorized'
     };
-    
     await saveRecord(record);
     syncData();
   };
@@ -251,17 +305,14 @@ const Dashboard: React.FC = () => {
     e.preventDefault();
     const staff = staffList.find(s => s.id === manualStaffId);
     if (!staff) return alert('ไม่พบรหัสบุคลากร');
-    
     const [year, month, day] = selectedDate.split('-').map(Number);
     const [hours, minutes] = manualTime.split(':').map(Number);
     const manualTimestamp = new Date(year, month - 1, day, hours, minutes).getTime();
-    
     let status: any = 'Admin Assist';
     if (manualType === 'arrival') {
         const limit = new Date(year, month - 1, day, 8, 0, 0, 0).getTime();
         status = manualTimestamp > limit ? 'Late' : 'On Time';
     }
-
     const record: CheckInRecord = {
       id: crypto.randomUUID(),
       staffId: staff.id,
@@ -275,7 +326,6 @@ const Dashboard: React.FC = () => {
       distanceFromBase: 0,
       aiVerification: 'Admin Authorized'
     };
-    
     await saveRecord(record);
     setManualReason('');
     alert('บันทึกสำเร็จ');
@@ -439,7 +489,6 @@ const Dashboard: React.FC = () => {
                       ))}
                     </div>
                 </div>
-
                 <div className="bg-white p-8 rounded-[3rem] border-4 border-rose-50 shadow-xl no-print">
                    <h4 className="font-black text-stone-800 mb-6 text-center text-sm uppercase tracking-widest">สัดส่วนการมาปฏิบัติงาน</h4>
                    <div className="h-64 w-full">
@@ -460,7 +509,21 @@ const Dashboard: React.FC = () => {
         )}
 
         {activeTab === 'official' && (
-          <div className="p-0 md:p-12 bg-stone-100 min-h-screen">
+          <div className="p-0 md:p-12 bg-stone-100 min-h-screen relative">
+             <div className="no-print absolute top-4 right-4 z-50 flex items-center gap-2">
+                <button 
+                    onClick={() => handleExportPDF('daily')}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-3 rounded-2xl font-black text-xs shadow-lg flex items-center gap-2 transition-all"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    ดาวน์โหลด PDF
+                </button>
+                <button onClick={() => window.print()} className="bg-white hover:bg-stone-50 text-stone-700 px-5 py-3 rounded-2xl font-black text-xs shadow-lg flex items-center gap-2 transition-all border border-stone-200">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                    พิมพ์รายงาน
+                </button>
+             </div>
+
              <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-[15mm] md:p-[20mm] min-h-[297mm] flex flex-col border border-stone-200">
                 <div className="flex flex-col items-center text-center mb-10">
                    <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain mb-6" />
@@ -480,15 +543,15 @@ const Dashboard: React.FC = () => {
                             <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-40 md:w-44">หมายเหตุ</th>
                          </tr>
                       </thead>
-                      <tbody>
+                      <tbody style={{ fontSize: officialData.length > 25 ? '9px' : '10px' }}>
                          {officialData.map(d => (
                             <tr key={d.no} className="hover:bg-stone-50/50">
-                               <td className="border border-stone-300 p-2 text-[10px] text-center font-mono">{d.no}</td>
-                               <td className="border border-stone-300 p-2 text-[10px] text-left whitespace-nowrap font-bold text-stone-800 pl-4">{d.name}</td>
-                               <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 font-medium">{d.role}</td>
-                               <td className="border border-stone-300 p-2 text-[10px] text-center font-normal text-stone-900">{d.arrival}</td>
-                               <td className="border border-stone-300 p-2 text-[10px] text-center font-normal text-stone-900">{d.departure}</td>
-                               <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 italic font-medium">{d.remark}</td>
+                               <td className="border border-stone-300 p-1.5 text-center font-mono">{d.no}</td>
+                               <td className="border border-stone-300 p-1.5 text-left whitespace-nowrap font-bold text-stone-800 pl-4">{d.name}</td>
+                               <td className="border border-stone-300 p-1.5 text-center text-stone-500 font-medium">{d.role}</td>
+                               <td className="border border-stone-300 p-1.5 text-center font-normal text-stone-900">{d.arrival}</td>
+                               <td className="border border-stone-300 p-1.5 text-center font-normal text-stone-900">{d.departure}</td>
+                               <td className="border border-stone-300 p-1.5 text-center text-stone-500 italic font-medium">{d.remark}</td>
                             </tr>
                          ))}
                       </tbody>
@@ -507,6 +570,13 @@ const Dashboard: React.FC = () => {
              <div className="no-print absolute top-4 right-4 z-50 flex items-center gap-2 bg-white/80 p-3 rounded-2xl shadow-md border border-stone-100 backdrop-blur-sm">
                 <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">เลือกเดือน</span>
                 <input type="month" value={selectedDate.substring(0, 7)} onChange={e => setSelectedDate(e.target.value + "-12")} className="bg-stone-100 border-none rounded-lg p-1 text-sm font-bold text-stone-700 outline-none cursor-pointer" />
+                <button 
+                    onClick={() => handleExportPDF('monthly')}
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl font-black text-[10px] shadow-lg flex items-center gap-2 ml-2"
+                >
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    PDF
+                </button>
              </div>
              <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-[15mm] md:p-[20mm] min-h-[297mm] flex flex-col border border-stone-200">
                 <div className="flex flex-col items-center text-center mb-10">
@@ -527,15 +597,15 @@ const Dashboard: React.FC = () => {
                             <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-48">วันที่ที่มาสาย</th>
                          </tr>
                       </thead>
-                      <tbody>
+                      <tbody style={{ fontSize: monthlyLatenessData.length > 25 ? '9px' : '10px' }}>
                          {monthlyLatenessData.map(d => (
                             <tr key={d.no} className="hover:bg-stone-50/50">
-                               <td className="border border-stone-300 p-2 text-[10px] text-center font-mono">{d.no}</td>
-                               <td className="border border-stone-300 p-2 text-[10px] text-left whitespace-nowrap font-bold text-stone-800 pl-4">{d.name}</td>
-                               <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 font-medium">{d.role}</td>
-                               <td className={`border border-stone-300 p-2 text-[10px] text-center font-black ${d.absentCount > 0 ? 'text-orange-600' : 'text-stone-300'}`}>{d.absentCount || '-'}</td>
-                               <td className={`border border-stone-300 p-2 text-[10px] text-center font-black ${d.lateCount > 0 ? 'text-rose-600' : 'text-stone-300'}`}>{d.lateCount || '-'}</td>
-                               <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 italic font-medium break-words max-w-[200px]">{d.lateDates}</td>
+                               <td className="border border-stone-300 p-1.5 text-center font-mono">{d.no}</td>
+                               <td className="border border-stone-300 p-1.5 text-left whitespace-nowrap font-bold text-stone-800 pl-4">{d.name}</td>
+                               <td className="border border-stone-300 p-1.5 text-center text-stone-500 font-medium">{d.role}</td>
+                               <td className={`border border-stone-300 p-1.5 text-center font-black ${d.absentCount > 0 ? 'text-orange-600' : 'text-stone-300'}`}>{d.absentCount || '-'}</td>
+                               <td className={`border border-stone-300 p-1.5 text-center font-black ${d.lateCount > 0 ? 'text-rose-600' : 'text-stone-300'}`}>{d.lateCount || '-'}</td>
+                               <td className="border border-stone-300 p-1.5 text-center text-stone-500 italic font-medium break-words max-w-[200px]">{d.lateDates}</td>
                             </tr>
                          ))}
                       </tbody>
