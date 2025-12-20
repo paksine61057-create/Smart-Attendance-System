@@ -12,8 +12,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 type TabType = 'today' | 'official' | 'monthly' | 'manual';
 
 const SCHOOL_LOGO_URL = 'https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png';
-// ปรับจุดเริ่มต้นของระบบและการนับสถิติเป็นวันที่ 11 ธันวาคม 2025 ตามคำขอ
-const CUTOFF_TIMESTAMP = new Date(2025, 11, 11).getTime();
+// กำหนดจุดเริ่มต้นระบบ 11 ธันวาคม 2025 (Month Index 11 = December)
+const CUTOFF_TIMESTAMP = new Date(2025, 11, 11, 0, 0, 0, 0).getTime();
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('today');
@@ -34,7 +34,7 @@ const Dashboard: React.FC = () => {
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   });
 
-  // Sync manualDate when tab switches to manual
+  // Sync manualDate when tab switches to manual or selectedDate changes
   useEffect(() => {
     if (activeTab === 'manual') {
       setManualDate(selectedDate);
@@ -52,7 +52,7 @@ const Dashboard: React.FC = () => {
         Promise.resolve(getRecords())
       ]);
       const mergedMap = new Map<string, CheckInRecord>();
-      const getSig = (r: CheckInRecord) => `${r.timestamp}_${String(r.staffId || '').toUpperCase().trim()}`;
+      const getSig = (r: CheckInRecord) => `${r.timestamp}_${String(r.staffId || '').toUpperCase().trim()}_${r.type}`;
       
       cloud.forEach(r => mergedMap.set(getSig(r), r));
       local.forEach(l => {
@@ -67,6 +67,7 @@ const Dashboard: React.FC = () => {
         }
       });
       
+      // กรองเฉพาะข้อมูลตั้งแต่วันที่ 11 ธันวาคม 2025 เป็นต้นไป
       const filtered = Array.from(mergedMap.values()).filter(r => r.timestamp >= CUTOFF_TIMESTAMP);
       setAllRecords(filtered);
     } catch (e) {
@@ -77,7 +78,7 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => { syncData(); }, [syncData]);
 
-  // กรองข้อมูลตามวันที่เลือก (selectedDate)
+  // กรองข้อมูลตามวันที่เลือก
   const filteredToday = useMemo(() => {
     return allRecords.filter(r => {
       const d = new Date(r.timestamp);
@@ -147,10 +148,11 @@ const Dashboard: React.FC = () => {
   }, [staffList, filteredToday]);
 
   const dailyAnalysis = useMemo(() => {
+    // ผู้ที่มาทำงานในวันนี้ คือคนที่มี record ประเภทมาเรียน/ไปราชการ/ลา/อนุญาตสาย
     const presentIds = new Set(filteredToday.filter(r => ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type)).map(r => r.staffId));
     const absentStaff = staffList.filter(s => !presentIds.has(s.id));
     return {
-      present: filteredToday.filter(r => r.type === 'arrival' || r.type === 'duty' || r.type === 'authorized_late').length,
+      present: filteredToday.filter(r => ['arrival', 'duty', 'authorized_late'].includes(r.type)).length,
       late: filteredToday.filter(r => r.status === 'Late').length,
       leave: filteredToday.filter(r => r.type.includes('_leave')).length,
       duty: filteredToday.filter(r => r.type === 'duty').length,
@@ -163,6 +165,7 @@ const Dashboard: React.FC = () => {
     const [year, month] = selectedDate.split('-').map(Number);
     const currentMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
     
+    // ดึง records ทั้งหมดของเดือนที่เลือก
     const monthlyRecords = allRecords.filter(r => {
         const d = new Date(r.timestamp);
         const prefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -176,7 +179,7 @@ const Dashboard: React.FC = () => {
     const workingDays: string[] = [];
     for (let d = 1; d <= lastDayToCount; d++) {
       const dateObj = new Date(year, month - 1, d);
-      // ข้ามวันก่อนหน้าวันที่ 11 ธันวาคม 2025
+      // สำคัญ: เก็บสถิติตั้งแต่วันที่ 11 ธันวาคม 2025 เป็นต้นไปเท่านั้น
       if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
       
       const dayOfWeek = dateObj.getDay();
@@ -186,7 +189,7 @@ const Dashboard: React.FC = () => {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       
       if (!isWeekend && !holiday) {
-        // อิงกับวันที่คนส่วนใหญ่มาทำงาน (มี record อย่างน้อย 1 รายการ)
+        // อิงจากการลงเวลาของคนอื่น (พิสูจน์ว่าเป็นวันทำงานปกติจริง)
         const hasAnyRecordToday = monthlyRecords.some(r => {
            const rd = new Date(r.timestamp);
            const rDateStr = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`;
@@ -210,12 +213,14 @@ const Dashboard: React.FC = () => {
 
       let absentCount = 0;
       workingDays.forEach(wDate => {
-        const hasArrivalOrEquivalent = staffRecords.some(r => {
+        // เงื่อนไขไม่ลงเวลาช่วงเช้า: ตรวจสอบว่าไม่มี record ประเภท Arrival หรือการลา/ราชการ/อนุญาตสาย ในวันนั้น
+        // หากแอดมินบันทึกแทนให้ (Admin Assist) รายการนั้นจะมี record ประเภทใดประเภทหนึ่งอยู่แล้ว จึงไม่ถือว่าขาด
+        const hasCheckInOrEquivalent = staffRecords.some(r => {
             const d = new Date(r.timestamp);
             const rDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
             return rDate === wDate && ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type);
         });
-        if (!hasArrivalOrEquivalent) absentCount++;
+        if (!hasCheckInOrEquivalent) absentCount++;
       });
 
       return {
@@ -234,7 +239,7 @@ const Dashboard: React.FC = () => {
     const data = type === 'daily' ? officialData : monthlyLatenessData;
     const title = type === 'daily' 
         ? `รายงานการปฏิบัติงานประจำวัน วันที่ ${new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`
-        : `รายงานการมาสายประจำเดือน ${new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}`;
+        : `รายงานสถิติประจำเดือน ${new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}`;
     const headers = type === 'daily' 
         ? [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'เวลามา', 'เวลากลับ', 'หมายเหตุ']]
         : [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'ไม่ลงเวลา', 'มาสาย', 'วันที่มาสาย']];
@@ -286,7 +291,7 @@ const Dashboard: React.FC = () => {
       role: staff.role,
       timestamp: timestamp,
       type: type,
-      status: type === 'duty' ? 'Duty' : (type === 'sick_leave' ? 'Sick Leave' : 'Personal Leave'),
+      status: type === 'duty' ? 'Duty' : (type === 'sick_leave' ? 'Sick Leave' : (type === 'personal_leave' ? 'Personal Leave' : 'Other Leave')),
       reason: `Admin recorded: ${type.replace('_', ' ')}`,
       location: { lat: 0, lng: 0 },
       distanceFromBase: 0,
@@ -315,8 +320,8 @@ const Dashboard: React.FC = () => {
     
     let status: any = 'Admin Assist';
     if (manualType === 'arrival') {
-        const limit = new Date(year, month - 1, day, 8, 0, 0, 0).getTime();
-        status = manualTimestamp > limit ? 'Late' : 'On Time';
+        const limit = new Date(year, month - 1, day, 8, 1, 0, 0).getTime();
+        status = manualTimestamp >= limit ? 'Late' : 'On Time';
     }
     const record: CheckInRecord = {
       id: crypto.randomUUID(),
@@ -335,9 +340,10 @@ const Dashboard: React.FC = () => {
     await saveRecord(record);
     setManualReason('');
     
+    // สำคัญ: ปรับปรุงวันที่ที่แสดงผลให้ตรงกับวันที่บันทึกทันที
     setSelectedDate(manualDate);
     
-    alert(`บันทึกข้อมูลเรียบร้อยสำหรับวันที่ ${new Date(manualDate).toLocaleDateString('th-TH')}`);
+    alert(`บันทึกข้อมูลย้อนหลังสำเร็จสำหรับวันที่ ${new Date(manualDate).toLocaleDateString('th-TH')}`);
     
     await syncData();
     setActiveTab('today');
@@ -358,14 +364,14 @@ const Dashboard: React.FC = () => {
           <h2 className="text-4xl font-black text-white flex items-center gap-3">
             Admin Dashboard <span className="animate-sway">❄️</span>
           </h2>
-          <p className="text-rose-200 text-xs font-bold tracking-widest uppercase mt-2 opacity-80">Reports & Monitoring Center</p>
+          <p className="text-rose-200 text-xs font-bold tracking-widest uppercase mt-2 opacity-80">Attendance Monitoring (Started 11 Dec 2025)</p>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
           <button onClick={syncData} disabled={isSyncing} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-bold text-sm transition-all flex items-center gap-2">
             {isSyncing ? '...' : '🔄 Sync Cloud'}
           </button>
           <div className="flex flex-col">
-            <label className="text-[10px] text-white/60 font-black uppercase mb-1 ml-1">เลือกวันที่แสดงผล</label>
+            <label className="text-[10px] text-white/60 font-black uppercase mb-1 ml-1">วันที่แสดงข้อมูล</label>
             <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="px-5 py-3 rounded-2xl bg-white border-none font-bold text-rose-700 shadow-lg text-sm outline-none cursor-pointer" />
           </div>
         </div>
@@ -374,8 +380,8 @@ const Dashboard: React.FC = () => {
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-print">
         {[
           { id: 'today', label: 'รายการประจำวัน', emoji: '📅' },
-          { id: 'official', label: 'สรุปการปฏิบัติงาน', emoji: '📜' },
-          { id: 'monthly', label: 'สรุปรายเดือน', emoji: '📊' },
+          { id: 'official', label: 'รายงานสรุปวัน', emoji: '📜' },
+          { id: 'monthly', label: 'สถิติรายเดือน', emoji: '📊' },
           { id: 'manual', label: 'ลงเวลาแทน', emoji: '✍️' }
         ].map(tab => (
           <button
@@ -422,7 +428,7 @@ const Dashboard: React.FC = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                   <div>
                     <h3 className="text-2xl font-black text-stone-800">
-                      ข้อมูลวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })} 🎁
+                      รายละเอียดวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })} ⛄
                     </h3>
                     <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">Attendance Records List</p>
                   </div>
@@ -433,7 +439,7 @@ const Dashboard: React.FC = () => {
 
                 {aiSummary && (
                     <div className="mb-8 p-6 bg-emerald-50 rounded-3xl border border-emerald-100 text-emerald-800 animate-in zoom-in text-sm font-medium leading-relaxed shadow-inner">
-                        <p className="font-black text-[10px] uppercase tracking-widest mb-2 text-emerald-400">การวิเคราะห์โดย AI</p>
+                        <p className="font-black text-[10px] uppercase tracking-widest mb-2 text-emerald-400">สรุปภาพรวมโดย AI</p>
                         {aiSummary}
                     </div>
                 )}
@@ -491,7 +497,7 @@ const Dashboard: React.FC = () => {
               <div className="w-full lg:w-80">
                 <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 no-print flex flex-col max-h-[700px]">
                     <h4 className="font-black text-stone-800 mb-6 flex items-center justify-between shrink-0">
-                      ยังไม่ลงชื่อ ⛄
+                      ยังไม่ลงชื่อเช้า ⛄
                       <span className="bg-rose-500 text-white text-[10px] px-3 py-1 rounded-full">{dailyAnalysis.absentCount}</span>
                     </h4>
                     <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
@@ -574,7 +580,7 @@ const Dashboard: React.FC = () => {
              <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[6mm] md:px-[15mm] py-[5mm] md:py-[8mm] min-h-[297mm] border border-stone-200">
                 <div className="flex flex-col items-center text-center mb-5">
                    <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-10 h-10 md:w-14 md:h-14 object-contain mb-1.5" />
-                   <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">รายงานการปฏิบัติงานของครูและบุคลากรทางการศึกษา</h1>
+                   <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">รายงานสถิติการมาปฏิบัติงานรายเดือน</h1>
                    <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
                    <h2 className="text-[9px] font-bold text-stone-700">ประจำเดือน {new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</h2>
                 </div>
@@ -587,7 +593,7 @@ const Dashboard: React.FC = () => {
                             <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-28">ตำแหน่ง</th>
                             <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-12">ไม่ลงเวลา</th>
                             <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-12">มาสาย</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center">วันที่ที่มาสาย</th>
+                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center">วันที่ที่มาสาย (ตั้งแต่ 11 ธ.ค. เป็นต้นไป)</th>
                          </tr>
                       </thead>
                       <tbody style={{ fontSize: webFontSize }}>
@@ -620,7 +626,7 @@ const Dashboard: React.FC = () => {
 
         {activeTab === 'manual' && (
           <div className="p-10 max-w-2xl mx-auto no-print">
-             <div className="text-center mb-10"><span className="text-6xl mb-4 inline-block">✍️</span><h3 className="text-2xl font-black text-stone-800">ลงเวลาทดแทนย้อนหลัง</h3><p className="text-stone-400 text-xs font-bold mt-2 italic">แอดมินสามารถระบุวันที่และเวลาที่ต้องการบันทึกย้อนหลังได้ที่นี่</p></div>
+             <div className="text-center mb-10"><span className="text-6xl mb-4 inline-block">✍️</span><h3 className="text-2xl font-black text-stone-800">ลงเวลาทดแทน / แก้ไขย้อนหลัง</h3><p className="text-stone-400 text-xs font-bold mt-2 italic">แอดมินสามารถลงเวลาแทนบุคลากรได้ กรณีติดราชการภายนอกหรือมีปัญหาเรื่องอุปกรณ์</p></div>
              <form onSubmit={handleManualCheckIn} className="space-y-6 bg-stone-50 p-10 rounded-[3rem] border-2 border-stone-100 shadow-xl">
                 <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เลือกบุคลากรที่ต้องการบันทึก</label><select value={manualStaffId} onChange={e => setManualStaffId(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm" required><option value="">-- ค้นหารายชื่อบุคลากร --</option>{staffList.map(s => <option key={s.id} value={s.id}>{s.id} : {s.name}</option>)}</select></div>
                 
@@ -629,8 +635,8 @@ const Dashboard: React.FC = () => {
                    <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ระบุวันที่ (Date)</label><input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm h-[52px]" required /></div>
                    <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ระบุเวลา (Time)</label><input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm h-[52px]" required /></div>
                 </div>
-                <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เหตุผลในการลงเวลาแทน</label><textarea value={manualReason} onChange={e => setManualReason(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none h-32 shadow-sm" placeholder="ระบุเหตุผล เช่น ติดราชการภายนอก, ลืมบันทึกเวลา..." /></div>
-                <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl shadow-rose-200 active:scale-95 transition-all text-lg">บันทึกข้อมูลย้อนหลัง 🎉</button>
+                <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">หมายเหตุ / เหตุผลการลงเวลาแทน</label><textarea value={manualReason} onChange={e => setManualReason(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none h-32 shadow-sm" placeholder="ระบุเหตุผล เช่น ติดราชการภายนอก, ลืมบันทึกเวลา..." /></div>
+                <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl shadow-rose-200 active:scale-95 transition-all text-lg">บันทึกข้อมูลย้อนหลัง ❄️</button>
              </form>
           </div>
         )}
