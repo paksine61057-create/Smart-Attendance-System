@@ -46,15 +46,15 @@ const Dashboard: React.FC = () => {
               if (!cloudSignatures.has(sig)) {
                   mergedRecords.push(local);
               } else {
-                  // [ROBUST MERGE] ถ้ารูปในเครื่องสมบูรณ์กว่าคลาวด์ ให้ใช้รูปในเครื่องเสมอ
+                  // [SMART MERGE] แก้ปัญหา Data too short จาก Cloud
                   const cloudIndex = mergedRecords.findIndex(r => `${r.timestamp}_${r.staffId}` === sig);
                   const cloudRec = mergedRecords[cloudIndex];
                   
-                  // เช็คความยาวรหัสภาพ (ถ้าในเครื่องรหัสยาวกว่า แสดงว่าข้อมูลคลาวด์อาจโดนตัดทอน)
                   const localImg = local.imageUrl || '';
                   const cloudImg = cloudRec.imageUrl || '';
 
-                  if (localImg.length > cloudImg.length && localImg.length > 20) {
+                  // ถ้ารูปในเครื่องยาวกว่า หรือ Cloud สั้นผิดปกติ ให้ใช้รูปในเครื่องเสมอ
+                  if (localImg.length > cloudImg.length || (localImg.length > 5000 && cloudImg.length < 1000)) {
                       mergedRecords[cloudIndex] = { ...cloudRec, imageUrl: localImg };
                   }
               }
@@ -265,24 +265,24 @@ const Dashboard: React.FC = () => {
                         className="w-full h-auto rounded-[1.8rem] object-contain max-h-[70vh] shadow-inner" 
                         onClick={(e) => e.stopPropagation()}
                         onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Image+Corrupted+or+Incomplete';
+                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Data+Broken+From+Cloud';
                         }}
                     />
                     <div className="absolute top-6 right-6 text-4xl animate-sway">🎅</div>
                 </div>
                 <div className="mt-8 flex flex-col items-center">
                     <p className="text-white font-black tracking-[0.2em] uppercase bg-rose-600 px-8 py-3 rounded-full shadow-2xl animate-pulse">
-                        Verified Identity ❄️
+                        Identity Verified ❄️
                     </p>
                     <p className="text-rose-200 text-[10px] font-bold mt-2 opacity-60">
-                        {previewImage.length > 500 ? `Data Length: ${previewImage.length.toLocaleString()} characters` : 'Data too short - Cloud error'}
+                        {previewImage.length > 500 ? `รหัสภาพสมบูรณ์: ${previewImage.length.toLocaleString()} ตัวอักษร` : 'ข้อมูลภาพสั้นเกินไป - เกิดข้อผิดพลาดจากคลาวด์'}
                     </p>
                 </div>
             </div>
         </div>
       )}
 
-      {/* Interactive Festive Dashboard Header */}
+      {/* Dashboard Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 no-print">
         <div className="bg-white/10 backdrop-blur-xl p-5 rounded-[2rem] border border-white/20 shadow-2xl relative overflow-hidden group">
           <div className="absolute -top-4 -right-4 text-5xl opacity-20 group-hover:opacity-100 transition-opacity animate-sway">⛄</div>
@@ -307,7 +307,7 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Festive Tabs */}
+      {/* Tabs */}
       <div className="flex flex-wrap gap-3 mb-8 border-b border-white/10 pb-4 no-print bg-white/5 p-3 rounded-[2rem] backdrop-blur-md shadow-2xl">
           <button onClick={() => setActiveTab('realtime')} className={`px-6 py-3 rounded-2xl text-xs font-black transition-all border-2 uppercase tracking-widest ${activeTab === 'realtime' ? 'bg-white text-rose-700 border-rose-200 shadow-xl' : 'text-white/60 hover:bg-white/10 border-transparent'}`}>Realtime Log</button>
           <button onClick={() => setActiveTab('official')} className={`px-6 py-3 rounded-2xl text-xs font-black transition-all border-2 uppercase tracking-widest ${activeTab === 'official' ? 'bg-white text-rose-700 border-rose-200 shadow-xl' : 'text-white/60 hover:bg-white/10 border-transparent'}`}>รายงานประจำวัน (Daily)</button>
@@ -316,7 +316,6 @@ const Dashboard: React.FC = () => {
 
       {activeTab === 'realtime' ? (
       <>
-        {/* Realtime Overview Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12 no-print">
             {[
                 { label: 'มาทำงานวันนี้', count: filteredRecords.length, color: 'rose', icon: '🎅' },
@@ -385,7 +384,6 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="lg:col-span-2 bg-white rounded-[3rem] shadow-[0_30px_80px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col h-[700px] border-4 border-rose-50 relative">
-                <div className="absolute top-4 right-4 text-4xl opacity-5 animate-sparkle pointer-events-none">✨</div>
                 <div className="p-8 flex justify-between items-center bg-white sticky top-0 z-10 border-b-4 border-stone-50">
                     <h3 className="font-black text-stone-800 flex items-center gap-3 text-xl"><span className="w-2 h-8 bg-emerald-500 rounded-full shadow-md"></span>รายการล่าสุด 🎄</h3>
                     <button onClick={handleClear} className="text-[10px] font-black text-rose-500 bg-rose-50 px-5 py-2 rounded-full hover:bg-rose-100 border-2 border-rose-100 tracking-widest uppercase">Clear Cache</button>
@@ -432,7 +430,7 @@ const Dashboard: React.FC = () => {
                                             >
                                                 ดูรูปภาพ ❄️
                                             </button>
-                                            <span className="text-[8px] text-stone-400 font-bold">
+                                            <span className={`text-[8px] font-bold ${record.imageUrl.length < 1000 ? 'text-rose-500' : 'text-stone-400'}`}>
                                                 Len: {record.imageUrl.length.toLocaleString()}
                                             </span>
                                         </div>
@@ -454,29 +452,20 @@ const Dashboard: React.FC = () => {
         </div>
       </>
       ) : (
-        /* PROFESSIONAL REPORT DOCUMENT (Printable) */
+        /* Printable Report Section */
         <div className="bg-white rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.4)] overflow-hidden min-h-[600px] border-4 border-rose-50 relative">
-            <div className="absolute top-10 right-10 text-6xl opacity-10 animate-sway no-print">🎅</div>
             <div className="p-10 border-b-4 border-rose-50 flex flex-col md:flex-row justify-between items-center gap-6 bg-stone-50/40 no-print">
                 <div className="p-6 bg-white rounded-[2rem] border-4 border-rose-50 shadow-xl max-w-lg relative overflow-hidden">
-                    <div className="absolute -bottom-2 -right-2 text-3xl opacity-20">⛄</div>
                     <h3 className="text-2xl font-black text-stone-800 flex items-center gap-3 relative z-10"><span className="text-3xl">❄️</span> {activeTab === 'monthly' ? 'สรุปการมาสายรายเดือน' : 'รายงานการมาปฏิบัติราชการ 🎄'}</h3>
                     <p className="text-stone-500 font-bold text-sm mt-2 pl-2 relative z-10">โรงเรียนประจักษ์ศิลปาคม • {activeTab === 'monthly' ? `ประจำเดือน ${formatMonthYear(selectedMonth)}` : `ประจำ${new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`}</p>
                 </div>
                 <div className="flex gap-4">
-                  <button onClick={handleBrowserPrint} className="px-10 py-5 bg-stone-900 text-white rounded-[2rem] shadow-2xl hover:bg-stone-800 text-sm font-black uppercase tracking-widest flex items-center gap-3 transition-all transform hover:scale-105 active:scale-95">
-                      พิมพ์รายงาน (A4) 🎅
-                  </button>
-                  {activeTab === 'official' && (
-                    <button onClick={handleOfficialPDF} className="px-8 py-5 bg-white text-stone-700 border-4 border-rose-100 rounded-[2rem] shadow-xl hover:bg-stone-50 text-sm font-black transition-all">
-                      Save PDF
-                    </button>
-                  )}
+                  <button onClick={handleBrowserPrint} className="px-10 py-5 bg-stone-900 text-white rounded-[2rem] shadow-2xl hover:bg-stone-800 text-sm font-black uppercase tracking-widest flex items-center gap-3 transition-all transform hover:scale-105 active:scale-95">พิมพ์รายงาน (A4) 🎅</button>
+                  {activeTab === 'official' && <button onClick={handleOfficialPDF} className="px-8 py-5 bg-white text-stone-700 border-4 border-rose-100 rounded-[2rem] shadow-xl hover:bg-stone-50 text-sm font-black transition-all">Save PDF</button>}
                 </div>
             </div>
             
             <div id="printable-report" className="p-6 md:p-12 bg-white">
-                {/* Official Header */}
                 <div className="hidden print:flex flex-col items-center justify-center mb-8">
                      <img src="https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png" className="w-20 h-20 object-contain mb-4" alt="Logo" />
                      <h1 className="text-2xl font-bold text-black leading-tight">โรงเรียนประจักษ์ศิลปาคม</h1>
@@ -485,7 +474,6 @@ const Dashboard: React.FC = () => {
                      </p>
                 </div>
 
-                {/* Report Table */}
                 <table className="w-full text-left border-collapse border-2 border-black">
                     <thead>
                         <tr className="text-black text-xs font-bold uppercase tracking-wider bg-gray-50/50">
@@ -539,7 +527,6 @@ const Dashboard: React.FC = () => {
                     </tbody>
                 </table>
                 
-                {/* Official Signature Section */}
                 <div className="hidden print:flex justify-between items-start mt-20 px-12 break-inside-avoid">
                     <div className="text-center w-64">
                         <p className="text-sm font-bold mb-12">ลงชื่อ..........................................................</p>
@@ -551,9 +538,6 @@ const Dashboard: React.FC = () => {
                         <p className="text-sm font-bold">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
                         <p className="text-xs text-gray-500 mt-2">วันที่......../......../........</p>
                     </div>
-                </div>
-                <div className="hidden print:block text-[9px] text-gray-400 mt-12 text-center border-t pt-2 italic">
-                    เอกสารนี้สร้างโดยระบบจัดเก็บข้อมูลอัตโนมัติ (SchoolCheckIn AI System) | ข้อมูล ณ เวลา {new Date().toLocaleTimeString('th-TH')}
                 </div>
             </div>
         </div>

@@ -186,10 +186,10 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const video = videoRef.current;
       
       if (context && video.videoWidth) {
-        // [RESOLVED] ปรับจูนขนาดเป็น 160px และคุณภาพ 0.3
-        // เพื่อให้ได้ความยาวรหัสประมาณ 11,000 - 15,000 ตัวอักษร
-        // ป้องกันปัญหา "Data too short" ที่เกิดจากการที่ Google Sheets ตัดทอนข้อมูลที่ยาวเกินไป
-        const TARGET_WIDTH = 160;
+        // [RESOLVED] ปรับจูนขนาดเป็น 180px และคุณภาพ 0.35 
+        // เพื่อให้ได้ความยาวรหัสประมาณ 13,000 - 17,000 ตัวอักษร
+        // ป้องกันปัญหา "Data too short" ที่เกิดจากขีดจำกัด Google Sheets
+        const TARGET_WIDTH = 180;
         const scale = TARGET_WIDTH / video.videoWidth;
         const width = TARGET_WIDTH;
         const height = video.videoHeight * scale;
@@ -205,8 +205,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         
         context.drawImage(video, 0, 0, width, height);
         
-        // ใช้คุณภาพ 0.3 เพื่อความประหยัดตัวอักษรสูงสุด แต่ยังมองเห็นใบหน้าชัดเจน
-        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.3);
+        // ใช้คุณภาพ 0.35 เพื่อรักษารายละเอียดแต่ประหยัดความยาวรหัส
+        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.35);
         
         setCapturedImage(imageBase64);
         setStep('verifying');
@@ -262,11 +262,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   if (step === 'info') {
     return (
       <div className="max-w-xl mx-auto relative mt-0 md:mt-4">
-        {/* Decorative Elements */}
         <div className="absolute -top-10 -left-6 md:-top-12 md:-left-12 text-5xl md:text-7xl animate-float opacity-90 z-20 pointer-events-none">⛄</div>
         <div className="absolute -bottom-8 -right-6 md:-bottom-10 md:-right-10 text-5xl md:text-7xl animate-sway opacity-90 z-20 pointer-events-none">🎅</div>
 
-        {/* Festive Gift Card Style */}
         <div className="relative overflow-hidden p-6 md:p-10 rounded-[2.5rem] shadow-[0_32px_80px_-20px_rgba(190,18,60,0.6)] border border-white/30 bg-gradient-to-br from-rose-800 via-red-700 to-amber-600 animate-shimmer-bg backdrop-blur-2xl">
           <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-24 -mt-24 blur-3xl"></div>
           <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-400/10 rounded-full -ml-24 -mb-24 blur-3xl"></div>
