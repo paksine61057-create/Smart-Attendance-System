@@ -186,10 +186,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const video = videoRef.current;
       
       if (context && video.videoWidth) {
-        // [OPTIMIZED] ปรับขนาดเป็น 180px และคุณภาพ 0.35 
-        // เพื่อให้ได้รหัสภาพประมาณ 12,000 - 16,000 ตัวอักษร
-        // ป้องกันปัญหารูปโดนตัดทอนบน Cloud Sheets
-        const TARGET_WIDTH = 180;
+        // [RESOLVED] ปรับจูนเป็น 200px และคุณภาพ 0.40 เพื่อให้ได้ความยาวรหัส ~15,000 ตัวอักษร
+        const TARGET_WIDTH = 200;
         const scale = TARGET_WIDTH / video.videoWidth;
         const width = TARGET_WIDTH;
         const height = video.videoHeight * scale;
@@ -205,8 +203,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         
         context.drawImage(video, 0, 0, width, height);
         
-        // ใช้คุณภาพ 0.35 เพื่อให้ขนาดไฟล์เหมาะสมที่สุด
-        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.35);
+        // ใช้คุณภาพ 0.4 เพื่อรักษารายละเอียดใบหน้า แต่ตัวอักษรรวมจะไม่เกิน 20,000 ตัว
+        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.40);
         
         setCapturedImage(imageBase64);
         setStep('verifying');

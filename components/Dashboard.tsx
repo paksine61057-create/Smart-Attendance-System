@@ -46,15 +46,16 @@ const Dashboard: React.FC = () => {
               if (!cloudSignatures.has(sig)) {
                   mergedRecords.push(local);
               } else {
-                  // [SMART MERGE] ถ้ารูปในเครื่องสมบูรณ์กว่าคลาวด์ ให้ใช้รูปในเครื่องเสมอ
+                  // [ROBUST MERGE] ถ้ารูปในเครื่องสมบูรณ์กว่าคลาวด์ ให้ใช้รูปในเครื่องเสมอ
                   const cloudIndex = mergedRecords.findIndex(r => `${r.timestamp}_${r.staffId}` === sig);
                   const cloudRec = mergedRecords[cloudIndex];
                   
-                  // ถ้ารายการคลาวด์ไม่มีรูป แต่ในเครื่องมี ให้สลับ
-                  if (local.imageUrl && local.imageUrl.length > 20) {
-                      if (!cloudRec.imageUrl || local.imageUrl.length > cloudRec.imageUrl.length) {
-                          mergedRecords[cloudIndex] = { ...cloudRec, imageUrl: local.imageUrl };
-                      }
+                  // เช็คความยาวรหัสภาพ (ถ้าในเครื่องรหัสยาวกว่า แสดงว่าข้อมูลคลาวด์อาจโดนตัดทอน)
+                  const localImg = local.imageUrl || '';
+                  const cloudImg = cloudRec.imageUrl || '';
+
+                  if (localImg.length > cloudImg.length && localImg.length > 20) {
+                      mergedRecords[cloudIndex] = { ...cloudRec, imageUrl: localImg };
                   }
               }
           });
@@ -202,8 +203,11 @@ const Dashboard: React.FC = () => {
 
   const openImage = (url?: string) => {
     if (url && url.length > 20) {
-        // [RESOLVED] เติม MIME Header ถ้าหายไป เพื่อให้รูปภาพแสดงผลได้
-        const finalUrl = url.startsWith('data:') ? url : `data:image/jpeg;base64,${url}`;
+        // [RESILIENT] ตรวจสอบและเติม Header ของ Base64 หากขาดหายไป
+        let finalUrl = url;
+        if (!url.startsWith('data:')) {
+            finalUrl = `data:image/jpeg;base64,${url}`;
+        }
         setPreviewImage(finalUrl);
     }
   };
@@ -254,25 +258,26 @@ const Dashboard: React.FC = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
                 
-                <div className="p-3 bg-white rounded-[2.5rem] shadow-[0_0_100px_rgba(225,29,72,0.4)] border-8 border-rose-100 overflow-hidden relative">
+                <div className="p-3 bg-white rounded-[2.5rem] shadow-[0_0_100px_rgba(225,29,72,0.5)] border-8 border-rose-100 overflow-hidden relative">
                     <img 
                         src={previewImage} 
                         alt="Evidence" 
-                        className="w-full h-auto rounded-[1.8rem] object-contain max-h-[75vh]" 
+                        className="w-full h-auto rounded-[1.8rem] object-contain max-h-[70vh] shadow-inner" 
                         onClick={(e) => e.stopPropagation()}
                         onError={(e) => {
-                            // ถ้าโหลดภาพไม่ขึ้นจริงๆ ให้แสดงตัวบอก
                             (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Image+Corrupted+or+Incomplete';
                         }}
                     />
                     <div className="absolute top-6 right-6 text-4xl animate-sway">🎅</div>
                 </div>
-                <p className="mt-6 text-white font-black bg-rose-600 px-8 py-3 rounded-full shadow-2xl tracking-widest uppercase animate-pulse">
-                   Verified Evidence Found ❄️
-                </p>
-                <p className="text-rose-200 text-[10px] mt-2 font-bold opacity-60">
-                   *รหัสรหัสภาพถูกบันทึกที่ช่วงความยาว 12k - 16k ตัวอักษร
-                </p>
+                <div className="mt-8 flex flex-col items-center">
+                    <p className="text-white font-black tracking-[0.2em] uppercase bg-rose-600 px-8 py-3 rounded-full shadow-2xl animate-pulse">
+                        Verified Identity ❄️
+                    </p>
+                    <p className="text-rose-200 text-[10px] font-bold mt-2 opacity-60">
+                        {previewImage.length > 500 ? `Data Length: ${previewImage.length} characters` : 'Data too short - Cloud error'}
+                    </p>
+                </div>
             </div>
         </div>
       )}
@@ -420,12 +425,17 @@ const Dashboard: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-5 text-center">
                                     {(record.imageUrl && record.imageUrl.length > 20) ? (
-                                        <button 
-                                            onClick={() => openImage(record.imageUrl)} 
-                                            className="px-6 py-2.5 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all flex items-center justify-center gap-2 mx-auto shadow-md active:scale-95"
-                                        >
-                                            ดูรูปภาพ ❄️
-                                        </button>
+                                        <div className="flex flex-col items-center gap-1">
+                                            <button 
+                                                onClick={() => openImage(record.imageUrl)} 
+                                                className="px-6 py-2.5 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all flex items-center justify-center gap-2 mx-auto shadow-md active:scale-95"
+                                            >
+                                                ดูรูปภาพ ❄️
+                                            </button>
+                                            <span className="text-[8px] text-stone-400 font-bold">
+                                                Len: {record.imageUrl.length.toLocaleString()}
+                                            </span>
+                                        </div>
                                     ) : <span className="text-stone-300 font-black">-</span>}
                                 </td>
                                 <td className="px-6 py-5 text-center">
