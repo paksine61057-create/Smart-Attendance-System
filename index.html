@@ -28,7 +28,7 @@
         animation-iteration-count: infinite, infinite;
         animation-play-state: running, running;
         opacity: 0.8;
-        pointer-events: none; /* ป้องกันการบังปุ่มบนมือถือ */
+        pointer-events: none;
       }
       @keyframes snowflakes-fall {
         0% { top: -10%; }
@@ -49,6 +49,24 @@
       .snowflake:nth-of-type(7) { left: 70%; animation-delay: 2.5s, 1s; }
       .snowflake:nth-of-type(8) { left: 80%; animation-delay: 1s, 0s; }
       .snowflake:nth-of-type(9) { left: 90%; animation-delay: 3s, 1.5s; }
+
+      /* Floating Animation */
+      @keyframes float {
+        0%, 100% { transform: translateY(0) rotate(0); }
+        50% { transform: translateY(-20px) rotate(5deg); }
+      }
+      .animate-float {
+        animation: float 4s ease-in-out infinite;
+      }
+
+      /* Sway Animation */
+      @keyframes sway {
+        0%, 100% { transform: rotate(-5deg); }
+        50% { transform: rotate(5deg); }
+      }
+      .animate-sway {
+        animation: sway 3s ease-in-out infinite;
+      }
 
       /* Custom Scrollbar */
       ::-webkit-scrollbar { width: 8px; height: 8px; }

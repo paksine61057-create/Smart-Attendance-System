@@ -57,6 +57,11 @@ function App() {
       {/* Festive Winter Night Background */}
       <div className="fixed inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-blue-900 via-slate-800 to-stone-900 pointer-events-none z-0 opacity-100"></div>
       
+      {/* Floating Festive Elements */}
+      <div className="fixed top-24 -left-8 text-7xl md:text-8xl animate-float z-0 pointer-events-none opacity-40 select-none">🎅</div>
+      <div className="fixed bottom-10 -right-8 text-7xl md:text-8xl animate-sway z-0 pointer-events-none opacity-40 select-none">⛄</div>
+      <div className="fixed bottom-20 left-10 text-4xl animate-sparkle z-0 pointer-events-none opacity-30 select-none">🎁</div>
+
       {/* Christmas Header - Red/Gold Acrylic */}
       <header className="relative z-40 bg-gradient-to-r from-rose-700/90 via-red-600/85 to-rose-700/90 backdrop-blur-md border-b border-white/20 sticky top-0 shadow-xl text-white">
         <div className="absolute inset-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.15)_50%,transparent_75%)] bg-[length:250%_250%] animate-shimmer-bg pointer-events-none"></div>
@@ -75,7 +80,7 @@ function App() {
             </div>
             <div>
               <h1 className="text-lg md:text-2xl font-bold text-white tracking-tight leading-tight drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
-                โรงเรียนประจักษ์ศิลปาคม 🎄
+                โรงเรียนประจักษ์ศิลปาคม <span className="animate-sparkle inline-block">🎄</span>
               </h1>
               <div className="flex items-center gap-2">
                  <span className="h-px w-4 md:w-6 bg-amber-300/50"></span>
@@ -135,11 +140,13 @@ function App() {
       {/* Admin Login Modal - Festive Style */}
       {showAdminLogin && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-in fade-in duration-300">
-          <div className="bg-white rounded-3xl shadow-[0_32px_64px_-16px_rgba(225,29,72,0.4)] p-8 max-w-sm w-full relative border border-rose-100">
-            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-red-600 to-amber-400 rounded-t-3xl"></div>
+          <div className="bg-white rounded-3xl shadow-[0_32px_64px_-16px_rgba(225,29,72,0.4)] p-8 max-w-sm w-full relative border border-rose-100 overflow-hidden">
+            <div className="absolute top-0 left-0 right-0 h-2 bg-gradient-to-r from-red-600 to-amber-400"></div>
+            <div className="absolute -top-6 -right-6 text-5xl opacity-20 animate-sway pointer-events-none">🎅</div>
+            
             <button 
               onClick={() => { setShowAdminLogin(false); setAdminPassword(''); setLoginError(''); }}
-              className="absolute top-4 right-4 text-slate-400 hover:text-rose-500 transition-colors"
+              className="absolute top-4 right-4 text-slate-400 hover:text-rose-500 transition-colors z-10"
             >
               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>

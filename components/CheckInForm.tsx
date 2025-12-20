@@ -254,6 +254,10 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   if (step === 'info') {
     return (
       <div className="max-w-xl mx-auto relative mt-0 md:mt-4">
+        {/* Decorative Elements */}
+        <div className="absolute -top-10 -left-6 md:-top-12 md:-left-12 text-5xl md:text-7xl animate-float opacity-90 z-20 pointer-events-none">⛄</div>
+        <div className="absolute -bottom-8 -right-6 md:-bottom-10 md:-right-10 text-5xl md:text-7xl animate-sway opacity-90 z-20 pointer-events-none">🎅</div>
+
         {/* Festive Gift Card Style */}
         <div className="relative overflow-hidden p-6 md:p-10 rounded-[2.5rem] shadow-[0_32px_80px_-20px_rgba(190,18,60,0.6)] border border-white/30 bg-gradient-to-br from-rose-800 via-red-700 to-amber-600 animate-shimmer-bg backdrop-blur-2xl">
           <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-24 -mt-24 blur-3xl"></div>
@@ -304,7 +308,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
               {currentUser ? (
                 <div className="animate-in slide-in-from-bottom-4 fade-in duration-700">
                     <div className="bg-white/10 p-5 rounded-3xl border border-white/20 backdrop-blur-xl mb-8 flex items-center gap-4 shadow-2xl ring-1 ring-white/10">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 border-4 border-white flex items-center justify-center text-white font-black text-2xl shadow-lg">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 border-4 border-white flex items-center justify-center text-white font-black text-2xl shadow-lg relative overflow-hidden">
+                            <div className="absolute -top-1 -right-1 text-xs">🎅</div>
                             {currentUser.name.charAt(0)}
                         </div>
                         <div>
@@ -505,8 +510,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   if (step === 'verifying') {
     return (
-      <div className="max-w-md mx-auto p-1.5 bg-gradient-to-br from-rose-300 via-white to-amber-200 rounded-[3.5rem] shadow-2xl">
-        <div className="bg-white p-12 rounded-[3.3rem] text-center h-[450px] flex flex-col items-center justify-center border-8 border-rose-50">
+      <div className="max-w-md mx-auto p-1.5 bg-gradient-to-br from-rose-300 via-white to-amber-200 rounded-[3.5rem] shadow-2xl overflow-hidden relative">
+        <div className="bg-white p-12 rounded-[3.3rem] text-center h-[450px] flex flex-col items-center justify-center border-8 border-rose-50 relative">
+            <div className="absolute -top-4 -right-4 text-6xl animate-sway">🎅</div>
             <div className="relative w-40 h-40 mx-auto mb-12">
                <div className="absolute inset-0 border-8 border-rose-50 rounded-full"></div>
                <div className="absolute inset-0 border-8 border-t-rose-600 border-r-amber-400 border-b-emerald-400 border-l-transparent rounded-full animate-spin"></div>
@@ -523,14 +529,21 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   if (step === 'result') {
     return (
-      <div className="max-w-md mx-auto p-2 bg-gradient-to-br from-emerald-200 via-white to-teal-200 rounded-[3.5rem] shadow-2xl animate-in zoom-in duration-500">
-        <div className="bg-white p-12 rounded-[3.3rem] text-center h-[450px] flex flex-col items-center justify-center border-8 border-emerald-50">
+      <div className="max-w-md mx-auto p-2 bg-gradient-to-br from-emerald-200 via-white to-teal-200 rounded-[3.5rem] shadow-2xl animate-in zoom-in duration-500 overflow-hidden relative">
+        <div className="bg-white p-12 rounded-[3.3rem] text-center h-[450px] flex flex-col items-center justify-center border-8 border-emerald-50 relative">
+          <div className="absolute -bottom-4 -left-4 text-7xl animate-float">⛄</div>
+          <div className="absolute -top-4 -right-4 text-5xl animate-sparkle">🎁</div>
           <div className="w-28 h-28 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-10 shadow-inner">
             <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </div>
           <h3 className="text-4xl font-black text-slate-800 mb-3 tracking-tight">DONE! 🎉</h3>
           <p className="text-slate-500 font-black text-lg">Happy New Year 2026!</p>
-          {currentUser && <p className="text-emerald-600 font-black text-2xl mt-4 drop-shadow-sm">{currentUser.name} 🦌</p>}
+          {currentUser && (
+            <div className="mt-4 p-4 bg-emerald-50 rounded-2xl border border-emerald-100 shadow-sm">
+                <p className="text-emerald-600 font-black text-2xl drop-shadow-sm">{currentUser.name} 🦌</p>
+                <p className="text-xs text-emerald-400 font-bold mt-1 uppercase tracking-widest">Successfully Verified ❄️</p>
+            </div>
+          )}
         </div>
       </div>
     );

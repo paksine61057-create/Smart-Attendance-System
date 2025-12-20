@@ -249,12 +249,13 @@ const Dashboard: React.FC = () => {
 
       {/* Interactive Festive Dashboard Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 no-print">
-        <div className="bg-white/10 backdrop-blur-xl p-5 rounded-[2rem] border border-white/20 shadow-2xl">
-          <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">
+        <div className="bg-white/10 backdrop-blur-xl p-5 rounded-[2rem] border border-white/20 shadow-2xl relative overflow-hidden group">
+          <div className="absolute -top-4 -right-4 text-5xl opacity-20 group-hover:opacity-100 transition-opacity animate-sway">⛄</div>
+          <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3 relative z-10">
              <span className="w-2.5 h-10 bg-gradient-to-b from-red-500 to-rose-600 rounded-full shadow-lg"></span>
              Admin Dashboard 🎁
           </h2>
-          <p className="text-amber-200 text-sm font-bold mt-1 pl-5 drop-shadow-sm uppercase tracking-widest">Happy New Year 2026 Monitor</p>
+          <p className="text-amber-200 text-sm font-bold mt-1 pl-5 drop-shadow-sm uppercase tracking-widest relative z-10">Happy New Year 2026 Monitor</p>
         </div>
         <div className="flex flex-wrap gap-4 items-center">
              <button onClick={() => setShowAdminCheckInModal(true)} className="px-6 py-3.5 bg-rose-600 text-white rounded-2xl font-black text-sm shadow-[0_10px_30px_rgba(225,29,72,0.4)] hover:bg-rose-700 transition-all flex items-center gap-2 border-b-4 border-rose-800">
@@ -303,7 +304,8 @@ const Dashboard: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 no-print">
             <div className="lg:col-span-1 flex flex-col gap-8">
-                <div className="bg-white p-10 rounded-[3rem] shadow-[0_25px_60px_rgba(0,0,0,0.3)] border-4 border-rose-50 h-[400px]">
+                <div className="bg-white p-10 rounded-[3rem] shadow-[0_25px_60px_rgba(0,0,0,0.3)] border-4 border-rose-50 h-[400px] relative overflow-hidden">
+                    <div className="absolute -bottom-6 -right-6 text-6xl opacity-10 animate-sway">⛄</div>
                     <h3 className="font-black text-stone-800 mb-8 flex items-center gap-3 text-lg"><span className="w-2 h-8 bg-rose-500 rounded-full"></span>สรุปสถิติ</h3>
                     <div className="flex-1 h-64 relative">
                         {filteredRecords.length > 0 ? (
@@ -321,7 +323,8 @@ const Dashboard: React.FC = () => {
                 </div>
 
                 {missingStaff.length > 0 && (
-                    <div className="bg-white rounded-[3rem] shadow-[0_25px_60px_rgba(0,0,0,0.3)] border-4 border-amber-50 overflow-hidden">
+                    <div className="bg-white rounded-[3rem] shadow-[0_25px_60px_rgba(0,0,0,0.3)] border-4 border-amber-50 overflow-hidden relative">
+                        <div className="absolute -top-4 -left-4 text-4xl opacity-10 animate-float">🎅</div>
                         <div className="p-6 border-b-4 border-amber-50 bg-amber-50/30">
                             <h3 className="font-black text-stone-800 flex items-center gap-3 text-sm">
                                 <span className="w-3 h-3 bg-amber-500 rounded-full animate-ping"></span>
@@ -349,7 +352,8 @@ const Dashboard: React.FC = () => {
                 )}
             </div>
 
-            <div className="lg:col-span-2 bg-white rounded-[3rem] shadow-[0_30px_80px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col h-[700px] border-4 border-rose-50">
+            <div className="lg:col-span-2 bg-white rounded-[3rem] shadow-[0_30px_80px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col h-[700px] border-4 border-rose-50 relative">
+                <div className="absolute top-4 right-4 text-4xl opacity-5 animate-sparkle pointer-events-none">✨</div>
                 <div className="p-8 flex justify-between items-center bg-white sticky top-0 z-10 border-b-4 border-stone-50">
                     <h3 className="font-black text-stone-800 flex items-center gap-3 text-xl"><span className="w-2 h-8 bg-emerald-500 rounded-full shadow-md"></span>รายการล่าสุด 🎄</h3>
                     <button onClick={handleClear} className="text-[10px] font-black text-rose-500 bg-rose-50 px-5 py-2 rounded-full hover:bg-rose-100 border-2 border-rose-100 tracking-widest uppercase">Clear Cache</button>
@@ -411,11 +415,13 @@ const Dashboard: React.FC = () => {
       </>
       ) : (
         /* PROFESSIONAL REPORT DOCUMENT (Printable) */
-        <div className="bg-white rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.4)] overflow-hidden min-h-[600px] border-4 border-rose-50">
+        <div className="bg-white rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.4)] overflow-hidden min-h-[600px] border-4 border-rose-50 relative">
+            <div className="absolute top-10 right-10 text-6xl opacity-10 animate-sway no-print">🎅</div>
             <div className="p-10 border-b-4 border-rose-50 flex flex-col md:flex-row justify-between items-center gap-6 bg-stone-50/40 no-print">
-                <div className="p-6 bg-white rounded-[2rem] border-4 border-rose-50 shadow-xl max-w-lg">
-                    <h3 className="text-2xl font-black text-stone-800 flex items-center gap-3"><span className="text-3xl">❄️</span> {activeTab === 'monthly' ? 'สรุปการมาสายรายเดือน' : 'รายงานการมาปฏิบัติราชการ 🎄'}</h3>
-                    <p className="text-stone-500 font-bold text-sm mt-2 pl-2">โรงเรียนประจักษ์ศิลปาคม • {activeTab === 'monthly' ? `ประจำเดือน ${formatMonthYear(selectedMonth)}` : `ประจำ${new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`}</p>
+                <div className="p-6 bg-white rounded-[2rem] border-4 border-rose-50 shadow-xl max-w-lg relative overflow-hidden">
+                    <div className="absolute -bottom-2 -right-2 text-3xl opacity-20">⛄</div>
+                    <h3 className="text-2xl font-black text-stone-800 flex items-center gap-3 relative z-10"><span className="text-3xl">❄️</span> {activeTab === 'monthly' ? 'สรุปการมาสายรายเดือน' : 'รายงานการมาปฏิบัติราชการ 🎄'}</h3>
+                    <p className="text-stone-500 font-bold text-sm mt-2 pl-2 relative z-10">โรงเรียนประจักษ์ศิลปาคม • {activeTab === 'monthly' ? `ประจำเดือน ${formatMonthYear(selectedMonth)}` : `ประจำ${new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`}</p>
                 </div>
                 <div className="flex gap-4">
                   <button onClick={handleBrowserPrint} className="px-10 py-5 bg-stone-900 text-white rounded-[2rem] shadow-2xl hover:bg-stone-800 text-sm font-black uppercase tracking-widest flex items-center gap-3 transition-all transform hover:scale-105 active:scale-95">
@@ -429,7 +435,7 @@ const Dashboard: React.FC = () => {
                 </div>
             </div>
             
-            <div id="printable-report" className="p-6 md:p-12">
+            <div id="printable-report" className="p-6 md:p-12 bg-white">
                 {/* Official Header */}
                 <div className="hidden print:flex flex-col items-center justify-center mb-8">
                      <img src="https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png" className="w-20 h-20 object-contain mb-4" alt="Logo" />
