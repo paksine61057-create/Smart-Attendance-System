@@ -196,23 +196,18 @@ const Dashboard: React.FC = () => {
     });
   }, [allRecords, selectedDate, staffList]);
 
-  // Handle Export PDF with Ultra Compaction
+  // Handle Export PDF with Normal proportions but Correct Positioning
   const handleExportPDF = (type: 'daily' | 'monthly') => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const data = type === 'daily' ? officialData : monthlyLatenessData;
-    const rowCount = data.length;
     
-    // Even more aggressive scale
-    let baseFontSize = rowCount > 25 ? 6 : 7.5;
-    let basePadding = rowCount > 25 ? 0.8 : 1.2;
-
     const title = type === 'daily' 
-        ? `รายงานการมาปฏิบัติงานประจำวันที่ ${new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`
+        ? `รายงานการปฏิบัติงานประจำวัน วันที่ ${new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`
         : `รายงานการมาสายประจำเดือน ${new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}`;
 
     const headers = type === 'daily' 
         ? [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'เวลามา', 'เวลากลับ', 'หมายเหตุ']]
-        : [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'ขาด/ไม่ลงชื่อ', 'มาสาย', 'วันที่มาสาย']];
+        : [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'ขาดงาน', 'มาสาย', 'วันที่มาสาย']];
 
     const body = data.map(d => {
         if (type === 'daily') {
@@ -224,23 +219,23 @@ const Dashboard: React.FC = () => {
         }
     });
 
-    // Extremely Compact Header (Y starts at 8)
-    doc.setFontSize(11);
-    doc.text('โรงเรียนประจักษ์ศิลปาคม', 105, 8, { align: 'center' });
-    doc.setFontSize(8.5);
-    doc.text(title, 105, 12, { align: 'center' });
+    // Header
+    doc.setFontSize(14);
+    doc.text('โรงเรียนประจักษ์ศิลปาคม', 105, 15, { align: 'center' });
+    doc.setFontSize(10);
+    doc.text(title, 105, 22, { align: 'center' });
 
     (doc as any).autoTable({
-        startY: 15,
+        startY: 28,
         head: headers,
         body: body,
         theme: 'grid',
         styles: {
-            fontSize: baseFontSize,
-            cellPadding: basePadding,
+            fontSize: 9,
+            cellPadding: 2,
             halign: 'center',
             valign: 'middle',
-            lineWidth: 0.05
+            lineWidth: 0.1
         },
         headStyles: {
             fillColor: [190, 18, 60],
@@ -248,22 +243,23 @@ const Dashboard: React.FC = () => {
             fontStyle: 'bold'
         },
         columnStyles: {
-            1: { halign: 'left' },
-            5: { fontSize: type === 'monthly' ? baseFontSize - 1.2 : baseFontSize } 
+            1: { halign: 'left' }
         },
-        margin: { top: 15, bottom: 20 }, 
+        margin: { top: 20, bottom: 20 }, 
     });
 
-    // Ultra-tight signature block - Moved up significantly
-    const finalY = (doc as any).lastAutoTable.finalY || 15;
-    const sigY = Math.min(finalY + 5, 285); 
+    // FIXED: Calculate final position accurately and add signature block right after
+    const finalY = (doc as any).lastAutoTable.finalY;
+    const sigY = finalY + 15; // Move up to 15mm after the table ends
     
-    doc.setFontSize(baseFontSize);
+    doc.setFontSize(10);
+    // Draw Left Signature
     doc.text('(ลงชื่อ)...........................................................', 55, sigY, { align: 'center' });
-    doc.text('กลุ่มบริหารงานบุคคล', 55, sigY + 3, { align: 'center' });
+    doc.text('กลุ่มบริหารงานบุคคล', 55, sigY + 7, { align: 'center' });
 
+    // Draw Right Signature
     doc.text('(ลงชื่อ)...........................................................', 155, sigY, { align: 'center' });
-    doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 155, sigY + 3, { align: 'center' });
+    doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 155, sigY + 7, { align: 'center' });
 
     doc.save(`report_${type}_${selectedDate}.pdf`);
   };
@@ -329,11 +325,8 @@ const Dashboard: React.FC = () => {
     setActiveTab('today');
   };
 
-  const webFontSize = useMemo(() => {
-    const count = staffList.length;
-    if (count > 25) return '8px';
-    return '9px';
-  }, [staffList.length]);
+  // Web view font size
+  const webFontSize = '9px';
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-20">
@@ -511,54 +504,57 @@ const Dashboard: React.FC = () => {
         )}
 
         {activeTab === 'official' && (
-          <div className="p-0 md:p-4 bg-stone-100 min-h-screen relative">
+          <div className="p-0 md:p-4 bg-stone-100 min-h-screen relative overflow-auto">
              <div className="no-print absolute top-2 right-4 z-50 flex items-center gap-2">
                 <button onClick={() => handleExportPDF('daily')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg font-black text-[9px] shadow-lg">PDF</button>
                 <button onClick={() => window.print()} className="bg-white hover:bg-stone-50 text-stone-700 px-3 py-1.5 rounded-lg font-black text-[9px] shadow-lg border border-stone-200">Print</button>
              </div>
 
-             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-[3mm] md:p-[5mm] min-h-[297mm] flex flex-col border border-stone-200">
-                <div className="flex flex-col items-center text-center mb-0.5">
-                   <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-7 h-7 md:w-9 md:h-9 object-contain mb-0.5" />
-                   <h1 className="text-[10px] md:text-xs font-black text-stone-900 leading-tight uppercase">รายงานการมาปฏิบัติงานของครูและบุคลากรทางการศึกษา</h1>
-                   <h1 className="text-[10px] md:text-xs font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
-                   <h2 className="text-[8.5px] font-bold text-stone-700">ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</h2>
+             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-[5mm] md:p-[10mm] min-h-[297mm] flex flex-col border border-stone-200">
+                <div className="flex flex-col items-center text-center mb-6">
+                   <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-12 h-12 md:w-16 md:h-16 object-contain mb-2" />
+                   <h1 className="text-sm md:text-base font-black text-stone-900 leading-tight uppercase">รายงานการมาปฏิบัติงานของครูและบุคลากรทางการศึกษา</h1>
+                   <h1 className="text-sm md:text-base font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
+                   <h2 className="text-xs font-bold text-stone-700">ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</h2>
                 </div>
-                <div className="flex-1 mt-1">
-                   <table className="w-full border-collapse border border-stone-300">
+                
+                {/* FIXED: Removed flex-1 to allow signature to follow the table naturally */}
+                <div className="mt-2">
+                   <table className="w-full border-collapse border border-stone-400">
                       <thead>
                          <tr className="bg-stone-50">
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center w-8">ลำดับ</th>
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center">รายชื่อ</th>
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center w-20">ตำแหน่ง</th>
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center w-14">เวลามา</th>
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center w-14">เวลากลับ</th>
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center w-28">หมายเหตุ</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center w-10">ลำดับ</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center">รายชื่อ</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center w-28">ตำแหน่ง</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center w-20">เวลามา</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center w-20">เวลากลับ</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center w-40">หมายเหตุ</th>
                          </tr>
                       </thead>
                       <tbody style={{ fontSize: webFontSize }}>
                          {officialData.map(d => (
                             <tr key={d.no} className="hover:bg-stone-50/20">
-                               <td className="border border-stone-300 p-0.5 text-center font-mono">{d.no}</td>
-                               <td className="border border-stone-300 p-0.5 text-left whitespace-nowrap font-bold text-stone-800 pl-1.5">{d.name}</td>
-                               <td className="border border-stone-300 p-0.5 text-center text-stone-500">{d.role}</td>
-                               <td className="border border-stone-300 p-0.5 text-center">{d.arrival}</td>
-                               <td className="border border-stone-300 p-0.5 text-center">{d.departure}</td>
-                               <td className="border border-stone-300 p-0.5 text-center text-stone-500 italic">{d.remark}</td>
+                               <td className="border border-stone-400 p-2 text-center font-mono">{d.no}</td>
+                               <td className="border border-stone-400 p-2 text-left font-bold text-stone-800 pl-4">{d.name}</td>
+                               <td className="border border-stone-400 p-2 text-center text-stone-500">{d.role}</td>
+                               <td className="border border-stone-400 p-2 text-center">{d.arrival}</td>
+                               <td className="border border-stone-400 p-2 text-center">{d.departure}</td>
+                               <td className="border border-stone-400 p-2 text-center text-stone-500 italic">{d.remark}</td>
                             </tr>
                          ))}
                       </tbody>
                    </table>
                 </div>
-                {/* Ultra-tight Signatures Web View */}
-                <div className="mt-1 grid grid-cols-2 gap-1 text-center py-1 border-t border-transparent">
+
+                {/* SIGNATURE BLOCK: Anchored 30px after table ends */}
+                <div className="mt-8 grid grid-cols-2 gap-10 text-center py-4">
                    <div>
-                      <p className="text-[8px] text-stone-800 mb-0.5">(ลงชื่อ)...........................................................</p>
-                      <p className="text-[8px] font-bold text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
+                      <p className="text-[10px] text-stone-800 mb-2">(ลงชื่อ)...........................................................</p>
+                      <p className="text-[10px] font-black text-stone-500 uppercase">กลุ่มบริหารงานบุคคล</p>
                    </div>
                    <div>
-                      <p className="text-[8px] text-stone-800 mb-0.5">(ลงชื่อ)...........................................................</p>
-                      <p className="text-[8px] font-bold text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
+                      <p className="text-[10px] text-stone-800 mb-2">(ลงชื่อ)...........................................................</p>
+                      <p className="text-[10px] font-black text-stone-500 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
                    </div>
                 </div>
              </div>
@@ -566,52 +562,56 @@ const Dashboard: React.FC = () => {
         )}
 
         {activeTab === 'monthly' && (
-          <div className="p-0 md:p-4 bg-stone-100 min-h-screen relative">
-             <div className="no-print absolute top-2 right-4 z-50 flex items-center gap-2 bg-white/80 p-1.5 rounded-lg shadow-sm border border-stone-100 backdrop-blur-sm">
-                <input type="month" value={selectedDate.substring(0, 7)} onChange={e => setSelectedDate(e.target.value + "-12")} className="bg-stone-100 border-none rounded-lg p-0.5 text-[10px] font-bold text-stone-700 cursor-pointer" />
-                <button onClick={() => handleExportPDF('monthly')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-2 py-1 rounded-md font-black text-[8px] shadow-sm">PDF</button>
+          <div className="p-0 md:p-4 bg-stone-100 min-h-screen relative overflow-auto">
+             <div className="no-print absolute top-2 right-4 z-50 flex items-center gap-2 bg-white/80 p-2 rounded-lg shadow-sm border border-stone-100 backdrop-blur-sm">
+                <input type="month" value={selectedDate.substring(0, 7)} onChange={e => setSelectedDate(e.target.value + "-12")} className="bg-stone-100 border-none rounded-lg p-1 text-xs font-bold text-stone-700 cursor-pointer" />
+                <button onClick={() => handleExportPDF('monthly')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-md font-black text-[10px] shadow-sm">PDF</button>
              </div>
-             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-[3mm] md:p-[5mm] min-h-[297mm] flex flex-col border border-stone-200">
-                <div className="flex flex-col items-center text-center mb-0.5">
-                   <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-7 h-7 md:w-9 md:h-9 object-contain mb-0.5" />
-                   <h1 className="text-[10px] md:text-xs font-black text-stone-900 leading-tight uppercase">รายงานการมาสายของครูและบุคลากรทางการศึกษา</h1>
-                   <h1 className="text-[10px] md:text-xs font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
-                   <h2 className="text-[8.5px] font-bold text-stone-700">ประจำเดือน {new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</h2>
+             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-[5mm] md:p-[10mm] min-h-[297mm] flex flex-col border border-stone-200">
+                <div className="flex flex-col items-center text-center mb-6">
+                   <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-12 h-12 md:w-16 md:h-16 object-contain mb-2" />
+                   <h1 className="text-sm md:text-base font-black text-stone-900 leading-tight uppercase">รายงานการมาสายของครูและบุคลากรทางการศึกษา</h1>
+                   <h1 className="text-sm md:text-base font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
+                   <h2 className="text-xs font-bold text-stone-700">ประจำเดือน {new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</h2>
                 </div>
-                <div className="flex-1 mt-1">
-                   <table className="w-full border-collapse border border-stone-300">
+                
+                {/* FIXED: Removed flex-1 to allow signature to follow the table naturally */}
+                <div className="mt-2">
+                   <table className="w-full border-collapse border border-stone-400">
                       <thead>
                          <tr className="bg-stone-50">
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center w-8">ลำดับ</th>
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center">รายชื่อ</th>
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center w-20">ตำแหน่ง</th>
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center w-14">ขาดงาน</th>
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center w-14">มาสาย</th>
-                            <th className="border border-stone-300 p-0.5 text-[7.5px] font-black text-center">วันที่ที่มาสาย</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center w-10">ลำดับ</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center">รายชื่อ</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center w-28">ตำแหน่ง</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center w-20">ขาดงาน</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center w-20">มาสาย</th>
+                            <th className="border border-stone-400 p-2 text-[9px] font-black text-center">วันที่ที่มาสาย</th>
                          </tr>
                       </thead>
                       <tbody style={{ fontSize: webFontSize }}>
                          {monthlyLatenessData.map(d => (
                             <tr key={d.no} className="hover:bg-stone-50/20">
-                               <td className="border border-stone-300 p-0.5 text-center font-mono">{d.no}</td>
-                               <td className="border border-stone-300 p-0.5 text-left whitespace-nowrap font-bold text-stone-800 pl-1.5">{d.name}</td>
-                               <td className="border border-stone-300 p-0.5 text-center text-stone-500">{d.role}</td>
-                               <td className={`border border-stone-300 p-0.5 text-center ${d.absentCount > 0 ? 'text-orange-600 font-black' : 'text-stone-300'}`}>{d.absentCount || '-'}</td>
-                               <td className={`border border-stone-300 p-0.5 text-center ${d.lateCount > 0 ? 'text-rose-600 font-black' : 'text-stone-300'}`}>{d.lateCount || '-'}</td>
-                               <td className="border border-stone-300 p-0.5 text-center text-stone-400 italic text-[7px] leading-[1.1] break-all">{d.lateDates}</td>
+                               <td className="border border-stone-400 p-2 text-center font-mono">{d.no}</td>
+                               <td className="border border-stone-400 p-2 text-left font-bold text-stone-800 pl-4">{d.name}</td>
+                               <td className="border border-stone-400 p-2 text-center text-stone-500">{d.role}</td>
+                               <td className={`border border-stone-400 p-2 text-center ${d.absentCount > 0 ? 'text-orange-600 font-black' : 'text-stone-300'}`}>{d.absentCount || '-'}</td>
+                               <td className={`border border-stone-400 p-2 text-center ${d.lateCount > 0 ? 'text-rose-600 font-black' : 'text-stone-300'}`}>{d.lateCount || '-'}</td>
+                               <td className="border border-stone-400 p-2 text-center text-stone-500 italic text-[8px]">{d.lateDates}</td>
                             </tr>
                          ))}
                       </tbody>
                    </table>
                 </div>
-                <div className="mt-1 grid grid-cols-2 gap-1 text-center py-1 border-t border-transparent">
+
+                {/* SIGNATURE BLOCK: Anchored 30px after table ends */}
+                <div className="mt-8 grid grid-cols-2 gap-10 text-center py-4">
                    <div>
-                      <p className="text-[8px] text-stone-800 mb-0.5">(ลงชื่อ)...........................................................</p>
-                      <p className="text-[8px] font-bold text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
+                      <p className="text-[10px] text-stone-800 mb-2">(ลงชื่อ)...........................................................</p>
+                      <p className="text-[10px] font-black text-stone-500 uppercase">กลุ่มบริหารงานบุคคล</p>
                    </div>
                    <div>
-                      <p className="text-[8px] text-stone-800 mb-0.5">(ลงชื่อ)...........................................................</p>
-                      <p className="text-[8px] font-bold text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
+                      <p className="text-[10px] text-stone-800 mb-2">(ลงชื่อ)...........................................................</p>
+                      <p className="text-[10px] font-black text-stone-500 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
                    </div>
                 </div>
              </div>
