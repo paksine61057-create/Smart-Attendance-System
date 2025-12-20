@@ -186,8 +186,10 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const video = videoRef.current;
       
       if (context && video.videoWidth) {
-        // [RESOLVED] ปรับจูนเป็น 200px และคุณภาพ 0.40 เพื่อให้ได้ความยาวรหัส ~15,000 ตัวอักษร
-        const TARGET_WIDTH = 200;
+        // [RESOLVED] ปรับจูนขนาดเป็น 160px และคุณภาพ 0.3
+        // เพื่อให้ได้ความยาวรหัสประมาณ 11,000 - 15,000 ตัวอักษร
+        // ป้องกันปัญหา "Data too short" ที่เกิดจากการที่ Google Sheets ตัดทอนข้อมูลที่ยาวเกินไป
+        const TARGET_WIDTH = 160;
         const scale = TARGET_WIDTH / video.videoWidth;
         const width = TARGET_WIDTH;
         const height = video.videoHeight * scale;
@@ -203,8 +205,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         
         context.drawImage(video, 0, 0, width, height);
         
-        // ใช้คุณภาพ 0.4 เพื่อรักษารายละเอียดใบหน้า แต่ตัวอักษรรวมจะไม่เกิน 20,000 ตัว
-        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.40);
+        // ใช้คุณภาพ 0.3 เพื่อความประหยัดตัวอักษรสูงสุด แต่ยังมองเห็นใบหน้าชัดเจน
+        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.3);
         
         setCapturedImage(imageBase64);
         setStep('verifying');

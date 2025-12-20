@@ -275,7 +275,7 @@ const Dashboard: React.FC = () => {
                         Verified Identity ❄️
                     </p>
                     <p className="text-rose-200 text-[10px] font-bold mt-2 opacity-60">
-                        {previewImage.length > 500 ? `Data Length: ${previewImage.length} characters` : 'Data too short - Cloud error'}
+                        {previewImage.length > 500 ? `Data Length: ${previewImage.length.toLocaleString()} characters` : 'Data too short - Cloud error'}
                     </p>
                 </div>
             </div>
