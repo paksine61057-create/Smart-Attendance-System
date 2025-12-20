@@ -12,7 +12,6 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 type TabType = 'today' | 'official' | 'monthly' | 'manual';
 
 const SCHOOL_LOGO_URL = 'https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png';
-// กำหนดจุดเริ่มต้นระบบ 11 ธันวาคม 2025 (Month Index 11 = December)
 const CUTOFF_TIMESTAMP = new Date(2025, 11, 11, 0, 0, 0, 0).getTime();
 
 const Dashboard: React.FC = () => {
@@ -24,7 +23,6 @@ const Dashboard: React.FC = () => {
   const [aiSummary, setAiSummary] = useState<string>('');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
-  // Manual Entry State
   const [manualStaffId, setManualStaffId] = useState('');
   const [manualType, setManualType] = useState<AttendanceType>('arrival');
   const [manualReason, setManualReason] = useState('');
@@ -34,7 +32,6 @@ const Dashboard: React.FC = () => {
     return `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   });
 
-  // Sync manualDate when tab switches to manual or selectedDate changes
   useEffect(() => {
     if (activeTab === 'manual') {
       setManualDate(selectedDate);
@@ -47,30 +44,49 @@ const Dashboard: React.FC = () => {
     setIsSyncing(true);
     try {
       await syncUnsyncedRecords();
-      const [cloud, local] = await Promise.all([
-        fetchGlobalRecords(),
-        Promise.resolve(getRecords())
-      ]);
-      const mergedMap = new Map<string, CheckInRecord>();
-      const getSig = (r: CheckInRecord) => `${r.timestamp}_${String(r.staffId || '').toUpperCase().trim()}_${r.type}`;
+      const cloud = await fetchGlobalRecords();
+      const local = getRecords();
       
-      cloud.forEach(r => mergedMap.set(getSig(r), r));
-      local.forEach(l => {
+      const getSig = (r: CheckInRecord) => `${r.timestamp}_${String(r.staffId || '').toUpperCase().trim()}_${r.type}`;
+      const cloudSigs = new Set(cloud.map(getSig));
+      
+      // การทำ Reconciliation: 
+      // หากข้อมูลในเครื่องเคยบอกว่า sync สำเร็จแล้ว (syncedToSheets = true) 
+      // แต่ดันไม่มีอยู่ใน cloud แล้ว (อาจถูกลบออกด้วยมือใน Sheet) 
+      // เราควรลบรายการนั้นออกจากความจำเครื่องด้วย
+      const validLocalRecords = local.filter(l => {
+        if (!l.syncedToSheets) return true; // ถ้ายังไม่เคย sync ให้เก็บไว้ก่อน
+        return cloudSigs.has(getSig(l)); // ถ้าเคย sync แล้ว ต้องมีอยู่ใน cloud ถึงจะเก็บไว้
+      });
+
+      // บันทึกกลับลง LocalStorage เพื่อล้างรายการที่ถูกลบออกจาก Cloud ไปแล้ว
+      if (validLocalRecords.length !== local.length) {
+        localStorage.setItem('school_checkin_records', JSON.stringify(validLocalRecords));
+      }
+
+      const mergedMap = new Map<string, CheckInRecord>();
+      
+      // ใส่ข้อมูลจาก Cloud เป็นหลัก
+      cloud.forEach(r => mergedMap.set(getSig(r), { ...r, syncedToSheets: true }));
+      
+      // ใส่ข้อมูลจาก Local ที่ยังไม่ได้ Sync หรือข้อมูลที่ยังไม่มีใน Cloud
+      validLocalRecords.forEach(l => {
         const sig = getSig(l);
         if (!mergedMap.has(sig)) {
           mergedMap.set(sig, l);
         } else {
+          // ถ้ามีทั้งคู่ ให้ใช้ภาพจากเครื่องถ้า cloud ไม่มีภาพ (กรณี cloud ตัดภาพออกเพื่อประหยัดพื้นที่)
           const existing = mergedMap.get(sig)!;
-          if ((l.imageUrl || "").length > (existing.imageUrl || "").length) {
+          if (!existing.imageUrl && l.imageUrl) {
             mergedMap.set(sig, { ...existing, imageUrl: l.imageUrl });
           }
         }
       });
       
-      // กรองเฉพาะข้อมูลตั้งแต่วันที่ 11 ธันวาคม 2025 เป็นต้นไป
       const filtered = Array.from(mergedMap.values()).filter(r => r.timestamp >= CUTOFF_TIMESTAMP);
       setAllRecords(filtered);
     } catch (e) {
+      console.error("Sync error:", e);
       const localOnly = getRecords().filter(r => r.timestamp >= CUTOFF_TIMESTAMP);
       setAllRecords(localOnly);
     } finally { setIsSyncing(false); }
@@ -78,7 +94,6 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => { syncData(); }, [syncData]);
 
-  // กรองข้อมูลตามวันที่เลือก
   const filteredToday = useMemo(() => {
     return allRecords.filter(r => {
       const d = new Date(r.timestamp);
@@ -148,7 +163,6 @@ const Dashboard: React.FC = () => {
   }, [staffList, filteredToday]);
 
   const dailyAnalysis = useMemo(() => {
-    // ผู้ที่มาทำงานในวันนี้ คือคนที่มี record ประเภทมาเรียน/ไปราชการ/ลา/อนุญาตสาย
     const presentIds = new Set(filteredToday.filter(r => ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type)).map(r => r.staffId));
     const absentStaff = staffList.filter(s => !presentIds.has(s.id));
     return {
@@ -165,7 +179,6 @@ const Dashboard: React.FC = () => {
     const [year, month] = selectedDate.split('-').map(Number);
     const currentMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
     
-    // ดึง records ทั้งหมดของเดือนที่เลือก
     const monthlyRecords = allRecords.filter(r => {
         const d = new Date(r.timestamp);
         const prefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -179,7 +192,6 @@ const Dashboard: React.FC = () => {
     const workingDays: string[] = [];
     for (let d = 1; d <= lastDayToCount; d++) {
       const dateObj = new Date(year, month - 1, d);
-      // สำคัญ: เก็บสถิติตั้งแต่วันที่ 11 ธันวาคม 2025 เป็นต้นไปเท่านั้น
       if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
       
       const dayOfWeek = dateObj.getDay();
@@ -189,7 +201,6 @@ const Dashboard: React.FC = () => {
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       
       if (!isWeekend && !holiday) {
-        // อิงจากการลงเวลาของคนอื่น (พิสูจน์ว่าเป็นวันทำงานปกติจริง)
         const hasAnyRecordToday = monthlyRecords.some(r => {
            const rd = new Date(r.timestamp);
            const rDateStr = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`;
@@ -213,8 +224,6 @@ const Dashboard: React.FC = () => {
 
       let absentCount = 0;
       workingDays.forEach(wDate => {
-        // เงื่อนไขไม่ลงเวลาช่วงเช้า: ตรวจสอบว่าไม่มี record ประเภท Arrival หรือการลา/ราชการ/อนุญาตสาย ในวันนั้น
-        // หากแอดมินบันทึกแทนให้ (Admin Assist) รายการนั้นจะมี record ประเภทใดประเภทหนึ่งอยู่แล้ว จึงไม่ถือว่าขาด
         const hasCheckInOrEquivalent = staffRecords.some(r => {
             const d = new Date(r.timestamp);
             const rDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -339,12 +348,8 @@ const Dashboard: React.FC = () => {
     
     await saveRecord(record);
     setManualReason('');
-    
-    // สำคัญ: ปรับปรุงวันที่ที่แสดงผลให้ตรงกับวันที่บันทึกทันที
     setSelectedDate(manualDate);
-    
     alert(`บันทึกข้อมูลย้อนหลังสำเร็จสำหรับวันที่ ${new Date(manualDate).toLocaleDateString('th-TH')}`);
-    
     await syncData();
     setActiveTab('today');
   };
@@ -418,7 +423,7 @@ const Dashboard: React.FC = () => {
                 <p className="text-3xl font-black text-amber-600">{dailyAnalysis.duty}</p>
               </div>
               <div className="bg-slate-50 p-6 rounded-[2.5rem] border-2 border-slate-100 text-center shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ยังไม่ลงชื่อ</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ยังไม่ลงชื่อเช้า</p>
                 <p className="text-3xl font-black text-slate-600">{dailyAnalysis.absentCount}</p>
               </div>
             </div>
