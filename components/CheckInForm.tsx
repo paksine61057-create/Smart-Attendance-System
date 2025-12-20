@@ -186,7 +186,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const video = videoRef.current;
       
       if (context && video.videoWidth) {
-        const MAX_WIDTH = 640;
+        // ลดขนาดลงเหลือ 320px (จากเดิม 400px) เพื่อให้รหัส Base64 สั้นลงมากพอที่จะไม่ถูกตัดใน Google Sheets
+        const MAX_WIDTH = 320;
         const scale = MAX_WIDTH / video.videoWidth;
         const width = MAX_WIDTH;
         const height = video.videoHeight * scale;
@@ -198,7 +199,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         context.filter = activeFilter && activeFilter.id !== 'normal' ? activeFilter.css : 'none';
         
         context.drawImage(video, 0, 0, width, height);
-        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.6);
+        // ลดคุณภาพลงเหลือ 0.3 (จากเดิม 0.4) เพื่อรับประกันความเสถียรในการเก็บข้อมูลบนคลาวด์
+        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.3);
         
         setCapturedImage(imageBase64);
         setStep('verifying');

@@ -28,8 +28,9 @@ const Dashboard: React.FC = () => {
   const [officialReportData, setOfficialReportData] = useState<any[]>([]);
   const [monthlyReportData, setMonthlyReportData] = useState<any[]>([]);
   
-  // Image Preview State
+  // Image Preview States
   const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
 
   const [showAdminCheckInModal, setShowAdminCheckInModal] = useState(false);
 
@@ -77,17 +78,13 @@ const Dashboard: React.FC = () => {
     const dailyStaffData = allStaff.map(staff => {
         const staffRecords = todaysRecords.filter(r => r.staffId === staff.id);
         const dutyOrLeave = staffRecords.find(r => ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type));
-        let arrivalTime = '-', departureTime = '-', note = '', arrivalStatus = 'Absent', departureStatus = '-', hasImage = false, imageUrl = '';
+        let arrivalTime = '-', departureTime = '-', note = '', arrivalStatus = 'Absent', departureStatus = '-';
 
         if (dutyOrLeave) {
             let label = dutyOrLeave.type === 'duty' ? 'ไปราชการ' : dutyOrLeave.type === 'sick_leave' ? 'ลาป่วย' : dutyOrLeave.type === 'personal_leave' ? 'ลากิจ' : 'ลาอื่นๆ';
             arrivalTime = departureTime = label;
             note = dutyOrLeave.reason || '';
             arrivalStatus = departureStatus = 'Leave';
-            if (dutyOrLeave.imageUrl && dutyOrLeave.imageUrl.length > 20) {
-                hasImage = true;
-                imageUrl = dutyOrLeave.imageUrl;
-            }
         } else {
             const arrival = staffRecords.find(r => r.type === 'arrival' || r.type === 'authorized_late');
             const departure = staffRecords.find(r => r.type === 'departure');
@@ -97,23 +94,14 @@ const Dashboard: React.FC = () => {
                 if (arrival.status === 'Late') note += `สาย: ${arrival.reason || '-'} `;
                 else if (arrival.status === 'Authorized Late') note += `อนุญาตเข้าสาย: ${arrival.reason || '-'} `;
                 else if (arrival.status === 'Admin Assist') note += `(Admin ลงให้) `;
-                if (arrival.imageUrl && arrival.imageUrl.length > 20) {
-                    hasImage = true;
-                    imageUrl = arrival.imageUrl;
-                }
             }
             if (departure) {
                 departureTime = new Date(departure.timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
                 departureStatus = departure.status;
                 if (departure.status === 'Early Leave') note += `กลับก่อน: ${departure.reason || '-'} `;
-                // If arrival didn't have image but departure does, use that
-                if (!hasImage && departure.imageUrl && departure.imageUrl.length > 20) {
-                    hasImage = true;
-                    imageUrl = departure.imageUrl;
-                }
             }
         }
-        return { staffId: staff.id, name: staff.name, role: staff.role, arrivalTime, arrivalStatus, departureTime, departureStatus, note: note.trim(), hasImage, imageUrl };
+        return { staffId: staff.id, name: staff.name, role: staff.role, arrivalTime, arrivalStatus, departureTime, departureStatus, note: note.trim() };
     });
     setOfficialReportData(dailyStaffData);
 
@@ -211,6 +199,7 @@ const Dashboard: React.FC = () => {
 
   const openImage = (url?: string) => {
     if (url) {
+        setImageError(false);
         setPreviewImage(url);
     }
   };
@@ -251,25 +240,43 @@ const Dashboard: React.FC = () => {
       {previewImage && (
         <div 
             className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300 no-print"
-            onClick={() => setPreviewImage(null)}
+            onClick={() => { setPreviewImage(null); setImageError(false); }}
         >
             <div className="relative max-w-2xl w-full flex flex-col items-center">
                 <button 
-                    onClick={() => setPreviewImage(null)}
+                    onClick={() => { setPreviewImage(null); setImageError(false); }}
                     className="absolute -top-12 right-0 text-white hover:text-rose-400 transition-colors bg-white/10 p-2 rounded-full backdrop-blur-md"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
-                <div className="p-2 bg-white rounded-[2rem] shadow-[0_0_80px_rgba(255,255,255,0.2)] border-8 border-rose-50 overflow-hidden relative">
-                    <img 
-                        src={previewImage} 
-                        alt="Check-in Evidence" 
-                        className="w-full h-auto rounded-[1.5rem] object-contain max-h-[75vh]" 
-                        onClick={(e) => e.stopPropagation()}
-                    />
+                
+                <div className="p-2 bg-white rounded-[2rem] shadow-[0_0_80px_rgba(255,255,255,0.2)] border-8 border-rose-50 overflow-hidden relative min-h-[250px] flex items-center justify-center">
+                    {imageError ? (
+                        <div className="p-10 text-center flex flex-col items-center gap-4 bg-rose-50 rounded-[1.5rem]">
+                            <span className="text-6xl animate-bounce">⚠️</span>
+                            <div className="space-y-4">
+                                <h4 className="font-black text-rose-700 text-xl">พบข้อผิดพลาดของข้อมูลรูปภาพ</h4>
+                                <div className="text-rose-600 text-xs font-bold leading-relaxed max-w-[300px] space-y-2 text-left bg-white/50 p-4 rounded-xl border border-rose-100">
+                                    <p>● ข้อมูลนี้ถูกดึงมาจากระบบคลาวด์ (Cloud) และมีขนาดรหัส Base64 ยาวเกินขีดจำกัดของพื้นที่เก็บข้อมูลเดิม (50,000 ตัวอักษร)</p>
+                                    <p>● ทำให้รหัสภาพถูก "ตัดตอน" ส่วนท้ายออกไป ข้อมูลรูปภาพจึงไม่สมบูรณ์และแสดงผลไม่ได้</p>
+                                    <p className="text-stone-800 font-black mt-2">💡 วิธีแก้: ระบบได้ลดความละเอียดภาพลงแล้วสำหรับรูปใหม่ที่กำลังจะเกิดขึ้น เพื่อให้เก็บข้อมูลบนคลาวด์ได้ 100% ครับ</p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <img 
+                            src={previewImage} 
+                            alt="Check-in Evidence" 
+                            className="w-full h-auto rounded-[1.5rem] object-contain max-h-[75vh]" 
+                            onError={() => setImageError(true)}
+                            onClick={(e) => e.stopPropagation()}
+                        />
+                    )}
                     <div className="absolute top-4 right-4 text-4xl animate-sway">🎅</div>
                 </div>
-                <p className="text-white font-black mt-6 tracking-widest uppercase bg-rose-600/80 px-6 py-2 rounded-full">Evidence Found ❄️</p>
+                <p className="text-white font-black mt-6 tracking-widest uppercase bg-rose-600/80 px-6 py-2 rounded-full shadow-2xl">
+                    {imageError ? 'Cloud Sync Issue ❄️' : 'Evidence Found ❄️'}
+                </p>
             </div>
         </div>
       )}
@@ -289,7 +296,7 @@ const Dashboard: React.FC = () => {
                 ลงเวลาแทน 🦌
              </button>
              <button onClick={syncData} disabled={isSyncing} className="px-5 py-3.5 bg-white/10 text-white border border-white/20 rounded-2xl font-black text-sm shadow-xl hover:bg-white/20 transition-all flex items-center gap-2 backdrop-blur-md">
-                <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357-2H15"></path></svg>
                 {isSyncing ? 'Syncing...' : 'Sync Cloud ❄️'}
              </button>
             <div className="relative">
@@ -420,7 +427,10 @@ const Dashboard: React.FC = () => {
                                 </td>
                                 <td className="px-6 py-5 text-center">
                                     {(record.imageUrl && record.imageUrl.length > 20) ? (
-                                        <button onClick={() => openImage(record.imageUrl)} className="px-4 py-2 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-stone-800 transition-all flex items-center justify-center gap-2 mx-auto shadow-md hover:scale-105 active:scale-95">
+                                        <button 
+                                            onClick={() => openImage(record.imageUrl)} 
+                                            className="px-4 py-2 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-stone-800 transition-all flex items-center justify-center gap-2 mx-auto shadow-md hover:scale-105 active:scale-95"
+                                        >
                                             รูปภาพ
                                         </button>
                                     ) : <span className="text-stone-300 font-black">-</span>}
@@ -489,12 +499,11 @@ const Dashboard: React.FC = () => {
                             ) : (
                                 <>
                                     <th className="px-3 py-3 border border-black text-center w-[5%]">ลำดับ</th>
-                                    <th className="px-3 py-3 border border-black w-[32%]">ชื่อ-นามสกุล</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[13%]">ตำแหน่ง</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[10%]">เวลามา</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[10%]">เวลากลับ</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[18%]">หมายเหตุ</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[12%] no-print">รูปภาพ</th>
+                                    <th className="px-3 py-3 border border-black w-[35%]">ชื่อ-นามสกุล</th>
+                                    <th className="px-3 py-3 border border-black text-center w-[15%]">ตำแหน่ง</th>
+                                    <th className="px-3 py-3 border border-black text-center w-[12%]">เวลามา</th>
+                                    <th className="px-3 py-3 border border-black text-center w-[12%]">เวลากลับ</th>
+                                    <th className="px-3 py-3 border border-black text-center w-[21%]">หมายเหตุ</th>
                                 </>
                             )}
                         </tr>
@@ -508,8 +517,8 @@ const Dashboard: React.FC = () => {
                                     <td className="px-3 py-2 border-r border-gray-300 text-center">{row.role}</td>
                                     <td className="px-3 py-2 border-r border-gray-300 text-center font-bold">{row.lateCount > 0 ? row.lateCount : '-'}</td>
                                     <td className="px-3 py-2 border-r border-gray-300 text-center font-bold text-red-600">{row.notSignedInCount > 0 ? row.notSignedInCount : '-'}</td>
-                                    <td className="px-3 py-2 border-r border-gray-300 text-[10px] text-center">{row.lateDates || '-'}</td>
-                                    <td className="px-3 py-2 text-center text-[10px]">{row.note || ''}</td>
+                                    <td className="px-3 py-2 border-r border-gray-300 text-[10px] text-center">{row.lateDays || '-'}</td>
+                                    <td className="px-3 py-2 text-center text-[10px] border-r border-gray-300">{row.note || ''}</td>
                                 </tr>
                             ))
                         ) : (
@@ -521,16 +530,6 @@ const Dashboard: React.FC = () => {
                                     <td className={`px-3 py-2 border-r border-gray-300 text-center font-bold font-mono ${row.arrivalStatus === 'Late' ? 'text-red-600' : 'text-black'}`}>{row.arrivalTime}</td>
                                     <td className="px-3 py-2 border-r border-gray-300 text-center font-bold font-mono">{row.departureTime}</td>
                                     <td className="px-3 py-2 border-r border-gray-300 text-center text-[10px]">{row.note || ''}</td>
-                                    <td className="px-3 py-2 text-center no-print">
-                                        {row.hasImage ? (
-                                            <button 
-                                                onClick={() => openImage(row.imageUrl)} 
-                                                className="text-[9px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-md border border-rose-100 hover:bg-rose-100 transition-colors uppercase"
-                                            >
-                                                ดูรูป ❄️
-                                            </button>
-                                        ) : '-'}
-                                    </td>
                                 </tr>
                             ))
                         )}
