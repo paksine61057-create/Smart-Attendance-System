@@ -1,5 +1,5 @@
 
-import { CheckInRecord, AppSettings } from '../types';
+import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
@@ -19,7 +19,13 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Role": record.role,
       "Type": record.type === 'arrival' ? 'มาทำงาน' : 
               record.type === 'departure' ? 'กลับบ้าน' : 
-              record.type.replace('_', ' '),
+              record.type === 'duty' ? 'ไปราชการ' :
+              record.type === 'sick_leave' ? 'ลาป่วย' :
+              record.type === 'personal_leave' ? 'ลากิจ' :
+              record.type === 'other_leave' ? 'ลาอื่นๆ' :
+              record.type === 'authorized_late' ? 'อนุญาตสาย' :
+              // Fix: Cast to string to prevent 'never' type error when all union members are already handled
+              (record.type as string).replace('_', ' '),
       "Status": record.status,
       "Reason": record.reason || '-',
       "Location": `https://www.google.com/maps?q=${record.location.lat},${record.location.lng}`,
@@ -165,20 +171,16 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
         
         const contentType = response.headers.get("content-type");
         if (contentType && contentType.indexOf("application/json") === -1) {
-            console.error("GAS returned non-JSON response. Check Deployment settings (Anyone/Me).");
             return [];
         }
 
         const data = await response.json();
-        console.log("Cloud Raw Data:", data); // Debugging
 
         if (Array.isArray(data)) {
             return data.map((r: any) => {
-                // ฟังก์ชันช่วยดึงค่าแบบไม่สนตัวพิมพ์เล็ก-ใหญ่
                 const getVal = (keys: string[]) => {
                     for (const k of keys) {
                         const lowK = k.toLowerCase().replace(/\s/g, '');
-                        // ลองหาตรงๆ หรือหาแบบตัดช่องว่าง/ตัวเล็ก
                         for (const objKey in r) {
                             if (objKey.toLowerCase().replace(/\s/g, '') === lowK) return r[objKey];
                         }
@@ -193,13 +195,24 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     ts = isNaN(parsed) ? Number(rawTs) : parsed;
                 }
 
+                // Enhanced Type Mapping for cloud data
+                const rawType = String(getVal(['type', 'Type']) || "").toLowerCase();
+                let type: AttendanceType = 'arrival';
+                if (rawType.includes('มา')) type = 'arrival';
+                else if (rawType.includes('กลับ')) type = 'departure';
+                else if (rawType.includes('ราชการ') || rawType === 'duty') type = 'duty';
+                else if (rawType.includes('ป่วย') || rawType === 'sick_leave' || rawType === 'sick leave') type = 'sick_leave';
+                else if (rawType.includes('กิจ') || rawType === 'personal_leave' || rawType === 'personal leave') type = 'personal_leave';
+                else if (rawType.includes('อื่น') || rawType === 'other_leave' || rawType === 'other leave') type = 'other_leave';
+                else if (rawType.includes('อนุญาต') || rawType === 'authorized_late' || rawType === 'authorized late') type = 'authorized_late';
+
                 return {
                     id: getVal(['id']) || String(ts),
                     staffId: getVal(['staffId', 'staffid', 'Staff ID']) || "",
                     name: getVal(['name', 'Name']) || "Unknown",
                     role: getVal(['role', 'Role']) || "",
                     timestamp: ts,
-                    type: String(getVal(['type', 'Type']) || "").toLowerCase().includes('มา') ? 'arrival' : 'departure',
+                    type: type,
                     status: getVal(['status', 'Status']) || "Normal",
                     reason: getVal(['reason', 'Reason']) || "",
                     location: { lat: 0, lng: 0 },

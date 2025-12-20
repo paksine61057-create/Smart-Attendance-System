@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getRecords, fetchGlobalRecords, syncUnsyncedRecords, deleteRecord, saveRecord } from '../services/storageService';
 import { getAllStaff } from '../services/staffService';
 import { generateDailyReportSummary } from '../services/geminiService';
+import { getHoliday } from '../services/holidayService';
 import { CheckInRecord, Staff, AttendanceType } from '../types';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
@@ -11,8 +12,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 type TabType = 'today' | 'official' | 'monthly' | 'manual';
 
 const SCHOOL_LOGO_URL = 'https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png';
-// Cutoff date: December 11, 2025 (Year 2025, Month index 11, Day 11)
-const CUTOFF_TIMESTAMP = new Date(2025, 11, 11).getTime();
+// Cutoff date: December 12, 2025 (Year 2025, Month index 11, Day 12) - พ.ศ. 2568
+const CUTOFF_TIMESTAMP = new Date(2025, 11, 12).getTime();
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('today');
@@ -52,7 +53,7 @@ const Dashboard: React.FC = () => {
           mergedMap.set(sig, { ...mergedMap.get(sig)!, imageUrl: l.imageUrl });
         }
       });
-      // Apply Filter: Only December 11, 2025 onwards
+      // Apply Filter: Only December 12, 2025 onwards (from Thai 2568)
       const filtered = Array.from(mergedMap.values()).filter(r => r.timestamp >= CUTOFF_TIMESTAMP);
       setAllRecords(filtered);
     } catch (e) {
@@ -73,8 +74,12 @@ const Dashboard: React.FC = () => {
   const officialData = useMemo(() => {
     return staffList.map((staff, index) => {
       const records = filteredToday.filter(r => r.staffId === staff.id);
-      const arrival = records.find(r => r.type === 'arrival');
+      
+      // Separate records by type (Arrival now includes Authorized Late records for time display)
+      const arrival = records.find(r => r.type === 'arrival' || r.type === 'authorized_late');
       const departure = records.find(r => r.type === 'departure');
+      
+      // Find the first special status record (Duty or Leave, excluding authorized_late as it behaves like arrival)
       const special = records.find(r => ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type));
 
       let arrivalValue = '-';
@@ -86,10 +91,12 @@ const Dashboard: React.FC = () => {
         'Sick Leave': 'ลาป่วย',
         'Personal Leave': 'ลากิจ',
         'Other Leave': 'ลาอื่นๆ',
-        'Authorized Late': 'อนุญาตสาย'
+        'Authorized Late': 'อนุญาตสาย',
+        'Admin Assist': 'แอดมินลงเวลาให้'
       };
 
       if (special) {
+        // If a special status exists (Duty/Leave), it overrides specific arrival/departure times in the primary view
         const thaiStatus = statusMap[special.status] || special.status;
         arrivalValue = thaiStatus;
         departureValue = thaiStatus;
@@ -99,14 +106,24 @@ const Dashboard: React.FC = () => {
           const time = new Date(arrival.timestamp);
           arrivalValue = time.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
           
-          const limit = new Date(time);
-          limit.setHours(8, 0, 0, 0);
-          if (time > limit) {
+          if (arrival.type === 'authorized_late' || arrival.status === 'Authorized Late') {
+             remark = 'อนุญาตสาย' + (arrival.reason ? ` (${arrival.reason})` : '');
+          } else if (arrival.status === 'Late') {
             remark = 'สาย' + (arrival.reason ? ` (${arrival.reason})` : '');
+          } else if (arrival.status === 'Admin Assist') {
+            remark = 'แอดมินลงเวลาให้';
           }
         }
         if (departure) {
-          departureValue = new Date(departure.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+          const time = new Date(departure.timestamp);
+          departureValue = time.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+          
+          if (departure.status === 'Early Leave') {
+            const leaveMsg = 'กลับก่อน' + (departure.reason ? ` (${departure.reason})` : '');
+            remark = remark ? `${remark}, ${leaveMsg}` : leaveMsg;
+          } else if (departure.status === 'Admin Assist' && !remark.includes('แอดมิน')) {
+             remark = remark ? `${remark}, แอดมินลงเวลาให้` : 'แอดมินลงเวลาให้';
+          }
         }
       }
 
@@ -122,11 +139,11 @@ const Dashboard: React.FC = () => {
   }, [staffList, filteredToday]);
 
   const dailyAnalysis = useMemo(() => {
-    const presentIds = new Set(filteredToday.filter(r => ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type)).map(r => r.staffId));
+    const presentIds = new Set(filteredToday.filter(r => ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type)).map(r => r.staffId));
     const absentStaff = staffList.filter(s => !presentIds.has(s.id));
     
     return {
-      present: filteredToday.filter(r => r.type === 'arrival').length,
+      present: filteredToday.filter(r => r.type === 'arrival' || r.type === 'duty' || r.type === 'authorized_late').length,
       late: filteredToday.filter(r => r.status === 'Late').length,
       leave: filteredToday.filter(r => r.type.includes('_leave')).length,
       duty: filteredToday.filter(r => r.type === 'duty').length,
@@ -137,7 +154,7 @@ const Dashboard: React.FC = () => {
 
   const chartData = useMemo(() => {
     return [
-      { name: 'มาตรงเวลา', value: Math.max(0, dailyAnalysis.present - dailyAnalysis.late), color: '#10b981' },
+      { name: 'มาตรงเวลา', value: Math.max(0, dailyAnalysis.present - dailyAnalysis.late - dailyAnalysis.duty), color: '#10b981' },
       { name: 'มาสาย', value: dailyAnalysis.late, color: '#f43f5e' },
       { name: 'ลา', value: dailyAnalysis.leave, color: '#3b82f6' },
       { name: 'ไปราชการ', value: dailyAnalysis.duty, color: '#f59e0b' },
@@ -146,22 +163,55 @@ const Dashboard: React.FC = () => {
   }, [dailyAnalysis]);
 
   const monthlyLatenessData = useMemo(() => {
-    const currentMonthPrefix = selectedDate.substring(0, 7); // YYYY-MM
+    const [year, month] = selectedDate.split('-').map(Number);
+    const currentMonthPrefix = selectedDate.substring(0, 7);
     const monthlyRecords = allRecords.filter(r => new Date(r.timestamp).toISOString().startsWith(currentMonthPrefix));
     
+    const now = new Date();
+    const isCurrentMonth = (year === now.getFullYear() && (month - 1) === now.getMonth());
+    const lastDayToCount = isCurrentMonth ? now.getDate() : new Date(year, month, 0).getDate();
+    
+    const workingDays: string[] = [];
+    for (let d = 1; d <= lastDayToCount; d++) {
+      const dateObj = new Date(year, month - 1, d);
+      if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
+
+      const dayOfWeek = dateObj.getDay();
+      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sun=0, Sat=6
+      const holiday = getHoliday(dateObj);
+      
+      if (!isWeekend && !holiday) {
+        workingDays.push(dateObj.toISOString().split('T')[0]);
+      }
+    }
+    
     return staffList.map((staff, index) => {
-      const lateRecords = monthlyRecords.filter(r => r.staffId === staff.id && r.status === 'Late');
+      const staffRecords = monthlyRecords.filter(r => r.staffId === staff.id);
+      
+      // Late count (specific status 'Late')
+      const lateRecords = staffRecords.filter(r => r.status === 'Late');
       const lateDates = lateRecords.map(r => {
         const d = new Date(r.timestamp);
         return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
       }).join(', ');
+
+      // Absent count (Missing 'Arrival' or equivalent accounting for check-in on working days)
+      let absentCount = 0;
+      workingDays.forEach(wDate => {
+        const hasArrivalOrEquivalent = staffRecords.some(r => {
+            const rDate = new Date(r.timestamp).toISOString().split('T')[0];
+            return rDate === wDate && ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type);
+        });
+        if (!hasArrivalOrEquivalent) absentCount++;
+      });
 
       return {
         no: index + 1,
         name: staff.name,
         role: staff.role,
         lateCount: lateRecords.length,
-        lateDates: lateDates || '-'
+        lateDates: lateDates || '-',
+        absentCount: absentCount
       };
     });
   }, [allRecords, selectedDate, staffList]);
@@ -235,14 +285,12 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-20">
-      {/* Image Preview Overlay */}
       {previewImage && (
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[100] flex items-center justify-center p-4 no-print" onClick={() => setPreviewImage(null)}>
           <img src={previewImage.startsWith('data:') ? previewImage : `data:image/jpeg;base64,${previewImage}`} className="max-w-full max-h-[90vh] rounded-3xl border-4 border-white shadow-2xl" alt="Preview" />
         </div>
       )}
 
-      {/* Header Section */}
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6 no-print bg-white/10 backdrop-blur-md p-8 rounded-[3rem] border border-white/20">
         <div className="text-center md:text-left">
           <h2 className="text-4xl font-black text-white flex items-center gap-3">
@@ -258,7 +306,6 @@ const Dashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Modern Tabs */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-print">
         {[
           { id: 'today', label: 'รายการวันนี้', emoji: '📅' },
@@ -278,12 +325,10 @@ const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      {/* Main Content Card */}
       <div className="bg-white rounded-[3.5rem] shadow-2xl border-4 border-rose-50 overflow-hidden min-h-[600px] animate-in fade-in slide-in-from-bottom-4 duration-500">
         
         {activeTab === 'today' && (
           <div className="p-10">
-            {/* Stats Overview */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
               <div className="bg-emerald-50 p-6 rounded-[2.5rem] border-2 border-emerald-100 text-center shadow-sm">
                 <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">มาทำงาน</p>
@@ -295,7 +340,7 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="bg-blue-50 p-6 rounded-[2.5rem] border-2 border-blue-100 text-center shadow-sm">
                 <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">ลา</p>
-                <p className="text-3xl font-black text-blue-600">{dailyAnalysis.leave}</p>
+                <p className="text-3xl font-black text-blue-700">{dailyAnalysis.leave}</p>
               </div>
               <div className="bg-amber-50 p-6 rounded-[2.5rem] border-2 border-amber-100 text-center shadow-sm">
                 <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">ไปราชการ</p>
@@ -353,7 +398,7 @@ const Dashboard: React.FC = () => {
                             <span className={`px-4 py-1.5 rounded-full text-[10px] font-black ${
                               r.status.includes('Time') ? 'bg-emerald-100 text-emerald-700' : 
                               r.status.includes('Late') ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
-                            }`}>{r.status === 'On Time' ? 'มาตรงเวลา' : r.status === 'Late' ? 'มาสาย' : r.status}</span>
+                            }`}>{r.status === 'On Time' ? 'มาตรงเวลา' : r.status === 'Late' ? 'มาสาย' : r.status === 'Duty' ? 'ไปราชการ' : r.status.includes('Leave') ? 'ลา' : r.status}</span>
                           </td>
                           <td className="p-5 text-center">
                             {r.imageUrl ? (
@@ -395,27 +440,15 @@ const Dashboard: React.FC = () => {
                     </div>
                 </div>
 
-                {/* Pie Chart Proportion */}
                 <div className="bg-white p-8 rounded-[3rem] border-4 border-rose-50 shadow-xl no-print">
                    <h4 className="font-black text-stone-800 mb-6 text-center text-sm uppercase tracking-widest">สัดส่วนการมาปฏิบัติงาน</h4>
                    <div className="h-64 w-full">
                      <ResponsiveContainer width="100%" height="100%">
                         <PieChart>
-                          <Pie
-                            data={chartData}
-                            innerRadius={60}
-                            outerRadius={80}
-                            paddingAngle={5}
-                            dataKey="value"
-                            stroke="none"
-                          >
-                            {chartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
+                          <Pie data={chartData} innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value" stroke="none">
+                            {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                           </Pie>
-                          <Tooltip 
-                            contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontWeight: 'bold' }}
-                          />
+                          <Tooltip contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontWeight: 'bold' }} />
                           <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
                         </PieChart>
                      </ResponsiveContainer>
@@ -431,17 +464,10 @@ const Dashboard: React.FC = () => {
              <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-[15mm] md:p-[20mm] min-h-[297mm] flex flex-col border border-stone-200">
                 <div className="flex flex-col items-center text-center mb-10">
                    <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain mb-6" />
-                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight max-w-lg">
-                      รายงานการมาปฏิบัติงานของครูและบุคลากรทางการศึกษา
-                   </h1>
-                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight">
-                      โรงเรียนประจักษ์ศิลปาคม
-                   </h1>
-                   <h2 className="text-md font-bold text-stone-700 mt-2">
-                      ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
-                   </h2>
+                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight max-w-lg">รายงานการมาปฏิบัติงานของครูและบุคลากรทางการศึกษา</h1>
+                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight">โรงเรียนประจักษ์ศิลปาคม</h1>
+                   <h2 className="text-md font-bold text-stone-700 mt-2">ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</h2>
                 </div>
-
                 <div className="flex-1">
                    <table className="w-full border-collapse border border-stone-300">
                       <thead>
@@ -468,16 +494,9 @@ const Dashboard: React.FC = () => {
                       </tbody>
                    </table>
                 </div>
-
                 <div className="mt-16 grid grid-cols-2 gap-12 text-center">
-                   <div>
-                      <div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div>
-                      <p className="text-[10px] font-bold text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
-                   </div>
-                   <div>
-                      <div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div>
-                      <p className="text-[10px] font-bold text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
-                   </div>
+                   <div><div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div><p className="text-[10px] font-bold text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p></div>
+                   <div><div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div><p className="text-[10px] font-bold text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p></div>
                 </div>
              </div>
           </div>
@@ -485,33 +504,17 @@ const Dashboard: React.FC = () => {
 
         {activeTab === 'monthly' && (
           <div className="p-0 md:p-12 bg-stone-100 min-h-screen relative">
-             {/* Local Month Selector for Monthly Tab */}
              <div className="no-print absolute top-4 right-4 z-50 flex items-center gap-2 bg-white/80 p-3 rounded-2xl shadow-md border border-stone-100 backdrop-blur-sm">
                 <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">เลือกเดือน</span>
-                <input 
-                  type="month" 
-                  value={selectedDate.substring(0, 7)} 
-                  onChange={e => setSelectedDate(e.target.value + "-11")} 
-                  className="bg-stone-100 border-none rounded-lg p-1 text-sm font-bold text-stone-700 outline-none cursor-pointer"
-                />
+                <input type="month" value={selectedDate.substring(0, 7)} onChange={e => setSelectedDate(e.target.value + "-12")} className="bg-stone-100 border-none rounded-lg p-1 text-sm font-bold text-stone-700 outline-none cursor-pointer" />
              </div>
-
              <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-[15mm] md:p-[20mm] min-h-[297mm] flex flex-col border border-stone-200">
-                {/* Header Section */}
                 <div className="flex flex-col items-center text-center mb-10">
                    <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain mb-6" />
-                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight max-w-xl">
-                      รายงานการมาสายของครูและบุคลากรทางการศึกษา
-                   </h1>
-                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight">
-                      โรงเรียนประจักษ์ศิลปาคม
-                   </h1>
-                   <h2 className="text-md font-bold text-stone-700 mt-2">
-                      ประจำเดือน {new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}
-                   </h2>
+                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight max-w-xl">รายงานการมาสายของครูและบุคลากรทางการศึกษา</h1>
+                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight">โรงเรียนประจักษ์ศิลปาคม</h1>
+                   <h2 className="text-md font-bold text-stone-700 mt-2">ประจำเดือน {new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</h2>
                 </div>
-
-                {/* Table Section */}
                 <div className="flex-1">
                    <table className="w-full border-collapse border border-stone-300">
                       <thead>
@@ -519,6 +522,7 @@ const Dashboard: React.FC = () => {
                             <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-12">ลำดับที่</th>
                             <th className="border border-stone-300 p-2 text-[10px] font-black text-center">รายชื่อ</th>
                             <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-32">ตำแหน่ง</th>
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-24">จำนวนครั้งที่ไม่ลงเวลา</th>
                             <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-24">จำนวนครั้งที่มาสาย</th>
                             <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-48">วันที่ที่มาสาย</th>
                          </tr>
@@ -529,28 +533,17 @@ const Dashboard: React.FC = () => {
                                <td className="border border-stone-300 p-2 text-[10px] text-center font-mono">{d.no}</td>
                                <td className="border border-stone-300 p-2 text-[10px] text-left whitespace-nowrap font-bold text-stone-800 pl-4">{d.name}</td>
                                <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 font-medium">{d.role}</td>
-                               <td className={`border border-stone-300 p-2 text-[10px] text-center font-black ${d.lateCount > 0 ? 'text-rose-600' : 'text-stone-300'}`}>
-                                  {d.lateCount || '-'}
-                               </td>
-                               <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 italic font-medium break-words max-w-[200px]">
-                                  {d.lateDates}
-                               </td>
+                               <td className={`border border-stone-300 p-2 text-[10px] text-center font-black ${d.absentCount > 0 ? 'text-orange-600' : 'text-stone-300'}`}>{d.absentCount || '-'}</td>
+                               <td className={`border border-stone-300 p-2 text-[10px] text-center font-black ${d.lateCount > 0 ? 'text-rose-600' : 'text-stone-300'}`}>{d.lateCount || '-'}</td>
+                               <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 italic font-medium break-words max-w-[200px]">{d.lateDates}</td>
                             </tr>
                          ))}
                       </tbody>
                    </table>
                 </div>
-
-                {/* Footer / Signatures Placeholder */}
                 <div className="mt-16 grid grid-cols-2 gap-12 text-center">
-                   <div>
-                      <div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div>
-                      <p className="text-[10px] font-bold text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
-                   </div>
-                   <div>
-                      <div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div>
-                      <p className="text-[10px] font-bold text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
-                   </div>
+                   <div><div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div><p className="text-[10px] font-bold text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p></div>
+                   <div><div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div><p className="text-[10px] font-bold text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p></div>
                 </div>
              </div>
           </div>
@@ -558,60 +551,18 @@ const Dashboard: React.FC = () => {
 
         {activeTab === 'manual' && (
           <div className="p-10 max-w-2xl mx-auto no-print">
-             <div className="text-center mb-10">
-                <span className="text-6xl mb-4 inline-block">✍️</span>
-                <h3 className="text-2xl font-black text-stone-800">ลงเวลาทดแทน (Admin Entry)</h3>
-                <p className="text-stone-400 text-xs font-bold mt-2 italic">กรณีบุคลากรติดภารกิจ หรือมีปัญหาเรื่องอุปกรณ์บันทึกภาพ</p>
-             </div>
-             
+             <div className="text-center mb-10"><span className="text-6xl mb-4 inline-block">✍️</span><h3 className="text-2xl font-black text-stone-800">ลงเวลาทดแทน (Admin Entry)</h3><p className="text-stone-400 text-xs font-bold mt-2 italic">กรณีบุคลากรติดภารกิจ หรือมีปัญหาเรื่องอุปกรณ์บันทึกภาพ</p></div>
              <form onSubmit={handleManualCheckIn} className="space-y-6 bg-stone-50 p-10 rounded-[3rem] border-2 border-stone-100 shadow-xl">
-                <div>
-                   <label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เลือกบุคลากรที่ต้องการบันทึก</label>
-                   <select 
-                    value={manualStaffId} 
-                    onChange={e => setManualStaffId(e.target.value)}
-                    className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm"
-                    required
-                   >
-                      <option value="">-- ค้นหารายชื่อบุคลากร --</option>
-                      {staffList.map(s => <option key={s.id} value={s.id}>{s.id} : {s.name}</option>)}
-                   </select>
-                </div>
+                <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เลือกบุคลากรที่ต้องการบันทึก</label><select value={manualStaffId} onChange={e => setManualStaffId(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm" required><option value="">-- ค้นหารายชื่อบุคลากร --</option>{staffList.map(s => <option key={s.id} value={s.id}>{s.id} : {s.name}</option>)}</select></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <div>
-                      <label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ประเภทการลงเวลา</label>
-                      <div className="grid grid-cols-2 gap-3">
-                         <button type="button" onClick={() => setManualType('arrival')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'arrival' ? 'bg-emerald-500 text-white border-emerald-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}>มาทำงาน</button>
-                         <button type="button" onClick={() => setManualType('departure')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'departure' ? 'bg-amber-500 text-white border-amber-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}>กลับบ้าน</button>
-                      </div>
-                   </div>
-                   <div>
-                      <label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ระบุเวลา (Time)</label>
-                      <input 
-                        type="time" 
-                        value={manualTime}
-                        onChange={e => setManualTime(e.target.value)}
-                        className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm h-[52px]"
-                        required
-                      />
-                   </div>
+                   <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ประเภทการลงเวลา</label><div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => setManualType('arrival')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'arrival' ? 'bg-emerald-500 text-white border-emerald-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}>มาทำงาน</button><button type="button" onClick={() => setManualType('departure')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'departure' ? 'bg-amber-500 text-white border-amber-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}>กลับบ้าน</button></div></div>
+                   <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ระบุเวลา (Time)</label><input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm h-[52px]" required /></div>
                 </div>
-                <div>
-                   <label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เหตุผลในการลงเวลาแทน</label>
-                   <textarea 
-                    value={manualReason} 
-                    onChange={e => setManualReason(e.target.value)}
-                    className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none h-32 shadow-sm"
-                    placeholder="ระบุเหตุผล เช่น ติดราชการภายนอก, ลืมบันทึกเวลา..."
-                   />
-                </div>
-                <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl shadow-rose-200 active:scale-95 transition-all text-lg">
-                  บันทึกข้อมูลเข้าระบบ 🎉
-                </button>
+                <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เหตุผลในการลงเวลาแทน</label><textarea value={manualReason} onChange={e => setManualReason(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none h-32 shadow-sm" placeholder="ระบุเหตุผล เช่น ติดราชการภายนอก, ลืมบันทึกเวลา..." /></div>
+                <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl shadow-rose-200 active:scale-95 transition-all text-lg">บันทึกข้อมูลเข้าระบบ 🎉</button>
              </form>
           </div>
         )}
-
       </div>
     </div>
   );
