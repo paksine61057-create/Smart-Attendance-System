@@ -102,6 +102,18 @@
       .animate-pulse-ring-festive {
         animation: pulse-ring-festive 2s infinite;
       }
+
+      /* Print Styles */
+      @media print {
+        .no-print { display: none !important; }
+        body { background: white !important; }
+        #root, main { padding: 0 !important; margin: 0 !important; }
+        .snowflake { display: none !important; }
+        @page {
+          size: A4;
+          margin: 0;
+        }
+      }
     </style>
   <script type="importmap">
 {
@@ -121,16 +133,16 @@
 </head>
   <body class="bg-slate-100 text-slate-900 selection:bg-rose-200 selection:text-rose-900">
     <!-- Snowflakes -->
-    <div class="snowflake">❅</div>
-    <div class="snowflake">❆</div>
-    <div class="snowflake">❅</div>
-    <div class="snowflake">❆</div>
-    <div class="snowflake">❅</div>
-    <div class="snowflake">❆</div>
-    <div class="snowflake">❅</div>
-    <div class="snowflake">❆</div>
-    <div class="snowflake">❅</div>
-    <div class="snowflake">❆</div>
+    <div class="snowflake no-print">❅</div>
+    <div class="snowflake no-print">❆</div>
+    <div class="snowflake no-print">❅</div>
+    <div class="snowflake no-print">❆</div>
+    <div class="snowflake no-print">❅</div>
+    <div class="snowflake no-print">❆</div>
+    <div class="snowflake no-print">❅</div>
+    <div class="snowflake no-print">❆</div>
+    <div class="snowflake no-print">❅</div>
+    <div class="snowflake no-print">❆</div>
 
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>

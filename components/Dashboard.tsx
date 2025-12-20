@@ -7,7 +7,11 @@ import { CheckInRecord, Staff, AttendanceType } from '../types';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
 
-type TabType = 'today' | 'monthly' | 'stats' | 'manual';
+type TabType = 'today' | 'official' | 'monthly' | 'manual';
+
+const SCHOOL_LOGO_URL = 'https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png';
+// Cutoff date: December 11, 2025 (Year 2025, Month index 11, Day 11)
+const CUTOFF_TIMESTAMP = new Date(2025, 11, 11).getTime();
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('today');
@@ -47,9 +51,12 @@ const Dashboard: React.FC = () => {
           mergedMap.set(sig, { ...mergedMap.get(sig)!, imageUrl: l.imageUrl });
         }
       });
-      setAllRecords(Array.from(mergedMap.values()));
+      // Apply Filter: Only December 11, 2025 onwards
+      const filtered = Array.from(mergedMap.values()).filter(r => r.timestamp >= CUTOFF_TIMESTAMP);
+      setAllRecords(filtered);
     } catch (e) {
-      setAllRecords(getRecords());
+      const localOnly = getRecords().filter(r => r.timestamp >= CUTOFF_TIMESTAMP);
+      setAllRecords(localOnly);
     } finally { setIsSyncing(false); }
   }, []);
 
@@ -61,6 +68,57 @@ const Dashboard: React.FC = () => {
       return d.toISOString().split('T')[0] === selectedDate;
     }).sort((a, b) => b.timestamp - a.timestamp);
   }, [allRecords, selectedDate]);
+
+  const officialData = useMemo(() => {
+    return staffList.map((staff, index) => {
+      const records = filteredToday.filter(r => r.staffId === staff.id);
+      const arrival = records.find(r => r.type === 'arrival');
+      const departure = records.find(r => r.type === 'departure');
+      const special = records.find(r => ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type));
+
+      let arrivalValue = '-';
+      let departureValue = '-';
+      let remark = '';
+
+      const statusMap: Record<string, string> = {
+        'Duty': 'ไปราชการ',
+        'Sick Leave': 'ลาป่วย',
+        'Personal Leave': 'ลากิจ',
+        'Other Leave': 'ลาอื่นๆ',
+        'Authorized Late': 'อนุญาตสาย'
+      };
+
+      if (special) {
+        const thaiStatus = statusMap[special.status] || special.status;
+        arrivalValue = thaiStatus;
+        departureValue = thaiStatus;
+        remark = special.reason || '';
+      } else {
+        if (arrival) {
+          const time = new Date(arrival.timestamp);
+          arrivalValue = time.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+          
+          const limit = new Date(time);
+          limit.setHours(8, 0, 0, 0);
+          if (time > limit) {
+            remark = 'สาย' + (arrival.reason ? ` (${arrival.reason})` : '');
+          }
+        }
+        if (departure) {
+          departureValue = new Date(departure.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+        }
+      }
+
+      return {
+        no: index + 1,
+        name: staff.name,
+        role: staff.role,
+        arrival: arrivalValue,
+        departure: departureValue,
+        remark: remark
+      };
+    });
+  }, [staffList, filteredToday]);
 
   const dailyAnalysis = useMemo(() => {
     const presentIds = new Set(filteredToday.filter(r => ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type)).map(r => r.staffId));
@@ -76,21 +134,25 @@ const Dashboard: React.FC = () => {
     };
   }, [filteredToday, staffList]);
 
-  const monthlyData = useMemo(() => {
-    const currentMonth = selectedDate.substring(0, 7);
-    const monthlyRecords = allRecords.filter(r => new Date(r.timestamp).toISOString().startsWith(currentMonth));
+  const monthlyLatenessData = useMemo(() => {
+    const currentMonthPrefix = selectedDate.substring(0, 7); // YYYY-MM
+    const monthlyRecords = allRecords.filter(r => new Date(r.timestamp).toISOString().startsWith(currentMonthPrefix));
     
-    return staffList.map(staff => {
-      const staffRecs = monthlyRecords.filter(r => r.staffId === staff.id);
+    return staffList.map((staff, index) => {
+      const lateRecords = monthlyRecords.filter(r => r.staffId === staff.id && r.status === 'Late');
+      const lateDates = lateRecords.map(r => {
+        const d = new Date(r.timestamp);
+        return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
+      }).join(', ');
+
       return {
-        ...staff,
-        total: staffRecs.filter(r => r.type === 'arrival').length,
-        onTime: staffRecs.filter(r => r.status === 'On Time').length,
-        late: staffRecs.filter(r => r.status === 'Late').length,
-        leave: staffRecs.filter(r => r.type.includes('_leave')).length,
-        duty: staffRecs.filter(r => r.type === 'duty').length,
+        no: index + 1,
+        name: staff.name,
+        role: staff.role,
+        lateCount: lateRecords.length,
+        lateDates: lateDates || '-'
       };
-    }).sort((a, b) => b.late - a.late);
+    });
   }, [allRecords, selectedDate, staffList]);
 
   const handleQuickLeave = async (staff: Staff, type: AttendanceType) => {
@@ -114,104 +176,6 @@ const Dashboard: React.FC = () => {
     
     await saveRecord(record);
     syncData();
-  };
-
-  const exportOfficialDailyPDF = () => {
-    const doc = new jsPDF('p', 'mm', 'a4');
-    const dateFormatted = new Date(selectedDate).toLocaleDateString('th-TH', { 
-        day: 'numeric', month: 'long', year: 'numeric' 
-    });
-
-    // Header
-    doc.setFontSize(14);
-    doc.text(`รายงานการมาปฏิบัติงานของครูและบุคลากรทางการศึกษาโรงเรียนประจักษ์ศิลปาคม`, 105, 15, { align: 'center' });
-    doc.text(`ประจำวันที่ ${dateFormatted}`, 105, 23, { align: 'center' });
-
-    // Processing Data: Merging Arrival and Departure for each staff
-    const tableData = staffList.map((staff, index) => {
-      const records = filteredToday.filter(r => r.staffId === staff.id);
-      const arrival = records.find(r => r.type === 'arrival');
-      const departure = records.find(r => r.type === 'departure');
-      const special = records.find(r => ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type));
-
-      let arrivalTime = '-';
-      let departureTime = '-';
-      let remark = '';
-
-      if (arrival) {
-        const time = new Date(arrival.timestamp);
-        arrivalTime = time.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-        
-        // Late calculation (After 08:00)
-        const limit = new Date(time);
-        limit.setHours(8, 0, 0, 0);
-        if (time > limit) {
-          remark = 'สาย' + (arrival.reason ? ` (${arrival.reason})` : '');
-        }
-      }
-
-      if (departure) {
-        departureTime = new Date(departure.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-      }
-
-      if (special) {
-        remark = special.status + (special.reason ? ` (${special.reason})` : '');
-      }
-
-      return [
-        index + 1,
-        staff.name,
-        staff.role,
-        arrivalTime,
-        departureTime,
-        remark
-      ];
-    });
-
-    (doc as any).autoTable({
-      startY: 32,
-      head: [['ลำดับที่', 'รายชื่อ', 'ตำแหน่ง', 'เวลามา', 'เวลากลับ', 'หมายเหตุ']],
-      body: tableData,
-      theme: 'grid',
-      styles: { font: 'helvetica', fontSize: 9, cellPadding: 3 },
-      headStyles: { fillColor: [190, 18, 60], textColor: [255, 255, 255], halign: 'center' },
-      columnStyles: {
-        0: { halign: 'center', cellWidth: 15 },
-        3: { halign: 'center', cellWidth: 25 },
-        4: { halign: 'center', cellWidth: 25 },
-        5: { cellWidth: 40 }
-      }
-    });
-
-    doc.save(`Official-Daily-Report-${selectedDate}.pdf`);
-  };
-
-  const exportPDF = (type: 'daily' | 'monthly') => {
-    if (type === 'daily') {
-      exportOfficialDailyPDF();
-      return;
-    }
-    
-    const doc = new jsPDF();
-    doc.text(`Monthly Summary Report: ${selectedDate.substring(0, 7)}`, 14, 15);
-    const tableData = monthlyData.map(m => [
-        m.staffId,
-        m.name,
-        m.total,
-        m.onTime,
-        m.late,
-        m.leave + m.duty,
-        `${Math.round((m.onTime / (m.total || 1)) * 100)}%`
-    ]);
-    (doc as any).autoTable({
-        startY: 25,
-        head: [['ID', 'Name', 'Attend', 'OnTime', 'Late', 'Leave/Duty', 'Efficiency']],
-        body: tableData,
-        theme: 'grid',
-        headStyles: { fillColor: [31, 41, 55] },
-        styles: { font: 'helvetica', fontSize: 9 }
-    });
-    doc.save(`Prachak-Monthly-Report-${selectedDate}.pdf`);
   };
 
   const handleAiSummary = async () => {
@@ -262,7 +226,7 @@ const Dashboard: React.FC = () => {
     <div className="w-full max-w-6xl mx-auto pb-20">
       {/* Image Preview Overlay */}
       {previewImage && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[100] flex items-center justify-center p-4" onClick={() => setPreviewImage(null)}>
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[100] flex items-center justify-center p-4 no-print" onClick={() => setPreviewImage(null)}>
           <img src={previewImage.startsWith('data:') ? previewImage : `data:image/jpeg;base64,${previewImage}`} className="max-w-full max-h-[90vh] rounded-3xl border-4 border-white shadow-2xl" alt="Preview" />
         </div>
       )}
@@ -279,7 +243,7 @@ const Dashboard: React.FC = () => {
           <button onClick={syncData} disabled={isSyncing} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-bold text-sm transition-all flex items-center gap-2">
             {isSyncing ? '...' : '🔄 Sync Cloud'}
           </button>
-          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="px-5 py-3 rounded-2xl bg-white border-none font-bold text-rose-700 shadow-lg text-sm outline-none" />
+          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="px-5 py-3 rounded-2xl bg-white border-none font-bold text-rose-700 shadow-lg text-sm outline-none cursor-pointer" />
         </div>
       </div>
 
@@ -287,7 +251,8 @@ const Dashboard: React.FC = () => {
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-print">
         {[
           { id: 'today', label: 'บันทึกวันนี้', emoji: '📅' },
-          { id: 'monthly', label: 'สรุปรายเดือน', emoji: '📊' },
+          { id: 'official', label: 'ตารางสรุปประจำวัน', emoji: '📜' },
+          { id: 'monthly', label: 'ตารางสรุปประจำเดือน', emoji: '📊' },
           { id: 'manual', label: 'ลงเวลาแทน', emoji: '✍️' }
         ].map(tab => (
           <button
@@ -332,18 +297,13 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="flex flex-col lg:flex-row gap-8">
-              {/* Daily Table Section */}
               <div className="flex-1">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                   <div>
-                    <h3 className="text-2xl font-black text-stone-800">รายงานการลงเวลาประจำวัน 🎁</h3>
-                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">Daily Detailed Attendance Table</p>
+                    <h3 className="text-2xl font-black text-stone-800">บันทึกการลงเวลาล่าสุด 🎁</h3>
+                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">Raw Logs Feed</p>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => exportPDF('daily')} className="px-5 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg transition-all">
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                      พิมพ์รายงานราชการ (A4)
-                    </button>
                     <button onClick={handleAiSummary} disabled={isGeneratingAi || filteredToday.length === 0} className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50">
                       {isGeneratingAi ? '...' : '✨ AI Analyze'}
                     </button>
@@ -400,17 +360,10 @@ const Dashboard: React.FC = () => {
                       ))}
                     </tbody>
                   </table>
-                  {filteredToday.length === 0 && (
-                    <div className="py-24 text-center text-stone-300 font-black">
-                      <span className="text-7xl block mb-4">🎄</span>
-                      <p>ไม่มีรายการบันทึกในวันนี้</p>
-                    </div>
-                  )}
                 </div>
               </div>
 
-              {/* Absent Sidebar - Updated to "Not Signed" */}
-              <div className="w-full lg:w-80 bg-slate-50 p-8 rounded-[3rem] border border-slate-100">
+              <div className="w-full lg:w-80 bg-slate-50 p-8 rounded-[3rem] border border-slate-100 no-print">
                   <h4 className="font-black text-stone-800 mb-6 flex items-center justify-between">
                     ยังไม่ลงชื่อ ⛄
                     <span className="bg-rose-500 text-white text-[10px] px-3 py-1 rounded-full">{dailyAnalysis.absentCount}</span>
@@ -420,89 +373,151 @@ const Dashboard: React.FC = () => {
                         <div key={s.id} className="p-5 bg-white rounded-3xl border border-stone-100 shadow-sm transition-all hover:shadow-md">
                             <div className="font-bold text-stone-700 text-xs">{s.name}</div>
                             <div className="text-[10px] text-stone-400 font-bold mt-1 uppercase mb-4">{s.id} • {s.role}</div>
-                            
                             <div className="grid grid-cols-3 gap-1.5">
-                                <button 
-                                  onClick={() => handleQuickLeave(s, 'personal_leave')}
-                                  className="py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[9px] font-black transition-colors border border-amber-100"
-                                >ลากิจ</button>
-                                <button 
-                                  onClick={() => handleQuickLeave(s, 'sick_leave')}
-                                  className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[9px] font-black transition-colors border border-rose-100"
-                                >ลาป่วย</button>
-                                <button 
-                                  onClick={() => handleQuickLeave(s, 'duty')}
-                                  className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black transition-colors border border-blue-100"
-                                >ไปราชการ</button>
+                                <button onClick={() => handleQuickLeave(s, 'personal_leave')} className="py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[9px] font-black transition-colors border border-amber-100">ลากิจ</button>
+                                <button onClick={() => handleQuickLeave(s, 'sick_leave')} className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[9px] font-black transition-colors border border-rose-100">ลาป่วย</button>
+                                <button onClick={() => handleQuickLeave(s, 'duty')} className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black transition-colors border border-blue-100">ไปราชการ</button>
                             </div>
                         </div>
                     ))}
-                    {dailyAnalysis.absentList.length === 0 && (
-                        <div className="text-center py-10 opacity-30 italic text-sm">ลงชื่อครบทุกคนแล้ว 🎉</div>
-                    )}
                   </div>
               </div>
             </div>
           </div>
         )}
 
-        {activeTab === 'monthly' && (
-          <div className="p-10">
-             <div className="flex flex-col md:flex-row justify-between items-center mb-10 gap-4">
-                <div>
-                    <h3 className="text-2xl font-black text-stone-800">ตารางรายงานการมาสายรายเดือน 📊</h3>
-                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">Performance & Lateness Monthly Audit</p>
+        {activeTab === 'official' && (
+          <div className="p-0 md:p-12 bg-stone-100 min-h-screen">
+             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-[15mm] md:p-[20mm] min-h-[297mm] flex flex-col border border-stone-200">
+                <div className="flex flex-col items-center text-center mb-10">
+                   <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain mb-6" />
+                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight max-w-lg">
+                      รายงานการมาปฏิบัติงานของครูและบุคลากรทางการศึกษา
+                   </h1>
+                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight">
+                      โรงเรียนประจักษ์ศิลปาคม
+                   </h1>
+                   <h2 className="text-md font-bold text-stone-700 mt-2">
+                      ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}
+                   </h2>
                 </div>
-                <button onClick={() => exportPDF('monthly')} className="px-6 py-3 bg-stone-900 hover:bg-black text-white rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg transition-all">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                  ส่งออกรายเดือน (PDF)
-                </button>
+
+                <div className="flex-1">
+                   <table className="w-full border-collapse border border-stone-300">
+                      <thead>
+                         <tr className="bg-stone-50">
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-12">ลำดับที่</th>
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center">รายชื่อ</th>
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-28 md:w-32">ตำแหน่ง</th>
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-20 md:w-24">เวลามา</th>
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-20 md:w-24">เวลากลับ</th>
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-40 md:w-44">หมายเหตุ</th>
+                         </tr>
+                      </thead>
+                      <tbody>
+                         {officialData.map(d => (
+                            <tr key={d.no} className="hover:bg-stone-50/50">
+                               <td className="border border-stone-300 p-2 text-[10px] text-center font-mono">{d.no}</td>
+                               <td className="border border-stone-300 p-2 text-[10px] text-left whitespace-nowrap font-bold text-stone-800 pl-4">{d.name}</td>
+                               <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 font-medium">{d.role}</td>
+                               <td className="border border-stone-300 p-2 text-[10px] text-center font-normal text-stone-900">{d.arrival}</td>
+                               <td className="border border-stone-300 p-2 text-[10px] text-center font-normal text-stone-900">{d.departure}</td>
+                               <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 italic font-medium">{d.remark}</td>
+                            </tr>
+                         ))}
+                      </tbody>
+                   </table>
+                </div>
+
+                <div className="mt-16 grid grid-cols-2 gap-12 text-center">
+                   <div>
+                      <div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div>
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
+                   </div>
+                   <div>
+                      <div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div>
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
+                   </div>
+                </div>
              </div>
-             
-             <div className="overflow-x-auto rounded-3xl border border-stone-100">
-                <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-stone-50 text-[10px] font-black uppercase text-stone-400 border-b border-stone-100">
-                      <th className="p-5">ID</th>
-                      <th className="p-5">บุคลากร</th>
-                      <th className="p-5 text-center">มาเรียนทั้งหมด</th>
-                      <th className="p-5 text-center">ตรงเวลา</th>
-                      <th className="p-5 text-center text-rose-500">มาสาย</th>
-                      <th className="p-5 text-center text-blue-500">ลา/ภารกิจ</th>
-                      <th className="p-5 text-right">ประสิทธิภาพ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-stone-50">
-                    {monthlyData.map(m => (
-                      <tr key={m.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-5 font-bold text-stone-400">{m.id}</td>
-                        <td className="p-5">
-                          <div className="font-bold text-stone-800">{m.name}</div>
-                          <div className="text-[10px] text-stone-400 font-bold uppercase">{m.role}</div>
-                        </td>
-                        <td className="p-5 text-center font-black">{m.total}</td>
-                        <td className="p-5 text-center text-emerald-600 font-bold">{m.onTime}</td>
-                        <td className={`p-5 text-center font-black ${m.late > 0 ? 'bg-rose-50 text-rose-600' : 'text-stone-300'}`}>{m.late}</td>
-                        <td className="p-5 text-center text-blue-500 font-bold">{m.leave + m.duty}</td>
-                        <td className="p-5 text-right">
-                          <div className="flex items-center justify-end gap-3">
-                            <span className="text-[10px] font-black text-stone-400">{Math.round((m.onTime / (m.total || 1)) * 100)}%</span>
-                            <div className="w-20 bg-stone-100 h-1.5 rounded-full overflow-hidden">
-                                <div className={`h-full transition-all duration-1000 ${m.late > 3 ? 'bg-rose-400' : 'bg-emerald-400'}`} 
-                                     style={{ width: `${Math.min(100, (m.onTime / (m.total || 1)) * 100)}%` }}></div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          </div>
+        )}
+
+        {activeTab === 'monthly' && (
+          <div className="p-0 md:p-12 bg-stone-100 min-h-screen relative">
+             {/* Local Month Selector for Monthly Tab */}
+             <div className="no-print absolute top-4 right-4 z-50 flex items-center gap-2 bg-white/80 p-3 rounded-2xl shadow-md border border-stone-100 backdrop-blur-sm">
+                <span className="text-[10px] font-black text-stone-400 uppercase tracking-widest">เลือกเดือน</span>
+                <input 
+                  type="month" 
+                  value={selectedDate.substring(0, 7)} 
+                  onChange={e => setSelectedDate(e.target.value + "-11")} 
+                  className="bg-stone-100 border-none rounded-lg p-1 text-sm font-bold text-stone-700 outline-none cursor-pointer"
+                />
+             </div>
+
+             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl p-[15mm] md:p-[20mm] min-h-[297mm] flex flex-col border border-stone-200">
+                {/* Header Section */}
+                <div className="flex flex-col items-center text-center mb-10">
+                   <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-16 h-16 md:w-20 md:h-20 object-contain mb-6" />
+                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight max-w-xl">
+                      รายงานการมาสายของครูและบุคลากรทางการศึกษา
+                   </h1>
+                   <h1 className="text-lg md:text-xl font-black text-stone-900 leading-tight">
+                      โรงเรียนประจักษ์ศิลปาคม
+                   </h1>
+                   <h2 className="text-md font-bold text-stone-700 mt-2">
+                      ประจำเดือน {new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}
+                   </h2>
+                </div>
+
+                {/* Table Section */}
+                <div className="flex-1">
+                   <table className="w-full border-collapse border border-stone-300">
+                      <thead>
+                         <tr className="bg-stone-50">
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-12">ลำดับที่</th>
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center">รายชื่อ</th>
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-32">ตำแหน่ง</th>
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-24">จำนวนครั้งที่มาสาย</th>
+                            <th className="border border-stone-300 p-2 text-[10px] font-black text-center w-48">วันที่ที่มาสาย</th>
+                         </tr>
+                      </thead>
+                      <tbody>
+                         {monthlyLatenessData.map(d => (
+                            <tr key={d.no} className="hover:bg-stone-50/50">
+                               <td className="border border-stone-300 p-2 text-[10px] text-center font-mono">{d.no}</td>
+                               <td className="border border-stone-300 p-2 text-[10px] text-left whitespace-nowrap font-bold text-stone-800 pl-4">{d.name}</td>
+                               <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 font-medium">{d.role}</td>
+                               <td className={`border border-stone-300 p-2 text-[10px] text-center font-black ${d.lateCount > 0 ? 'text-rose-600' : 'text-stone-300'}`}>
+                                  {d.lateCount || '-'}
+                               </td>
+                               <td className="border border-stone-300 p-2 text-[10px] text-center text-stone-500 italic font-medium break-words max-w-[200px]">
+                                  {d.lateDates}
+                               </td>
+                            </tr>
+                         ))}
+                      </tbody>
+                   </table>
+                </div>
+
+                {/* Footer / Signatures Placeholder */}
+                <div className="mt-16 grid grid-cols-2 gap-12 text-center">
+                   <div>
+                      <div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div>
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
+                   </div>
+                   <div>
+                      <div className="h-px bg-stone-300 w-32 md:w-40 mx-auto mb-2"></div>
+                      <p className="text-[10px] font-bold text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
+                   </div>
+                </div>
              </div>
           </div>
         )}
 
         {activeTab === 'manual' && (
-          <div className="p-10 max-w-2xl mx-auto">
+          <div className="p-10 max-w-2xl mx-auto no-print">
              <div className="text-center mb-10">
                 <span className="text-6xl mb-4 inline-block">✍️</span>
                 <h3 className="text-2xl font-black text-stone-800">ลงเวลาทดแทน (Admin Entry)</h3>
@@ -522,21 +537,12 @@ const Dashboard: React.FC = () => {
                       {staffList.map(s => <option key={s.id} value={s.id}>{s.id} : {s.name}</option>)}
                    </select>
                 </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                    <div>
                       <label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ประเภทการลงเวลา</label>
                       <div className="grid grid-cols-2 gap-3">
-                         <button 
-                          type="button"
-                          onClick={() => setManualType('arrival')}
-                          className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'arrival' ? 'bg-emerald-500 text-white border-emerald-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}
-                         >มาทำงาน</button>
-                         <button 
-                          type="button"
-                          onClick={() => setManualType('departure')}
-                          className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'departure' ? 'bg-amber-500 text-white border-amber-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}
-                         >กลับบ้าน</button>
+                         <button type="button" onClick={() => setManualType('arrival')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'arrival' ? 'bg-emerald-500 text-white border-emerald-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}>มาทำงาน</button>
+                         <button type="button" onClick={() => setManualType('departure')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'departure' ? 'bg-amber-500 text-white border-amber-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}>กลับบ้าน</button>
                       </div>
                    </div>
                    <div>
@@ -550,7 +556,6 @@ const Dashboard: React.FC = () => {
                       />
                    </div>
                 </div>
-
                 <div>
                    <label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เหตุผลในการลงเวลาแทน</label>
                    <textarea 
@@ -560,7 +565,6 @@ const Dashboard: React.FC = () => {
                     placeholder="ระบุเหตุผล เช่น ติดราชการภายนอก, ลืมบันทึกเวลา..."
                    />
                 </div>
-
                 <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl shadow-rose-200 active:scale-95 transition-all text-lg">
                   บันทึกข้อมูลเข้าระบบ 🎉
                 </button>
