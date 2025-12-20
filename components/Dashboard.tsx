@@ -12,7 +12,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recha
 type TabType = 'today' | 'official' | 'monthly' | 'manual';
 
 const SCHOOL_LOGO_URL = 'https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png';
-const CUTOFF_TIMESTAMP = new Date(2025, 11, 1).getTime();
+// ปรับจุดเริ่มต้นของระบบและการนับสถิติเป็นวันที่ 11 ธันวาคม 2025 ตามคำขอ
+const CUTOFF_TIMESTAMP = new Date(2025, 11, 11).getTime();
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('today');
@@ -38,7 +39,7 @@ const Dashboard: React.FC = () => {
     if (activeTab === 'manual') {
       setManualDate(selectedDate);
     }
-  }, [activeTab]);
+  }, [activeTab, selectedDate]);
 
   const staffList = useMemo(() => getAllStaff(), []);
 
@@ -158,21 +159,10 @@ const Dashboard: React.FC = () => {
     };
   }, [filteredToday, staffList]);
 
-  const chartData = useMemo(() => {
-    return [
-      { name: 'มาตรงเวลา', value: Math.max(0, dailyAnalysis.present - dailyAnalysis.late - dailyAnalysis.duty), color: '#10b981' },
-      { name: 'มาสาย', value: dailyAnalysis.late, color: '#f43f5e' },
-      { name: 'ลา', value: dailyAnalysis.leave, color: '#3b82f6' },
-      { name: 'ไปราชการ', value: dailyAnalysis.duty, color: '#f59e0b' },
-      { name: 'ยังไม่ลงชื่อ', value: dailyAnalysis.absentCount, color: '#64748b' }
-    ].filter(d => d.value > 0);
-  }, [dailyAnalysis]);
-
   const monthlyLatenessData = useMemo(() => {
     const [year, month] = selectedDate.split('-').map(Number);
     const currentMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
     
-    // กรอง Records ทั้งหมดที่อยู่ในเดือนนี้
     const monthlyRecords = allRecords.filter(r => {
         const d = new Date(r.timestamp);
         const prefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
@@ -183,10 +173,10 @@ const Dashboard: React.FC = () => {
     const isCurrentMonth = (year === now.getFullYear() && (month - 1) === now.getMonth());
     const lastDayToCount = isCurrentMonth ? now.getDate() : new Date(year, month, 0).getDate();
     
-    // หา "วันทำงานจริง" (Working Days)
     const workingDays: string[] = [];
     for (let d = 1; d <= lastDayToCount; d++) {
       const dateObj = new Date(year, month - 1, d);
+      // ข้ามวันก่อนหน้าวันที่ 11 ธันวาคม 2025
       if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
       
       const dayOfWeek = dateObj.getDay();
@@ -195,9 +185,8 @@ const Dashboard: React.FC = () => {
       
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
       
-      // เงื่อนไข: ไม่ใช่วันเสาร์อาทิตย์ และ ไม่ใช่วันหยุดพิเศษ
       if (!isWeekend && !holiday) {
-        // เงื่อนไขเพิ่มเติม: จะต้องมีอย่างน้อย 1 คนลงเวลาในวันนั้น (พิสูจน์ว่าเป็นวันทำงานจริง ไม่ใช่วันหยุดฉุกเฉิน)
+        // อิงกับวันที่คนส่วนใหญ่มาทำงาน (มี record อย่างน้อย 1 รายการ)
         const hasAnyRecordToday = monthlyRecords.some(r => {
            const rd = new Date(r.timestamp);
            const rDateStr = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`;
