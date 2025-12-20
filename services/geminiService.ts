@@ -3,9 +3,8 @@ import { GoogleGenAI, Type } from "@google/genai";
 import { CheckInRecord } from "../types";
 
 // Initialize Gemini
-// NOTE: Ideally, the API key should not be exposed in frontend code.
-// In a real production app, this should be proxied through a backend.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+// Fix: Use process.env.API_KEY directly as a named parameter in the constructor
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 export const analyzeCheckInImage = async (base64Image: string): Promise<string> => {
   try {
@@ -13,7 +12,8 @@ export const analyzeCheckInImage = async (base64Image: string): Promise<string> 
     const cleanBase64 = base64Image.replace(/^data:image\/\w+;base64,/, "");
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      // Fix: Use gemini-2.5-flash-image for image analysis tasks
+      model: 'gemini-2.5-flash-image',
       contents: {
         parts: [
           {
@@ -29,6 +29,7 @@ export const analyzeCheckInImage = async (base64Image: string): Promise<string> 
       },
     });
 
+    // Fix: Access response.text as a property
     return response.text || "Analysis failed.";
   } catch (error) {
     console.error("Gemini Image Analysis Error:", error);
@@ -55,10 +56,12 @@ export const generateDailyReportSummary = async (records: CheckInRecord[]): Prom
     `;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      // Fix: Use gemini-3-flash-preview for basic text tasks
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
 
+    // Fix: Access response.text as a property
     return response.text || "Summary unavailable.";
   } catch (error) {
     console.error("Gemini Report Error:", error);

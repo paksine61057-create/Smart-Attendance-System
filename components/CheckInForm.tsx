@@ -11,32 +11,23 @@ interface CheckInFormProps {
   onSuccess: () => void;
 }
 
-// Camera Filters Definition - Optimized for Skin Smoothing (Beauty)
 const CAMERA_FILTERS = [
   { id: 'normal', name: 'ปกติ', css: 'none', color: '#9ca3af' },
-  { id: 'beauty', name: 'ผิวเนียน', css: 'brightness(1.15) contrast(0.95) saturate(1.05) hue-rotate(-2deg)', color: '#f472b6' }, // New Beauty Mode
-  { id: 'clear', name: 'หน้าใส', css: 'brightness(1.2) contrast(0.9) saturate(1.0)', color: '#fbcfe8' }, // High brightness, low contrast = smooth
-  { id: 'soft', name: 'ละมุน', css: 'brightness(1.1) contrast(0.85) saturate(0.9) sepia(0.1)', color: '#e5e7eb' }, // Soft focus feel
-  { id: 'fresh', name: 'สดใส', css: 'brightness(1.05) contrast(1.1) saturate(1.3)', color: '#fcd34d' }, // Vivid
-  { id: 'chic', name: 'เท่', css: 'grayscale(1) contrast(1.2) brightness(1.1)', color: '#1f2937' }, // Dark B&W
+  { id: 'beauty', name: 'ผิวเนียน', css: 'brightness(1.15) contrast(0.95) saturate(1.05) hue-rotate(-2deg)', color: '#f472b6' },
+  { id: 'clear', name: 'หน้าใส', css: 'brightness(1.2) contrast(0.9) saturate(1.0)', color: '#fbcfe8' },
+  { id: 'soft', name: 'ละมุน', css: 'brightness(1.1) contrast(0.85) saturate(0.9) sepia(0.1)', color: '#e5e7eb' },
+  { id: 'fresh', name: 'สดใส', css: 'brightness(1.05) contrast(1.1) saturate(1.3)', color: '#fcd34d' },
+  { id: 'chic', name: 'เท่', css: 'grayscale(1) contrast(1.2) brightness(1.1)', color: '#1f2937' },
 ];
 
 const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [step, setStep] = useState<'info' | 'camera' | 'verifying' | 'result'>('info');
   
-  // Auto-select Attendance Type based on time of day
-  // Modified: 00:00 - 12:00 -> Arrival (Default) covers checking in before 07:00
-  // Otherwise -> Departure
   const [attendanceType, setAttendanceType] = useState<AttendanceType>(() => {
     const currentHour = new Date().getHours();
-    if (currentHour < 12) {
-        return 'arrival';
-    } else {
-        return 'departure';
-    }
+    return currentHour < 12 ? 'arrival' : 'departure';
   });
   
-  // Login State
   const [staffIdInput, setStaffIdInput] = useState('');
   const [currentUser, setCurrentUser] = useState<Staff | null>(null);
 
@@ -46,21 +37,16 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [settings, setSettings] = useState<AppSettings | null>(null);
 
-  // UX Loading States
   const [isValidating, setIsValidating] = useState(false);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
-  
-  // Filter State
   const [activeFilterId, setActiveFilterId] = useState('normal');
-
-  // Holiday State
   const [todayHoliday, setTodayHoliday] = useState<string | null>(null);
   
   const isEarlyDeparture = useCallback(() => {
     if (attendanceType !== 'departure') return false;
     const now = new Date();
     const targetTime = new Date();
-    targetTime.setHours(16, 0, 0, 0); // Changed to 16:00
+    targetTime.setHours(16, 0, 0, 0);
     return now < targetTime;
   }, [attendanceType]);
 
@@ -68,16 +54,14 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     if (attendanceType !== 'arrival') return false;
     const now = new Date();
     const targetTime = new Date();
-    targetTime.setHours(8, 1, 0, 0); // Late if 08:01 onwards
-    return now >= targetTime; // Changed to >= for strict 08:01 start
+    targetTime.setHours(8, 1, 0, 0);
+    return now >= targetTime;
   }, [attendanceType]);
 
-  // Check if type allows remote check-in (NO GPS REQUIRED)
   const isSpecialRequest = useCallback(() => {
       return ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(attendanceType);
   }, [attendanceType]);
   
-  // Check if type is Authorized Late (GPS REQUIRED + REASON REQUIRED)
   const isAuthorizedLate = useCallback(() => {
       return attendanceType === 'authorized_late';
   }, [attendanceType]);
@@ -86,33 +70,24 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    // Force sync on mount to ensure we have the absolute latest coordinates from Admin
     const initSettings = async () => {
         await syncSettingsFromCloud();
         setSettings(getSettings());
     };
     initSettings();
 
-    // Load Saved Staff ID
     const savedId = localStorage.getItem('school_checkin_saved_staff_id');
-    if (savedId) {
-        setStaffIdInput(savedId);
-    }
+    if (savedId) setStaffIdInput(savedId);
 
-    // Check Holiday
     const holiday = getHoliday(new Date());
     setTodayHoliday(holiday);
   }, []);
 
-  // Auto-login check when typing ID
   useEffect(() => {
     if (staffIdInput.length >= 5) {
         const staff = getStaffById(staffIdInput);
-        if (staff) {
-            setCurrentUser(staff);
-        } else {
-            setCurrentUser(null);
-        }
+        if (staff) setCurrentUser(staff);
+        else setCurrentUser(null);
     } else {
         setCurrentUser(null);
     }
@@ -127,13 +102,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
           stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
-            // Wait for video to be ready before removing loading state
-            videoRef.current.onloadedmetadata = () => {
-                setIsCameraLoading(false);
-            };
+            videoRef.current.onloadedmetadata = () => setIsCameraLoading(false);
           }
         } catch (err) {
-          console.error("Camera error", err);
           setLocationError("ไม่สามารถเปิดกล้องได้");
           setIsCameraLoading(false);
           setStep('info');
@@ -141,42 +112,27 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       };
       startCamera();
     }
-    return () => {
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
-      }
-    };
+    return () => stream?.getTracks().forEach(track => track.stop());
   }, [step]);
 
   const validateLocation = async () => {
-    // 1. Force Sync again to be super safe
     await syncSettingsFromCloud();
-    
-    // 2. Get fresh settings
     const currentSettings = getSettings();
     setSettings(currentSettings);
 
-    // *** SPECIAL HANDLING FOR LEAVE/DUTY ***
-    // "ไม่ต้องใช้ gps" -> We allow check-in from anywhere and don't block if GPS is missing/slow.
-    // NOTE: 'authorized_late' IS NOT in isSpecialRequest(), so it WILL perform the GPS check below.
     if (isSpecialRequest()) {
          try {
-             // Race GPS vs Timeout (3s) to avoid hanging
              const positionPromise = getCurrentPosition();
-             const timeoutPromise = new Promise<GeolocationPosition>((_, reject) => 
-                 setTimeout(() => reject(new Error("GPS Timeout")), 3000)
-             );
+             const timeoutPromise = new Promise<GeolocationPosition>((_, reject) => setTimeout(() => reject(new Error("GPS Timeout")), 3000));
              const position = await Promise.race([positionPromise, timeoutPromise]);
              return { lat: position.coords.latitude, lng: position.coords.longitude };
          } catch (e) {
-             console.log("GPS skipped for special request (Timeout or Error)", e);
-             return { lat: 0, lng: 0 }; // Proceed with empty location
+             return { lat: 0, lng: 0 };
          }
     }
 
-    // *** NORMAL CHECK-IN (ARRIVAL/DEPARTURE) + AUTHORIZED LATE ***
     if (!currentSettings?.officeLocation) {
-      setLocationError("ระบบยังไม่ได้รับการตั้งค่าพิกัดห้องบุคคล กรุณาติดต่อผู้ดูแล");
+      setLocationError("ระบบยังไม่ได้รับการตั้งค่าพิกัดห้องบุคคล");
       return false;
     }
     
@@ -191,12 +147,12 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       setCurrentDistance(dist);
       
       if (dist > currentSettings.maxDistanceMeters) {
-        setLocationError(`คุณอยู่ห่างจากจุดเช็คอิน ${Math.round(dist)} เมตร (ต้องไม่เกิน ${currentSettings.maxDistanceMeters} เมตร)`);
+        setLocationError(`ห่างจากจุดเช็คอิน ${Math.round(dist)} ม. (จำกัด ${currentSettings.maxDistanceMeters} ม.)`);
         return false;
       }
       return { lat: position.coords.latitude, lng: position.coords.longitude };
     } catch (err) {
-      setLocationError("ไม่สามารถระบุตำแหน่ง GPS ได้ กรุณาเปิด GPS");
+      setLocationError("ไม่สามารถระบุตำแหน่ง GPS ได้");
       return false;
     }
   };
@@ -204,38 +160,23 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const handleStartCheckIn = async () => {
     setLocationError('');
     if (!currentUser) {
-      alert("กรุณาระบุรหัสบุคลากรที่ถูกต้อง");
+      alert("กรุณาระบุรหัสบุคลากร");
       return;
     }
     
-    // SAVE STAFF ID LOCALLY
     localStorage.setItem('school_checkin_saved_staff_id', currentUser.id);
 
-    if (isEarlyDeparture() && !reason.trim()) {
-      alert("กรุณาระบุเหตุผลที่กลับก่อนเวลา 16.00 น.");
+    if ((isEarlyDeparture() || isLateArrival() || isSpecialRequest() || isAuthorizedLate()) && !reason.trim()) {
+      alert("กรุณาระบุเหตุผลหรือรายละเอียด");
       return;
-    }
-    if (isLateArrival() && !reason.trim()) {
-      alert("กรุณาระบุเหตุผลที่มาสาย (ตั้งแต่ 08.01 น.)");
-      return;
-    }
-    if (isSpecialRequest() && !reason.trim()) {
-        alert("กรุณาระบุรายละเอียด/สถานที่ สำหรับการลาหรือไปราชการ");
-        return;
-    }
-    if (isAuthorizedLate() && !reason.trim()) {
-        alert("กรุณาระบุเหตุผลการขออนุญาตเข้าสาย");
-        return;
     }
 
-    setIsValidating(true); // START LOADING UI
+    setIsValidating(true);
     try {
         const loc = await validateLocation();
-        if (loc) {
-            setStep('camera');
-        }
+        if (loc) setStep('camera');
     } finally {
-        setIsValidating(false); // STOP LOADING UI
+        setIsValidating(false);
     }
   };
 
@@ -245,8 +186,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const video = videoRef.current;
       
       if (context && video.videoWidth) {
-        // RESIZE LOGIC: Reduce image size for reliable upload
-        const MAX_WIDTH = 640; // Max width 640px is sufficient for verification
+        const MAX_WIDTH = 640;
         const scale = MAX_WIDTH / video.videoWidth;
         const width = MAX_WIDTH;
         const height = video.videoHeight * scale;
@@ -254,33 +194,21 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         canvasRef.current.width = width;
         canvasRef.current.height = height;
         
-        // APPLY FILTER TO CANVAS CONTEXT BEFORE DRAWING
         const activeFilter = CAMERA_FILTERS.find(f => f.id === activeFilterId);
-        if (activeFilter && activeFilter.id !== 'normal') {
-            context.filter = activeFilter.css;
-        } else {
-            context.filter = 'none';
-        }
+        context.filter = activeFilter && activeFilter.id !== 'normal' ? activeFilter.css : 'none';
         
-        // Draw resized image with filter
         context.drawImage(video, 0, 0, width, height);
-        
-        // Get Base64 with reduced quality (0.6)
         const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.6);
         
         setCapturedImage(imageBase64);
         setStep('verifying');
         
-        // Parallel Verification
         const aiPromise = analyzeCheckInImage(imageBase64);
-        // Re-validate location to get timestamped coordinates (or 0,0 for special)
         const locPromise = validateLocation(); 
-        
         const [aiResult, loc] = await Promise.all([aiPromise, locPromise]);
         
-        // If normal/authorized check-in failed GPS on capture, stop
         if (!loc && !isSpecialRequest()) {
-            setStep('camera'); // Go back
+            setStep('camera');
             return; 
         }
         
@@ -289,24 +217,17 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
         if (attendanceType === 'arrival') {
             const startOfWork = new Date();
-            startOfWork.setHours(8, 1, 0, 0); // Late if 08:01 onwards
-            // 08:01:00 is LATE.
+            startOfWork.setHours(8, 1, 0, 0);
             status = now >= startOfWork ? 'Late' : 'On Time';
         } else if (attendanceType === 'departure') {
             const endOfWork = new Date();
-            endOfWork.setHours(16, 0, 0, 0); // Changed to 16:00
+            endOfWork.setHours(16, 0, 0, 0);
             status = now < endOfWork ? 'Early Leave' : 'Normal';
-        } else if (attendanceType === 'duty') {
-            status = 'Duty';
-        } else if (attendanceType === 'sick_leave') {
-            status = 'Sick Leave';
-        } else if (attendanceType === 'personal_leave') {
-            status = 'Personal Leave';
-        } else if (attendanceType === 'other_leave') {
-            status = 'Other Leave';
-        } else if (attendanceType === 'authorized_late') {
-            status = 'Authorized Late';
-        }
+        } else if (attendanceType === 'duty') status = 'Duty';
+        else if (attendanceType === 'sick_leave') status = 'Sick Leave';
+        else if (attendanceType === 'personal_leave') status = 'Personal Leave';
+        else if (attendanceType === 'other_leave') status = 'Other Leave';
+        else if (attendanceType === 'authorized_late') status = 'Authorized Late';
 
         const record: CheckInRecord = {
           id: crypto.randomUUID(),
@@ -325,9 +246,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
         await saveRecord(record);
         setStep('result');
-        setTimeout(() => {
-          onSuccess();
-        }, 2000);
+        setTimeout(() => onSuccess(), 2500);
       }
     }
   }, [currentUser, attendanceType, reason, currentDistance, isEarlyDeparture, isLateArrival, isSpecialRequest, isAuthorizedLate, validateLocation, onSuccess, activeFilterId]);
@@ -335,237 +254,174 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   if (step === 'info') {
     return (
       <div className="max-w-xl mx-auto relative mt-0 md:mt-4">
-        {/* Luxury Blue-Purple Gradient Acrylic Card (Left-to-Right) */}
-        <div className="relative overflow-hidden p-6 md:p-8 rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(79,70,229,0.5)] border border-white/40 bg-gradient-to-r from-blue-700 via-indigo-600 to-purple-600 animate-shimmer-bg backdrop-blur-xl">
-          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-10 mix-blend-overlay"></div>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent pointer-events-none"></div>
+        {/* Festive Gift Card Style */}
+        <div className="relative overflow-hidden p-6 md:p-10 rounded-[2.5rem] shadow-[0_32px_80px_-20px_rgba(190,18,60,0.6)] border border-white/30 bg-gradient-to-br from-rose-800 via-red-700 to-amber-600 animate-shimmer-bg backdrop-blur-2xl">
+          <div className="absolute top-0 right-0 w-48 h-48 bg-white/5 rounded-full -mr-24 -mt-24 blur-3xl"></div>
+          <div className="absolute bottom-0 left-0 w-48 h-48 bg-amber-400/10 rounded-full -ml-24 -mb-24 blur-3xl"></div>
           
           <div className="relative z-10 text-white">
-            <div className="text-center mb-4 md:mb-6">
-              <h2 className="text-2xl md:text-3xl font-bold tracking-tight drop-shadow-md flex items-center justify-center gap-2">
-                <span className="animate-sparkle text-yellow-300">✨</span> ยืนยันตัวตน
+            <div className="text-center mb-6 md:mb-8">
+              <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight drop-shadow-lg flex items-center justify-center gap-3">
+                <span className="animate-sparkle text-amber-300 text-4xl">🎄</span> ยืนยันตัวตน
               </h2>
-              <p className="text-indigo-100 text-xs md:text-sm mt-1 font-medium opacity-90">ระบบลงเวลาบุคลากร โรงเรียนประจักษ์ศิลปาคม</p>
+              <p className="text-rose-100 text-sm md:text-base mt-2 font-bold opacity-90 tracking-wide">Season's Greetings 2026 ❄️</p>
             </div>
 
-            {/* HOLIDAY BANNER */}
             {todayHoliday && (
-                <div className="mb-6 p-3 bg-white/20 border border-white/30 rounded-2xl flex items-center justify-center gap-2 animate-pulse shadow-lg backdrop-blur-md">
-                     <span className="text-2xl">🎉</span>
+                <div className="mb-8 p-4 bg-white/15 border border-white/20 rounded-3xl flex items-center justify-center gap-4 animate-pulse shadow-2xl backdrop-blur-md">
+                     <span className="text-3xl">🎁</span>
                      <div className="text-center">
-                         <p className="text-[10px] text-indigo-100 uppercase tracking-widest font-bold">Today is a holiday</p>
-                         <p className="text-sm md:text-base font-bold text-white drop-shadow-md">{todayHoliday}</p>
+                         <p className="text-[10px] text-amber-200 uppercase tracking-[0.2em] font-black">Holiday Break</p>
+                         <p className="text-lg md:text-xl font-black text-white drop-shadow-lg">{todayHoliday}</p>
                      </div>
-                     <span className="text-2xl">🇹🇭</span>
+                     <span className="text-3xl">🦌</span>
                 </div>
             )}
             
-            {!settings?.officeLocation && (
-              <div className="bg-white text-amber-600 p-3 rounded-2xl mb-6 text-xs md:text-sm border-l-4 border-amber-500 flex items-center gap-2 shadow-lg animate-pulse">
-                <span className="text-lg">⚠️</span>
-                <strong>แจ้งเตือน:</strong> ยังไม่ได้ตั้งค่าพิกัดจุดลงเวลา
-              </div>
-            )}
-
-            <div className="space-y-4 md:space-y-6">
-              {/* Staff Login Section */}
-              <div className="space-y-1">
-                 <label className="block text-[10px] md:text-xs font-bold text-white mb-1 ml-1 uppercase tracking-widest opacity-90 shadow-sm">รหัสบุคลากร (Staff ID)</label>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                 <label className="block text-[10px] md:text-xs font-black text-amber-200 mb-1 ml-2 uppercase tracking-[0.25em] drop-shadow-md">รหัสบุคลากร (Staff ID)</label>
                  <div className="relative">
                     <input 
                         type="text" 
                         value={staffIdInput}
                         onChange={(e) => setStaffIdInput(e.target.value.toUpperCase())}
-                        className={`w-full px-4 py-3 md:py-4 rounded-2xl focus:ring-4 outline-none transition-all font-bold text-lg text-center tracking-wider shadow-lg bg-white
+                        className={`w-full px-4 py-4 md:py-5 rounded-3xl focus:ring-8 outline-none transition-all font-black text-2xl text-center tracking-[0.3em] shadow-2xl bg-white
                         ${currentUser 
-                            ? 'text-emerald-700 border-4 border-orange-400 focus:ring-emerald-400/30' 
-                            : 'text-stone-700 border-4 border-orange-400 focus:border-amber-500 focus:ring-amber-400/50 placeholder-stone-400'}`}
-                        placeholder="เช่น PJ001"
+                            ? 'text-emerald-700 border-4 border-emerald-400 focus:ring-emerald-400/30' 
+                            : 'text-stone-700 border-4 border-amber-300 focus:border-amber-400 focus:ring-amber-400/50 placeholder-stone-300'}`}
+                        placeholder="PJ..."
                         maxLength={5}
                     />
                     {currentUser && (
-                        <div className="absolute right-4 top-1/2 -translate-y-1/2 text-emerald-600 animate-in zoom-in drop-shadow-sm">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                        <div className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-500 animate-in zoom-in drop-shadow-md">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
                         </div>
                     )}
                  </div>
-                 {!currentUser && staffIdInput.length > 0 && (
-                     <div className="mt-2 bg-gradient-to-r from-orange-100 to-amber-100 p-2 rounded-xl border border-orange-300 shadow-md animate-in slide-in-from-top-2">
-                        <p className="text-center text-xs font-bold text-orange-700 flex items-center justify-center gap-1">
-                            <span>👉</span> กรุณากรอกรหัสประจำตัว 5 หลัก
-                        </p>
-                     </div>
-                 )}
               </div>
 
               {currentUser ? (
-                <div className="animate-in slide-in-from-bottom-2 fade-in duration-500">
-                    {/* User Profile Card */}
-                    <div className="bg-white/10 p-4 rounded-2xl border border-white/20 backdrop-blur-md mb-6 flex items-center gap-3 shadow-lg">
-                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-white to-indigo-100 border-2 border-white/50 flex items-center justify-center text-indigo-700 font-bold text-lg shadow-sm">
+                <div className="animate-in slide-in-from-bottom-4 fade-in duration-700">
+                    <div className="bg-white/10 p-5 rounded-3xl border border-white/20 backdrop-blur-xl mb-8 flex items-center gap-4 shadow-2xl ring-1 ring-white/10">
+                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 border-4 border-white flex items-center justify-center text-white font-black text-2xl shadow-lg">
                             {currentUser.name.charAt(0)}
                         </div>
                         <div>
-                            <h3 className="text-white font-bold text-base md:text-lg drop-shadow-sm">{currentUser.name}</h3>
-                            <p className="text-indigo-100 text-xs md:text-sm font-medium opacity-90">{currentUser.role}</p>
+                            <h3 className="text-white font-black text-xl md:text-2xl drop-shadow-md tracking-tight">{currentUser.name}</h3>
+                            <p className="text-rose-100 text-sm font-bold opacity-90">{currentUser.role} 🎁</p>
                         </div>
                     </div>
 
-                    {/* Main Actions - REDESIGNED */}
-                    <div className="space-y-4">
-                        <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-5">
+                        <div className="grid grid-cols-2 gap-5">
                             <button
                                 onClick={() => { setAttendanceType('arrival'); setReason(''); }}
-                                className={`relative p-4 rounded-3xl transition-all duration-300 flex flex-col items-center justify-center gap-2 group overflow-hidden border-2
+                                className={`relative p-5 rounded-[2rem] transition-all duration-300 flex flex-col items-center justify-center gap-2 group overflow-hidden border-4
                                 ${attendanceType === 'arrival' 
-                                    ? 'bg-gradient-to-b from-emerald-100 to-teal-50 border-emerald-400 text-emerald-800 shadow-[0_0_20px_rgba(16,185,129,0.4)] scale-105 z-10 animate-pulse-ring-green' 
-                                    : 'bg-black/20 border-white/10 text-white/70 hover:bg-black/30 hover:text-white hover:border-white/30'
+                                    ? 'bg-white border-emerald-400 text-emerald-800 shadow-[0_0_30px_rgba(52,211,153,0.5)] scale-110 z-10' 
+                                    : 'bg-black/30 border-white/10 text-white/80 hover:bg-black/40 hover:text-white hover:border-white/30'
                                 }`}
                             >
-                                {attendanceType === 'arrival' && (
-                                    <div className="absolute top-2 right-2 text-emerald-500 animate-in zoom-in">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                                    </div>
-                                )}
-                                <div className={`p-3 rounded-full ${attendanceType === 'arrival' ? 'bg-emerald-200 text-emerald-700' : 'bg-white/10 text-white'}`}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.35 15.35l-3.3-3.3"/><path d="M9 12a3 3 0 1 0 6 0"/></svg>
+                                <div className={`p-4 rounded-2xl ${attendanceType === 'arrival' ? 'bg-emerald-100 text-emerald-600' : 'bg-white/10 text-white'}`}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="M20 12h2"/><path d="m19.07 4.93-1.41 1.41"/><path d="M15.35 15.35l-3.3-3.3"/><path d="M9 12a3 3 0 1 0 6 0"/></svg>
                                 </div>
-                                <span className="font-bold text-base md:text-lg">ลงเวลามา</span>
-                                <span className={`text-[10px] ${attendanceType === 'arrival' ? 'text-emerald-600' : 'text-white/50'}`}>Arrival Check-in</span>
+                                <span className="font-black text-xl">มาทำงาน</span>
                             </button>
 
                             <button
                                 onClick={() => { setAttendanceType('departure'); setReason(''); }}
-                                className={`relative p-4 rounded-3xl transition-all duration-300 flex flex-col items-center justify-center gap-2 group overflow-hidden border-2
+                                className={`relative p-5 rounded-[2rem] transition-all duration-300 flex flex-col items-center justify-center gap-2 group overflow-hidden border-4
                                 ${attendanceType === 'departure' 
-                                    ? 'bg-gradient-to-b from-amber-100 to-orange-50 border-amber-400 text-amber-800 shadow-[0_0_20px_rgba(245,158,11,0.4)] scale-105 z-10 animate-pulse-ring-amber' 
-                                    : 'bg-black/20 border-white/10 text-white/70 hover:bg-black/30 hover:text-white hover:border-white/30'
+                                    ? 'bg-white border-amber-400 text-amber-800 shadow-[0_0_30px_rgba(251,191,36,0.5)] scale-110 z-10 animate-pulse-ring-festive' 
+                                    : 'bg-black/30 border-white/10 text-white/80 hover:bg-black/40 hover:text-white hover:border-white/30'
                                 }`}
                             >
-                                {attendanceType === 'departure' && (
-                                    <div className="absolute top-2 right-2 text-amber-500 animate-in zoom-in">
-                                        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                                    </div>
-                                )}
-                                <div className={`p-3 rounded-full ${attendanceType === 'departure' ? 'bg-amber-200 text-amber-700' : 'bg-white/10 text-white'}`}>
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+                                <div className={`p-4 rounded-2xl ${attendanceType === 'departure' ? 'bg-amber-100 text-amber-600' : 'bg-white/10 text-white'}`}>
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
                                 </div>
-                                <span className="font-bold text-base md:text-lg">ลงเวลากลับ</span>
-                                <span className={`text-[10px] ${attendanceType === 'departure' ? 'text-amber-600' : 'text-white/50'}`}>Departure Check-out</span>
+                                <span className="font-black text-xl">กลับบ้าน</span>
                             </button>
                         </div>
                         
-                        {/* Leave / Duty Options */}
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-3">
                              <button
                                 onClick={() => { setAttendanceType('authorized_late'); setReason(''); }}
-                                className={`col-span-2 py-3 text-[10px] md:text-xs font-bold rounded-xl transition-all border flex items-center justify-center gap-2 ${
+                                className={`col-span-2 py-4 text-xs font-black rounded-2xl transition-all border-2 flex items-center justify-center gap-2 ${
                                     attendanceType === 'authorized_late' 
-                                    ? 'bg-white text-indigo-700 border-white shadow-md transform scale-105' 
-                                    : 'bg-white/5 text-white/80 border-white/10 hover:bg-white/10'
+                                    ? 'bg-white text-rose-700 border-white shadow-xl transform scale-105' 
+                                    : 'bg-white/10 text-white/90 border-white/10 hover:bg-white/20'
                                 }`}
                              >
                                  ⏰ ขออนุญาตเข้าสาย
                              </button>
                              <button
                                 onClick={() => { setAttendanceType('duty'); setReason(''); }}
-                                className={`py-2 text-[10px] md:text-xs font-bold rounded-xl transition-all border ${
-                                    attendanceType === 'duty' 
-                                    ? 'bg-white text-blue-600 border-white shadow-md transform scale-105' 
-                                    : 'bg-white/5 text-white/80 border-white/10 hover:bg-white/10'
+                                className={`py-3 text-[11px] font-black rounded-2xl transition-all border-2 ${
+                                    attendanceType === 'duty' ? 'bg-white text-emerald-700 border-white' : 'bg-white/10 text-white/80 border-white/10'
                                 }`}
                              >
                                  🏛️ ไปราชการ
                              </button>
                              <button
                                 onClick={() => { setAttendanceType('sick_leave'); setReason(''); }}
-                                className={`py-2 text-[10px] md:text-xs font-bold rounded-xl transition-all border ${
-                                    attendanceType === 'sick_leave' 
-                                    ? 'bg-white text-amber-600 border-white shadow-md transform scale-105' 
-                                    : 'bg-white/5 text-white/80 border-white/10 hover:bg-white/10'
+                                className={`py-3 text-[11px] font-black rounded-2xl transition-all border-2 ${
+                                    attendanceType === 'sick_leave' ? 'bg-white text-amber-700 border-white' : 'bg-white/10 text-white/80 border-white/10'
                                 }`}
                              >
                                  🤒 ลาป่วย
                              </button>
-                             <button
-                                onClick={() => { setAttendanceType('personal_leave'); setReason(''); }}
-                                className={`py-2 text-[10px] md:text-xs font-bold rounded-xl transition-all border ${
-                                    attendanceType === 'personal_leave' 
-                                    ? 'bg-white text-orange-500 border-white shadow-md transform scale-105' 
-                                    : 'bg-white/5 text-white/80 border-white/10 hover:bg-white/10'
-                                }`}
-                             >
-                                 📝 ลากิจ
-                             </button>
-                             <button
-                                onClick={() => { setAttendanceType('other_leave'); setReason(''); }}
-                                className={`py-2 text-[10px] md:text-xs font-bold rounded-xl transition-all border ${
-                                    attendanceType === 'other_leave' 
-                                    ? 'bg-white text-stone-600 border-white shadow-md transform scale-105' 
-                                    : 'bg-white/5 text-white/80 border-white/10 hover:bg-white/10'
-                                }`}
-                             >
-                                 🏳️ ลาอื่นๆ
-                             </button>
                         </div>
 
-                        {/* Reason / Details Field */}
                         {((attendanceType === 'departure' && isEarlyDeparture()) || 
                           (attendanceType === 'arrival' && isLateArrival()) ||
                           isSpecialRequest() || 
                           isAuthorizedLate()) && (
-                            <div className={`animate-in fade-in slide-in-from-top-2 p-4 rounded-2xl shadow-lg border-2 ${
-                                isSpecialRequest() ? 'bg-white text-blue-800 border-blue-200' : 
-                                isAuthorizedLate() ? 'bg-white text-indigo-800 border-indigo-200' :
-                                attendanceType === 'arrival' ? 'bg-white text-amber-700 border-amber-200' : 'bg-white text-red-700 border-red-200'
-                            }`}>
-                            <label className="block text-[10px] font-bold mb-2 uppercase tracking-wider flex items-center gap-2 drop-shadow-none">
-                                {isSpecialRequest() ? '📝 รายละเอียด / สถานที่' : 
-                                 isAuthorizedLate() ? '⏰ ระบุเหตุผลการขออนุญาต' :
-                                 attendanceType === 'arrival' ? '⚠️ ระบุสาเหตุที่มาสาย' : '⚠️ ระบุสาเหตุที่กลับก่อนเวลา'}
-                            </label>
-                            <textarea 
-                                value={reason}
-                                onChange={(e) => setReason(e.target.value)}
-                                className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-300 text-stone-800 placeholder-stone-400 transition-all text-sm font-medium"
-                                placeholder={isSpecialRequest() ? "ระบุสถานที่ราชการ หรือรายละเอียดการลา..." : "กรุณาระบุเหตุผล..."}
-                                rows={2}
-                            />
+                            <div className="animate-in fade-in slide-in-from-top-4 p-5 rounded-[2rem] bg-white shadow-2xl border-4 border-amber-200">
+                                <label className="block text-[11px] font-black mb-3 uppercase tracking-widest text-rose-700">
+                                    {isSpecialRequest() ? '📝 รายละเอียดการลา / ราชการ' : '⚠️ ระบุเหตุผล'}
+                                </label>
+                                <textarea 
+                                    value={reason}
+                                    onChange={(e) => setReason(e.target.value)}
+                                    className="w-full p-4 bg-rose-50 border-2 border-rose-100 rounded-2xl outline-none focus:ring-4 focus:ring-rose-200 text-stone-800 font-bold text-sm"
+                                    placeholder="ระบุที่นี่..."
+                                    rows={2}
+                                />
                             </div>
                         )}
 
                         {locationError && (
-                            <div className="p-3 bg-white text-red-600 rounded-2xl text-xs flex items-start gap-2 border border-red-100 shadow-lg animate-in slide-in-from-bottom-2">
-                            <span className="mt-0.5 text-base">📍</span>
-                            <span className="font-bold">{locationError}</span>
+                            <div className="p-4 bg-white text-rose-600 rounded-[2rem] text-xs font-black flex items-center gap-3 border-4 border-rose-200 shadow-2xl">
+                                <span className="text-2xl animate-bounce">📍</span>
+                                <span>{locationError}</span>
                             </div>
                         )}
 
                         <button 
                             onClick={handleStartCheckIn}
                             disabled={isValidating}
-                            className="w-full py-4 bg-white text-indigo-700 rounded-2xl font-bold tracking-wide shadow-[0_10px_20px_-5px_rgba(255,255,255,0.3)] hover:shadow-[0_15px_30px_-5px_rgba(255,255,255,0.4)] hover:-translate-y-1 active:translate-y-0 active:scale-[0.99] transition-all duration-300 mt-2 text-base border border-white/50 disabled:opacity-80 disabled:cursor-wait"
+                            className="w-full py-5 bg-gradient-to-r from-amber-400 to-orange-400 text-white rounded-[2rem] font-black text-lg tracking-wider shadow-[0_15px_40px_-10px_rgba(245,158,11,0.6)] hover:shadow-[0_20px_50px_-10px_rgba(245,158,11,0.8)] hover:-translate-y-1 active:translate-y-0 active:scale-95 transition-all duration-300 mt-4 border-4 border-white/50 disabled:opacity-80"
                         >
                             {isValidating ? (
-                                <span className="flex items-center justify-center gap-2 animate-pulse">
-                                    <svg className="animate-spin h-5 w-5 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <span className="flex items-center justify-center gap-3 animate-pulse">
+                                    <svg className="animate-spin h-6 w-6 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                                         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                                         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                                     </svg>
-                                    กำลังตรวจสอบพิกัด...
+                                    กำลังนำทางขั้วโลกเหนือ...
                                 </span>
                             ) : (
-                                <span className="flex items-center justify-center gap-2">
-                                    ถ่ายภาพยืนยัน
-                                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                <span className="flex items-center justify-center gap-3">
+                                    ถ่ายภาพยืนยันตัวตน ❄️
                                 </span>
                             )}
                         </button>
                     </div>
                 </div>
               ) : (
-                <div className="text-center p-6 border-2 border-dashed border-white/30 rounded-2xl bg-white/10 backdrop-blur-md">
-                    <p className="text-indigo-100 font-bold text-sm drop-shadow-md tracking-wide">กรุณากรอกรหัสบุคลากรเพื่อเข้าสู่ระบบ</p>
+                <div className="text-center p-8 border-4 border-dashed border-white/20 rounded-[2rem] bg-white/5 backdrop-blur-md">
+                    <p className="text-rose-100 font-black text-base drop-shadow-md tracking-widest animate-pulse">Merry Christmas & Happy New Year 🎁</p>
                 </div>
               )}
             </div>
@@ -577,74 +433,70 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   if (step === 'camera') {
     return (
-      <div className="max-w-md mx-auto bg-stone-900 rounded-[2.5rem] overflow-hidden shadow-2xl relative border-8 border-stone-100 ring-1 ring-stone-200">
+      <div className="max-w-md mx-auto bg-stone-900 rounded-[3rem] overflow-hidden shadow-[0_40px_100px_rgba(0,0,0,0.6)] relative border-[12px] border-white ring-4 ring-rose-100">
         <video 
             ref={videoRef} 
             autoPlay 
             playsInline 
-            className="w-full h-[600px] object-cover opacity-90 transition-all duration-300" 
+            className="w-full h-[650px] object-cover opacity-95 transition-all duration-300" 
             style={{ filter: CAMERA_FILTERS.find(f => f.id === activeFilterId)?.css || 'none' }}
         />
         <canvas ref={canvasRef} className="hidden" />
         
-        {/* Loading Overlay for Camera */}
         {isCameraLoading && (
             <div className="absolute inset-0 bg-stone-900 flex flex-col items-center justify-center text-white z-20">
-                <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mb-4"></div>
-                <p className="font-bold text-sm">กำลังเปิดกล้อง...</p>
+                <div className="w-16 h-16 border-8 border-white/20 border-t-rose-500 rounded-full animate-spin mb-6"></div>
+                <p className="font-black text-lg tracking-widest animate-pulse">READY FOR HOLIDAY? 🎄</p>
             </div>
         )}
         
-        {/* Modern HUD Overlay */}
         <div className="absolute inset-0 pointer-events-none z-10">
-             {/* Simple Frame */}
-             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-64 h-80 border border-white/20 rounded-3xl"></div>
-             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-60 h-76 border border-white/10 rounded-2xl"></div>
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-72 h-88 border-4 border-white/30 rounded-[3rem] shadow-[0_0_50px_rgba(255,255,255,0.2)]"></div>
         </div>
 
-        <div className="absolute top-8 left-0 right-0 flex justify-center flex-col items-center gap-2 z-10">
-           <div className="bg-black/40 backdrop-blur-md px-5 py-2 rounded-full text-white/90 text-xs font-bold shadow-sm border border-white/10 flex items-center gap-2">
-              <span className={`w-2 h-2 rounded-full animate-pulse ${attendanceType === 'arrival' ? 'bg-emerald-400' : attendanceType === 'departure' ? 'bg-amber-400' : 'bg-blue-400'}`}></span>
-              Status: {attendanceType.replace('_', ' ').toUpperCase()}
+        <div className="absolute top-10 left-0 right-0 flex justify-center flex-col items-center gap-3 z-10">
+           <div className="bg-rose-600/60 backdrop-blur-xl px-6 py-2.5 rounded-full text-white text-xs font-black shadow-2xl border-2 border-white/30 flex items-center gap-3">
+              <span className={`w-3 h-3 rounded-full animate-pulse ${attendanceType === 'arrival' ? 'bg-emerald-400' : 'bg-amber-400'}`}></span>
+              {attendanceType.toUpperCase()} MODE ❄️
            </div>
            {currentUser && (
-               <div className="text-white/80 text-xs font-medium bg-black/40 px-3 py-1 rounded-full">{currentUser.name}</div>
+               <div className="text-white font-black text-sm bg-black/50 px-5 py-1.5 rounded-full backdrop-blur-md border border-white/10 shadow-lg">{currentUser.name} 🎅</div>
            )}
         </div>
 
-        {/* Filter Selection Bar - MOVED UP and INCREASED Z-INDEX */}
-        <div className="absolute bottom-36 left-0 right-0 z-30 px-4">
-             <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-hide justify-center px-4">
+        <div className="absolute bottom-40 left-0 right-0 z-30 px-4">
+             <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-hide justify-center px-4">
                  {CAMERA_FILTERS.map((filter) => (
                      <button
                         key={filter.id}
                         type="button"
                         onClick={() => setActiveFilterId(filter.id)}
-                        className={`flex flex-col items-center gap-1 min-w-[50px] transition-all duration-200 cursor-pointer group ${activeFilterId === filter.id ? 'scale-110 opacity-100' : 'opacity-70 hover:opacity-100'}`}
+                        className={`flex flex-col items-center gap-2 min-w-[60px] transition-all duration-300 cursor-pointer ${activeFilterId === filter.id ? 'scale-125' : 'opacity-60 hover:opacity-100'}`}
                      >
-                        <div className={`w-12 h-12 rounded-full border-2 overflow-hidden shadow-lg relative ${activeFilterId === filter.id ? 'border-yellow-400 ring-2 ring-yellow-400/50' : 'border-white'}`} style={{ backgroundColor: filter.color }}>
-                             {/* Small sparkle icon for effect */}
+                        <div className={`w-14 h-14 rounded-full border-4 overflow-hidden shadow-2xl relative ${activeFilterId === filter.id ? 'border-amber-400 ring-4 ring-amber-400/30' : 'border-white'}`} style={{ backgroundColor: filter.color }}>
                              {activeFilterId === filter.id && filter.id !== 'normal' && (
-                                 <span className="absolute inset-0 flex items-center justify-center text-xs animate-pulse">✨</span>
+                                 <span className="absolute inset-0 flex items-center justify-center text-lg animate-sparkle">✨</span>
                              )}
                         </div>
-                        <span className="text-[10px] text-white font-bold shadow-black drop-shadow-md bg-black/30 px-2 py-0.5 rounded-full backdrop-blur-sm">{filter.name}</span>
+                        <span className="text-[10px] text-white font-black bg-black/60 px-2.5 py-1 rounded-full backdrop-blur-md uppercase tracking-widest">{filter.name}</span>
                      </button>
                  ))}
              </div>
         </div>
 
-        <div className="absolute bottom-0 inset-x-0 p-8 bg-gradient-to-t from-black via-black/80 to-transparent flex flex-col items-center pb-12 z-20">
+        <div className="absolute bottom-0 inset-x-0 p-10 bg-gradient-to-t from-black via-black/90 to-transparent flex flex-col items-center pb-14 z-20">
           {!isSpecialRequest() && (
-              <p className="text-white/80 mb-6 text-xs font-medium tracking-wider bg-white/10 px-4 py-1.5 rounded-full backdrop-blur-md border border-white/5">
-                Distance: <span className="font-bold text-white text-sm">{currentDistance ? Math.round(currentDistance) : '...'}</span> m
+              <p className="text-white/80 mb-8 text-xs font-black tracking-[0.2em] bg-white/10 px-6 py-2 rounded-full backdrop-blur-xl border-2 border-white/10">
+                DIST: <span className="font-black text-amber-300 text-lg">{currentDistance ? Math.round(currentDistance) : '...'}</span> M
               </p>
           )}
           <button 
             onClick={capturePhoto}
-            className="w-20 h-20 rounded-full bg-white/10 border border-white/30 backdrop-blur-sm flex items-center justify-center group hover:bg-white/20 transition-all duration-100 active:scale-90"
+            className="w-24 h-24 rounded-full bg-white/20 border-4 border-white/40 backdrop-blur-md flex items-center justify-center group active:scale-90 transition-all duration-100"
           >
-             <div className="w-16 h-16 rounded-full bg-white shadow-[0_0_20px_rgba(255,255,255,0.3)] group-hover:scale-95 transition-transform duration-300"></div>
+             <div className="w-18 h-18 rounded-full bg-white shadow-[0_0_40px_rgba(255,255,255,0.4)] group-hover:scale-95 transition-transform duration-300 flex items-center justify-center">
+                 <div className="w-8 h-8 rounded-full bg-rose-600 animate-pulse"></div>
+             </div>
           </button>
         </div>
       </div>
@@ -653,17 +505,17 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   if (step === 'verifying') {
     return (
-      <div className="max-w-md mx-auto p-1 bg-gradient-to-br from-indigo-200 to-purple-200 rounded-[2.5rem] shadow-xl">
-        <div className="bg-white p-12 rounded-[2.3rem] text-center relative overflow-hidden h-[400px] flex flex-col items-center justify-center">
-            <div className="relative w-32 h-32 mx-auto mb-10">
-               <div className="absolute inset-0 border-4 border-indigo-50 rounded-full"></div>
-               <div className="absolute inset-0 border-4 border-t-indigo-600 border-r-purple-400 border-b-transparent border-l-transparent rounded-full animate-spin"></div>
-               <div className="absolute inset-4 bg-indigo-50 rounded-full flex items-center justify-center">
-                   <div className="w-3 h-3 bg-indigo-600 rounded-full animate-pulse"></div>
+      <div className="max-w-md mx-auto p-1.5 bg-gradient-to-br from-rose-300 via-white to-amber-200 rounded-[3.5rem] shadow-2xl">
+        <div className="bg-white p-12 rounded-[3.3rem] text-center h-[450px] flex flex-col items-center justify-center border-8 border-rose-50">
+            <div className="relative w-40 h-40 mx-auto mb-12">
+               <div className="absolute inset-0 border-8 border-rose-50 rounded-full"></div>
+               <div className="absolute inset-0 border-8 border-t-rose-600 border-r-amber-400 border-b-emerald-400 border-l-transparent rounded-full animate-spin"></div>
+               <div className="absolute inset-6 bg-rose-50 rounded-full flex items-center justify-center">
+                   <span className="text-4xl animate-bounce">🎁</span>
                </div>
             </div>
-            <h3 className="text-2xl font-bold text-stone-800 mb-2 tracking-tight">AI Analysis</h3>
-            <p className="text-stone-400 font-medium text-sm">กำลังตรวจสอบความถูกต้องของภาพ...</p>
+            <h3 className="text-3xl font-black text-slate-800 mb-2 tracking-tight">AI Santa Verifying</h3>
+            <p className="text-slate-400 font-bold text-sm uppercase tracking-widest">Checking your festive face... ❄️</p>
         </div>
       </div>
     );
@@ -671,16 +523,14 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   if (step === 'result') {
     return (
-      <div className="max-w-md mx-auto p-1 bg-gradient-to-br from-emerald-100 to-teal-100 rounded-[2.5rem] shadow-xl animate-in zoom-in duration-300">
-        <div className="bg-white p-12 rounded-[2.3rem] text-center h-[400px] flex flex-col items-center justify-center">
-          <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-8 shadow-sm">
-            <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      <div className="max-w-md mx-auto p-2 bg-gradient-to-br from-emerald-200 via-white to-teal-200 rounded-[3.5rem] shadow-2xl animate-in zoom-in duration-500">
+        <div className="bg-white p-12 rounded-[3.3rem] text-center h-[450px] flex flex-col items-center justify-center border-8 border-emerald-50">
+          <div className="w-28 h-28 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-10 shadow-inner">
+            <svg xmlns="http://www.w3.org/2000/svg" width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
           </div>
-          <h3 className="text-3xl font-bold text-stone-800 mb-3 tracking-tight">
-              เรียบร้อย
-          </h3>
-          <p className="text-stone-500 font-medium">บันทึกข้อมูลเข้าสู่ระบบแล้ว</p>
-          {currentUser && <p className="text-emerald-600 font-bold mt-2">{currentUser.name}</p>}
+          <h3 className="text-4xl font-black text-slate-800 mb-3 tracking-tight">DONE! 🎉</h3>
+          <p className="text-slate-500 font-black text-lg">Happy New Year 2026!</p>
+          {currentUser && <p className="text-emerald-600 font-black text-2xl mt-4 drop-shadow-sm">{currentUser.name} 🦌</p>}
         </div>
       </div>
     );
