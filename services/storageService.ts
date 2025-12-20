@@ -7,41 +7,49 @@ const SETTINGS_KEY = 'school_checkin_settings';
 // ลิ้งค์ฐานข้อมูลที่คุณระบุ
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
 
+/**
+ * ฟังก์ชันส่งข้อมูลไปยัง Google Sheets
+ * จะทำการแปลงข้อมูลให้ตรงกับหัวข้อคอลัมน์ที่ผู้ใช้ต้องการ
+ */
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
-    // ใช้ text/plain เพื่อเลี่ยงปัญหา CORS preflight ใน Google Apps Script
+    const dateObj = new Date(record.timestamp);
+    
+    // จัดรูปแบบข้อมูลให้ตรงกับคอลัมน์ใน Google Sheets
+    const payload = {
+      "Timestamp": record.timestamp,
+      "Date": dateObj.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      "Time": dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+      "Staff ID": record.staffId || '-',
+      "Name": record.name,
+      "Role": record.role,
+      "Type": record.type === 'arrival' ? 'มาทำงาน' : 
+              record.type === 'departure' ? 'กลับบ้าน' : 
+              record.type.replace('_', ' '),
+      "Status": record.status,
+      "Reason": record.reason || '-',
+      "Location": `https://www.google.com/maps?q=${record.location.lat},${record.location.lng}`,
+      "Distance (m)": Math.round(record.distanceFromBase),
+      "AI Verification": record.aiVerification || '-',
+      // แถมรูปภาพไปให้ด้วย เผื่อในอนาคตต้องการเก็บ
+      "Image": record.imageUrl ? "HAS_IMAGE" : "NO_IMAGE",
+      "imageBase64": record.imageUrl || "" 
+    };
+
     const response = await fetch(url, {
       method: 'POST',
-      mode: 'no-cors', // สำคัญมากสำหรับการส่งไปยัง GAS Web App
-      headers: { 'Content-Type': 'text/plain' },
-      body: JSON.stringify(record)
+      mode: 'no-cors', // สำคัญ: เพื่อให้ส่งข้อมูลไปยัง Google Apps Script ได้
+      headers: {
+        'Content-Type': 'text/plain;charset=utf-8',
+      },
+      body: JSON.stringify(payload)
     });
-    // เนื่องจากใช้ no-cors เราจะไม่รู้ผล response.ok แต่ assume ว่าถ้าไม่ throw คือส่งสำเร็จ
-    return true;
+
+    return true; // เนื่องจาก no-cors เราจึงไม่เห็นสถานะจริง แต่ถ้าไม่ Error ถือว่าส่งคำขอสำเร็จ
   } catch (e) {
     console.error("Failed to sync to sheets", e);
     return false;
   }
-};
-
-export const deleteRecord = async (record: CheckInRecord) => {
-  const records = getRecords();
-  localStorage.setItem(RECORDS_KEY, JSON.stringify(records.filter(r => r.id !== record.id)));
-
-  const settings = getSettings();
-  const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-
-  if (targetUrl) {
-      try {
-        await fetch(targetUrl, {
-            method: 'POST',
-            mode: 'no-cors',
-            headers: { 'Content-Type': 'text/plain' },
-            body: JSON.stringify({ action: 'deleteRecord', id: record.id })
-        });
-      } catch (e) { console.error("Cloud delete failed", e); }
-  }
-  return true;
 };
 
 export const saveRecord = async (record: CheckInRecord) => {
@@ -81,6 +89,26 @@ export const syncUnsyncedRecords = async () => {
         }
     }
     localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
+};
+
+export const deleteRecord = async (record: CheckInRecord) => {
+  const records = getRecords();
+  localStorage.setItem(RECORDS_KEY, JSON.stringify(records.filter(r => r.id !== record.id)));
+
+  const settings = getSettings();
+  const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+
+  if (targetUrl) {
+      try {
+        await fetch(targetUrl, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain' },
+            body: JSON.stringify({ action: 'deleteRecord', id: record.id })
+        });
+      } catch (e) { console.error("Cloud delete failed", e); }
+  }
+  return true;
 };
 
 export const getRecords = (): CheckInRecord[] => {
