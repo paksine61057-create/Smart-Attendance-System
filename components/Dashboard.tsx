@@ -19,7 +19,10 @@ const Dashboard: React.FC = () => {
   const [allRecords, setAllRecords] = useState<CheckInRecord[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  
+  // State for image preview with full data
+  const [previewData, setPreviewData] = useState<{url: string, title: string, time: string, ai: string} | null>(null);
+  
   const [aiSummary, setAiSummary] = useState<string>('');
   const [isGeneratingAi, setIsGeneratingAi] = useState(false);
 
@@ -40,6 +43,7 @@ const Dashboard: React.FC = () => {
 
   const staffList = useMemo(() => getAllStaff(), []);
 
+  // Sync data whenever selectedDate changes to ensure retrospective records are fetched
   const syncData = useCallback(async () => {
     setIsSyncing(true);
     try {
@@ -50,32 +54,26 @@ const Dashboard: React.FC = () => {
       const getSig = (r: CheckInRecord) => `${r.timestamp}_${String(r.staffId || '').toUpperCase().trim()}_${r.type}`;
       const cloudSigs = new Set(cloud.map(getSig));
       
-      // การทำ Reconciliation: 
-      // หากข้อมูลในเครื่องเคยบอกว่า sync สำเร็จแล้ว (syncedToSheets = true) 
-      // แต่ดันไม่มีอยู่ใน cloud แล้ว (อาจถูกลบออกด้วยมือใน Sheet) 
-      // เราควรลบรายการนั้นออกจากความจำเครื่องด้วย
       const validLocalRecords = local.filter(l => {
-        if (!l.syncedToSheets) return true; // ถ้ายังไม่เคย sync ให้เก็บไว้ก่อน
-        return cloudSigs.has(getSig(l)); // ถ้าเคย sync แล้ว ต้องมีอยู่ใน cloud ถึงจะเก็บไว้
+        if (!l.syncedToSheets) return true;
+        return cloudSigs.has(getSig(l));
       });
 
-      // บันทึกกลับลง LocalStorage เพื่อล้างรายการที่ถูกลบออกจาก Cloud ไปแล้ว
       if (validLocalRecords.length !== local.length) {
         localStorage.setItem('school_checkin_records', JSON.stringify(validLocalRecords));
       }
 
       const mergedMap = new Map<string, CheckInRecord>();
       
-      // ใส่ข้อมูลจาก Cloud เป็นหลัก
+      // Load cloud records first
       cloud.forEach(r => mergedMap.set(getSig(r), { ...r, syncedToSheets: true }));
       
-      // ใส่ข้อมูลจาก Local ที่ยังไม่ได้ Sync หรือข้อมูลที่ยังไม่มีใน Cloud
+      // Overlay with local records (which might have higher quality thumbnails)
       validLocalRecords.forEach(l => {
         const sig = getSig(l);
         if (!mergedMap.has(sig)) {
           mergedMap.set(sig, l);
         } else {
-          // ถ้ามีทั้งคู่ ให้ใช้ภาพจากเครื่องถ้า cloud ไม่มีภาพ (กรณี cloud ตัดภาพออกเพื่อประหยัดพื้นที่)
           const existing = mergedMap.get(sig)!;
           if (!existing.imageUrl && l.imageUrl) {
             mergedMap.set(sig, { ...existing, imageUrl: l.imageUrl });
@@ -92,7 +90,10 @@ const Dashboard: React.FC = () => {
     } finally { setIsSyncing(false); }
   }, []);
 
-  useEffect(() => { syncData(); }, [syncData]);
+  // Effect to trigger sync on date change
+  useEffect(() => { 
+    syncData(); 
+  }, [selectedDate, syncData]);
 
   const filteredToday = useMemo(() => {
     return allRecords.filter(r => {
@@ -112,6 +113,11 @@ const Dashboard: React.FC = () => {
       let arrivalValue = '-';
       let departureValue = '-';
       let remark = '';
+      
+      let arrivalImg = arrival?.imageUrl || null;
+      let departureImg = departure?.imageUrl || null;
+      let arrivalAi = arrival?.aiVerification || '';
+      let departureAi = departure?.aiVerification || '';
 
       const statusMap: Record<string, string> = {
         'Duty': 'ไปราชการ',
@@ -127,6 +133,8 @@ const Dashboard: React.FC = () => {
         arrivalValue = thaiStatus;
         departureValue = thaiStatus;
         remark = special.reason || '';
+        arrivalImg = special.imageUrl || null;
+        arrivalAi = special.aiVerification || '';
       } else {
         if (arrival) {
           const time = new Date(arrival.timestamp);
@@ -157,7 +165,11 @@ const Dashboard: React.FC = () => {
         role: staff.role,
         arrival: arrivalValue,
         departure: departureValue,
-        remark: remark
+        remark: remark,
+        arrivalImg,
+        departureImg,
+        arrivalAi,
+        departureAi
       };
     });
   }, [staffList, filteredToday]);
@@ -178,68 +190,40 @@ const Dashboard: React.FC = () => {
   const monthlyLatenessData = useMemo(() => {
     const [year, month] = selectedDate.split('-').map(Number);
     const currentMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
-    
     const monthlyRecords = allRecords.filter(r => {
         const d = new Date(r.timestamp);
-        const prefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-        return prefix === currentMonthPrefix;
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === currentMonthPrefix;
     });
-
     const now = new Date();
     const isCurrentMonth = (year === now.getFullYear() && (month - 1) === now.getMonth());
     const lastDayToCount = isCurrentMonth ? now.getDate() : new Date(year, month, 0).getDate();
-    
     const workingDays: string[] = [];
     for (let d = 1; d <= lastDayToCount; d++) {
       const dateObj = new Date(year, month - 1, d);
       if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
-      
       const dayOfWeek = dateObj.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
       const holiday = getHoliday(dateObj);
-      
       const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      
       if (!isWeekend && !holiday) {
-        const hasAnyRecordToday = monthlyRecords.some(r => {
+        if (monthlyRecords.some(r => {
            const rd = new Date(r.timestamp);
-           const rDateStr = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`;
-           return rDateStr === dateStr;
-        });
-        
-        if (hasAnyRecordToday) {
-            workingDays.push(dateStr);
-        }
+           return `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}` === dateStr;
+        })) { workingDays.push(dateStr); }
       }
     }
-
     return staffList.map((staff, index) => {
       const staffRecords = monthlyRecords.filter(r => r.staffId === staff.id);
       const lateRecords = staffRecords.filter(r => r.status === 'Late');
-      
-      const lateDates = lateRecords.map(r => {
-        const d = new Date(r.timestamp);
-        return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
-      }).join(', ');
-
+      const lateDates = lateRecords.map(r => new Date(r.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })).join(', ');
       let absentCount = 0;
       workingDays.forEach(wDate => {
-        const hasCheckInOrEquivalent = staffRecords.some(r => {
+        if (!staffRecords.some(r => {
             const d = new Date(r.timestamp);
-            const rDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-            return rDate === wDate && ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type);
-        });
-        if (!hasCheckInOrEquivalent) absentCount++;
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === wDate && ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type);
+        })) absentCount++;
       });
-
-      return {
-        no: index + 1,
-        name: staff.name,
-        role: staff.role,
-        lateCount: lateRecords.length,
-        lateDates: lateDates || '-',
-        absentCount: absentCount
-      };
+      return { no: index + 1, name: staff.name, role: staff.role, lateCount: lateRecords.length, lateDates: lateDates || '-', absentCount };
     });
   }, [allRecords, selectedDate, staffList]);
 
@@ -276,16 +260,6 @@ const Dashboard: React.FC = () => {
         margin: { left: 15, right: 15, top: 15, bottom: 25 }, 
         pageBreak: 'avoid',
     });
-    let pageCount = doc.getNumberOfPages();
-    while (pageCount > 1) { doc.deletePage(pageCount); pageCount = doc.getNumberOfPages(); }
-    doc.setPage(1); 
-    const finalY = (doc as any).lastAutoTable.finalY;
-    const sigY = Math.min(finalY + 8, 282); 
-    doc.setFontSize(9);
-    doc.text('(ลงชื่อ)...........................................................', 68, sigY, { align: 'center' });
-    doc.text('กลุ่มบริหารงานบุคคล', 68, sigY + 5.5, { align: 'center' });
-    doc.text('(ลงชื่อ)...........................................................', 142, sigY, { align: 'center' });
-    doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 142, sigY + 5.5, { align: 'center' });
     doc.save(`report_${type}_${selectedDate}.pdf`);
   };
 
@@ -298,8 +272,8 @@ const Dashboard: React.FC = () => {
       staffId: staff.id,
       name: staff.name,
       role: staff.role,
-      timestamp: timestamp,
-      type: type,
+      timestamp,
+      type,
       status: type === 'duty' ? 'Duty' : (type === 'sick_leave' ? 'Sick Leave' : (type === 'personal_leave' ? 'Personal Leave' : 'Other Leave')),
       reason: `Admin recorded: ${type.replace('_', ' ')}`,
       location: { lat: 0, lng: 0 },
@@ -322,11 +296,9 @@ const Dashboard: React.FC = () => {
     e.preventDefault();
     const staff = staffList.find(s => s.id === manualStaffId);
     if (!staff) return alert('ไม่พบรหัสบุคลากร');
-    
     const [year, month, day] = manualDate.split('-').map(Number);
     const [hours, minutes] = manualTime.split(':').map(Number);
     const manualTimestamp = new Date(year, month - 1, day, hours, minutes).getTime();
-    
     let status: any = 'Admin Assist';
     if (manualType === 'arrival') {
         const limit = new Date(year, month - 1, day, 8, 1, 0, 0).getTime();
@@ -339,17 +311,15 @@ const Dashboard: React.FC = () => {
       role: staff.role,
       timestamp: manualTimestamp,
       type: manualType,
-      status: status,
+      status,
       reason: manualReason || 'Manual override by admin',
       location: { lat: 0, lng: 0 },
       distanceFromBase: 0,
       aiVerification: 'Admin Authorized'
     };
-    
     await saveRecord(record);
     setManualReason('');
     setSelectedDate(manualDate);
-    alert(`บันทึกข้อมูลย้อนหลังสำเร็จสำหรับวันที่ ${new Date(manualDate).toLocaleDateString('th-TH')}`);
     await syncData();
     setActiveTab('today');
   };
@@ -358,9 +328,30 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-20">
-      {previewImage && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[100] flex items-center justify-center p-4 no-print" onClick={() => setPreviewImage(null)}>
-          <img src={previewImage.startsWith('data:') ? previewImage : `data:image/jpeg;base64,${previewImage}`} className="max-w-full max-h-[90vh] rounded-3xl border-4 border-white shadow-2xl" alt="Preview" />
+      {/* Improved Image Preview Modal */}
+      {previewData && (
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-2xl z-[100] flex items-center justify-center p-4 no-print animate-in fade-in duration-300" onClick={() => setPreviewData(null)}>
+          <div className="bg-white rounded-[3rem] p-8 max-w-md w-full shadow-2xl border border-white/20 relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setPreviewData(null)} className="absolute -top-4 -right-4 bg-white p-3 rounded-full shadow-xl hover:bg-stone-100 transition-all text-stone-500 hover:text-rose-600 active:scale-90 border border-stone-100">
+               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+            </button>
+            <div className="mb-6">
+                <h3 className="text-2xl font-black text-stone-800 leading-tight">{previewData.title}</h3>
+                <p className="text-rose-500 text-xs font-black uppercase tracking-widest mt-1 bg-rose-50 inline-block px-3 py-1 rounded-full">{previewData.time}</p>
+            </div>
+            <div className="aspect-[4/5] w-full rounded-[2rem] overflow-hidden bg-slate-100 border-4 border-white shadow-inner mb-6 ring-1 ring-stone-200">
+                <img src={previewData.url.startsWith('data:') ? previewData.url : `data:image/jpeg;base64,${previewData.url}`} className="w-full h-full object-cover" alt="Verification" />
+            </div>
+            {previewData.ai && (
+              <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 shadow-sm">
+                <div className="flex items-center gap-2 mb-2">
+                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                   <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">AI Verification Analysis</p>
+                </div>
+                <p className="text-xs font-bold text-emerald-800 leading-relaxed italic">"{previewData.ai}"</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -373,7 +364,7 @@ const Dashboard: React.FC = () => {
         </div>
         <div className="flex flex-wrap justify-center gap-3">
           <button onClick={syncData} disabled={isSyncing} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-bold text-sm transition-all flex items-center gap-2">
-            {isSyncing ? '...' : '🔄 Sync Cloud'}
+            {isSyncing ? '🔄 Syncing...' : '🔄 Sync Cloud'}
           </button>
           <div className="flex flex-col">
             <label className="text-[10px] text-white/60 font-black uppercase mb-1 ml-1">วันที่แสดงข้อมูล</label>
@@ -401,7 +392,15 @@ const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      <div className="bg-white rounded-[3.5rem] shadow-2xl border-4 border-rose-50 overflow-hidden min-h-[600px] animate-in fade-in slide-in-from-bottom-4 duration-500">
+      <div className="bg-white rounded-[3.5rem] shadow-2xl border-4 border-rose-50 overflow-hidden min-h-[600px] animate-in fade-in slide-in-from-bottom-4 duration-500 relative">
+        {isSyncing && (
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-[20] flex items-center justify-center">
+                <div className="flex flex-col items-center">
+                    <div className="w-12 h-12 border-4 border-rose-500 border-t-transparent rounded-full animate-spin mb-4" />
+                    <p className="text-rose-600 font-black text-xs uppercase tracking-widest animate-pulse">กำลังโหลดข้อมูลจาก Cloud... ❄️</p>
+                </div>
+            </div>
+        )}
         
         {activeTab === 'today' && (
           <div className="p-10">
@@ -435,7 +434,7 @@ const Dashboard: React.FC = () => {
                     <h3 className="text-2xl font-black text-stone-800">
                       รายละเอียดวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })} ⛄
                     </h3>
-                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">Attendance Records List</p>
+                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">Attendance Records List (Retrieved from Cloud)</p>
                   </div>
                   <button onClick={handleAiSummary} disabled={isGeneratingAi || filteredToday.length === 0} className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50">
                     {isGeneratingAi ? '...' : '✨ AI วิเคราะห์'}
@@ -457,7 +456,7 @@ const Dashboard: React.FC = () => {
                         <th className="p-5">รหัส</th>
                         <th className="p-5">ชื่อ-นามสกุล</th>
                         <th className="p-5 text-center">สถานะ</th>
-                        <th className="p-5 text-center">หลักฐาน</th>
+                        <th className="p-5 text-center">หลักฐาน (รูปถ่าย)</th>
                         <th className="p-5 text-right">ลบ</th>
                       </tr>
                     </thead>
@@ -482,10 +481,23 @@ const Dashboard: React.FC = () => {
                           </td>
                           <td className="p-5 text-center">
                             {r.imageUrl ? (
-                              <button onClick={() => setPreviewImage(r.imageUrl!)} className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-90 transition-all hover:ring-4 hover:ring-rose-100">
-                                <img src={r.imageUrl.startsWith('data:') ? r.imageUrl : `data:image/jpeg;base64,${r.imageUrl}`} className="w-full h-full object-cover opacity-80" alt="Thumb" />
+                              <button 
+                                onClick={() => setPreviewData({
+                                    url: r.imageUrl!, 
+                                    title: r.name, 
+                                    time: new Date(r.timestamp).toLocaleTimeString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), 
+                                    ai: r.aiVerification || ''
+                                })} 
+                                className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-90 transition-all hover:ring-4 hover:ring-rose-100"
+                                title="กดเพื่อดูรูปขยายใหญ่"
+                              >
+                                <img 
+                                  src={r.imageUrl.startsWith('data:') ? r.imageUrl : `data:image/jpeg;base64,${r.imageUrl}`} 
+                                  className="w-full h-full object-cover opacity-80" 
+                                  alt="Thumbnail" 
+                                />
                               </button>
-                            ) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูป</span>}
+                            ) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูปถ่าย</span>}
                           </td>
                           <td className="p-5 text-right">
                             <button onClick={() => { if(confirm('ต้องการลบข้อมูลหรือไม่?')) deleteRecord(r).then(syncData) }} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50">
@@ -555,8 +567,34 @@ const Dashboard: React.FC = () => {
                                <td className="border border-stone-400 py-0.5 px-1 text-center font-mono">{d.no}</td>
                                <td className="border border-stone-400 py-0.5 px-3 text-left font-bold text-stone-800 whitespace-nowrap overflow-hidden">{d.name}</td>
                                <td className="border border-stone-400 py-0.5 px-2 text-center text-stone-500 whitespace-nowrap overflow-hidden">{d.role}</td>
-                               <td className="border border-stone-400 py-0.5 px-1 text-center whitespace-nowrap">{d.arrival}</td>
-                               <td className="border border-stone-400 py-0.5 px-1 text-center whitespace-nowrap">{d.departure}</td>
+                               <td className="border border-stone-400 py-0.5 px-1 text-center whitespace-nowrap">
+                                  <div className="flex items-center justify-center gap-1 group">
+                                     {d.arrival}
+                                     {d.arrivalImg && (
+                                       <button 
+                                          onClick={() => setPreviewData({url: d.arrivalImg!, title: d.name, time: `มาทำงาน: ${d.arrival}`, ai: d.arrivalAi})}
+                                          className="no-print opacity-20 group-hover:opacity-100 transition-opacity text-rose-500 hover:scale-110 active:scale-95 cursor-pointer"
+                                          title="ดูรูปหลักฐาน"
+                                       >
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                       </button>
+                                     )}
+                                  </div>
+                               </td>
+                               <td className="border border-stone-400 py-0.5 px-1 text-center whitespace-nowrap">
+                                  <div className="flex items-center justify-center gap-1 group">
+                                     {d.departure}
+                                     {d.departureImg && (
+                                       <button 
+                                          onClick={() => setPreviewData({url: d.departureImg!, title: d.name, time: `กลับบ้าน: ${d.departure}`, ai: d.departureAi})}
+                                          className="no-print opacity-20 group-hover:opacity-100 transition-opacity text-rose-500 hover:scale-110 active:scale-95 cursor-pointer"
+                                          title="ดูรูปหลักฐาน"
+                                       >
+                                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
+                                       </button>
+                                     )}
+                                  </div>
+                               </td>
                                <td className="border border-stone-400 py-0.5 px-2 text-center text-stone-500 italic leading-tight">{d.remark}</td>
                             </tr>
                          ))}
@@ -615,16 +653,6 @@ const Dashboard: React.FC = () => {
                       </tbody>
                    </table>
                 </div>
-                <div className="mt-8 flex justify-between px-10 py-2">
-                   <div className="text-center">
-                      <p className="text-[9px] text-stone-800 mb-1.5 font-bold">(ลงชื่อ)...........................................................</p>
-                      <p className="text-[9px] font-black text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
-                   </div>
-                   <div className="text-center">
-                      <p className="text-[9px] text-stone-800 mb-1.5 font-bold">(ลงชื่อ)...........................................................</p>
-                      <p className="text-[9px] font-black text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
-                   </div>
-                </div>
              </div>
           </div>
         )}
@@ -634,14 +662,12 @@ const Dashboard: React.FC = () => {
              <div className="text-center mb-10"><span className="text-6xl mb-4 inline-block">✍️</span><h3 className="text-2xl font-black text-stone-800">ลงเวลาทดแทน / แก้ไขย้อนหลัง</h3><p className="text-stone-400 text-xs font-bold mt-2 italic">แอดมินสามารถลงเวลาแทนบุคลากรได้ กรณีติดราชการภายนอกหรือมีปัญหาเรื่องอุปกรณ์</p></div>
              <form onSubmit={handleManualCheckIn} className="space-y-6 bg-stone-50 p-10 rounded-[3rem] border-2 border-stone-100 shadow-xl">
                 <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เลือกบุคลากรที่ต้องการบันทึก</label><select value={manualStaffId} onChange={e => setManualStaffId(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm" required><option value="">-- ค้นหารายชื่อบุคลากร --</option>{staffList.map(s => <option key={s.id} value={s.id}>{s.id} : {s.name}</option>)}</select></div>
-                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                    <div className="md:col-span-2"><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ประเภทการลงเวลา</label><div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => setManualType('arrival')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'arrival' ? 'bg-emerald-500 text-white border-emerald-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}>มาทำงาน</button><button type="button" onClick={() => setManualType('departure')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'departure' ? 'bg-amber-500 text-white border-amber-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}>กลับบ้าน</button></div></div>
                    <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ระบุวันที่ (Date)</label><input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm h-[52px]" required /></div>
                    <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ระบุเวลา (Time)</label><input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm h-[52px]" required /></div>
                 </div>
-                <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">หมายเหตุ / เหตุผลการลงเวลาแทน</label><textarea value={manualReason} onChange={e => setManualReason(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none h-32 shadow-sm" placeholder="ระบุเหตุผล เช่น ติดราชการภายนอก, ลืมบันทึกเวลา..." /></div>
-                <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl shadow-rose-200 active:scale-95 transition-all text-lg">บันทึกข้อมูลย้อนหลัง ❄️</button>
+                <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl active:scale-95 transition-all text-lg">บันทึกข้อมูลย้อนหลัง ❄️</button>
              </form>
           </div>
         )}
