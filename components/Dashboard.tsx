@@ -6,6 +6,7 @@ import { generateDailyReportSummary } from '../services/geminiService';
 import { CheckInRecord, Staff, AttendanceType } from '../types';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 type TabType = 'today' | 'official' | 'monthly' | 'manual';
 
@@ -134,6 +135,16 @@ const Dashboard: React.FC = () => {
     };
   }, [filteredToday, staffList]);
 
+  const chartData = useMemo(() => {
+    return [
+      { name: 'มาตรงเวลา', value: Math.max(0, dailyAnalysis.present - dailyAnalysis.late), color: '#10b981' },
+      { name: 'มาสาย', value: dailyAnalysis.late, color: '#f43f5e' },
+      { name: 'ลา', value: dailyAnalysis.leave, color: '#3b82f6' },
+      { name: 'ไปราชการ', value: dailyAnalysis.duty, color: '#f59e0b' },
+      { name: 'ยังไม่ลงชื่อ', value: dailyAnalysis.absentCount, color: '#64748b' }
+    ].filter(d => d.value > 0);
+  }, [dailyAnalysis]);
+
   const monthlyLatenessData = useMemo(() => {
     const currentMonthPrefix = selectedDate.substring(0, 7); // YYYY-MM
     const monthlyRecords = allRecords.filter(r => new Date(r.timestamp).toISOString().startsWith(currentMonthPrefix));
@@ -250,7 +261,7 @@ const Dashboard: React.FC = () => {
       {/* Modern Tabs */}
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-print">
         {[
-          { id: 'today', label: 'บันทึกวันนี้', emoji: '📅' },
+          { id: 'today', label: 'รายการวันนี้', emoji: '📅' },
           { id: 'official', label: 'ตารางสรุปประจำวัน', emoji: '📜' },
           { id: 'monthly', label: 'ตารางสรุปประจำเดือน', emoji: '📊' },
           { id: 'manual', label: 'ลงเวลาแทน', emoji: '✍️' }
@@ -275,23 +286,23 @@ const Dashboard: React.FC = () => {
             {/* Stats Overview */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
               <div className="bg-emerald-50 p-6 rounded-[2.5rem] border-2 border-emerald-100 text-center shadow-sm">
-                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">Present</p>
+                <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-1">มาทำงาน</p>
                 <p className="text-3xl font-black text-emerald-600">{dailyAnalysis.present}</p>
               </div>
               <div className="bg-rose-50 p-6 rounded-[2.5rem] border-2 border-rose-100 text-center shadow-sm">
-                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">Late</p>
+                <p className="text-[10px] font-black text-rose-400 uppercase tracking-widest mb-1">มาสาย</p>
                 <p className="text-3xl font-black text-rose-600">{dailyAnalysis.late}</p>
               </div>
               <div className="bg-blue-50 p-6 rounded-[2.5rem] border-2 border-blue-100 text-center shadow-sm">
-                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">Leave</p>
+                <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-1">ลา</p>
                 <p className="text-3xl font-black text-blue-600">{dailyAnalysis.leave}</p>
               </div>
               <div className="bg-amber-50 p-6 rounded-[2.5rem] border-2 border-amber-100 text-center shadow-sm">
-                <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">Duty</p>
+                <p className="text-[10px] font-black text-amber-400 uppercase tracking-widest mb-1">ไปราชการ</p>
                 <p className="text-3xl font-black text-amber-600">{dailyAnalysis.duty}</p>
               </div>
               <div className="bg-slate-50 p-6 rounded-[2.5rem] border-2 border-slate-100 text-center shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Not Signed</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ยังไม่ลงชื่อ</p>
                 <p className="text-3xl font-black text-slate-600">{dailyAnalysis.absentCount}</p>
               </div>
             </div>
@@ -301,18 +312,18 @@ const Dashboard: React.FC = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                   <div>
                     <h3 className="text-2xl font-black text-stone-800">บันทึกการลงเวลาล่าสุด 🎁</h3>
-                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">Raw Logs Feed</p>
+                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">ข้อมูลการลงเวลาล่าสุด</p>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={handleAiSummary} disabled={isGeneratingAi || filteredToday.length === 0} className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50">
-                      {isGeneratingAi ? '...' : '✨ AI Analyze'}
+                      {isGeneratingAi ? '...' : '✨ AI วิเคราะห์'}
                     </button>
                   </div>
                 </div>
 
                 {aiSummary && (
                     <div className="mb-8 p-6 bg-emerald-50 rounded-3xl border border-emerald-100 text-emerald-800 animate-in zoom-in text-sm font-medium leading-relaxed shadow-inner">
-                        <p className="font-black text-[10px] uppercase tracking-widest mb-2 text-emerald-400">Gemini Strategic Insight</p>
+                        <p className="font-black text-[10px] uppercase tracking-widest mb-2 text-emerald-400">การวิเคราะห์โดย AI</p>
                         {aiSummary}
                     </div>
                 )}
@@ -321,12 +332,12 @@ const Dashboard: React.FC = () => {
                   <table className="w-full text-left">
                     <thead>
                       <tr className="bg-stone-50 text-[10px] font-black uppercase text-stone-400 border-b border-stone-100">
-                        <th className="p-5">Time</th>
-                        <th className="p-5">ID</th>
-                        <th className="p-5">Name</th>
-                        <th className="p-5 text-center">Status</th>
-                        <th className="p-5 text-center">Evidence</th>
-                        <th className="p-5 text-right">Delete</th>
+                        <th className="p-5">เวลา</th>
+                        <th className="p-5">รหัส</th>
+                        <th className="p-5">ชื่อ-นามสกุล</th>
+                        <th className="p-5 text-center">สถานะ</th>
+                        <th className="p-5 text-center">หลักฐาน</th>
+                        <th className="p-5 text-right">ลบ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-50">
@@ -342,17 +353,17 @@ const Dashboard: React.FC = () => {
                             <span className={`px-4 py-1.5 rounded-full text-[10px] font-black ${
                               r.status.includes('Time') ? 'bg-emerald-100 text-emerald-700' : 
                               r.status.includes('Late') ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
-                            }`}>{r.status}</span>
+                            }`}>{r.status === 'On Time' ? 'มาตรงเวลา' : r.status === 'Late' ? 'มาสาย' : r.status}</span>
                           </td>
                           <td className="p-5 text-center">
                             {r.imageUrl ? (
                               <button onClick={() => setPreviewImage(r.imageUrl!)} className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-90 transition-all hover:ring-4 hover:ring-rose-100">
                                 <img src={r.imageUrl.startsWith('data:') ? r.imageUrl : `data:image/jpeg;base64,${r.imageUrl}`} className="w-full h-full object-cover opacity-80" alt="Thumb" />
                               </button>
-                            ) : <span className="text-[10px] text-stone-300 italic">No Photo</span>}
+                            ) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูป</span>}
                           </td>
                           <td className="p-5 text-right">
-                            <button onClick={() => { if(confirm('Delete record?')) deleteRecord(r).then(syncData) }} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50">
+                            <button onClick={() => { if(confirm('ต้องการลบข้อมูลหรือไม่?')) deleteRecord(r).then(syncData) }} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50">
                               <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                             </button>
                           </td>
@@ -363,24 +374,53 @@ const Dashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div className="w-full lg:w-80 bg-slate-50 p-8 rounded-[3rem] border border-slate-100 no-print">
-                  <h4 className="font-black text-stone-800 mb-6 flex items-center justify-between">
-                    ยังไม่ลงชื่อ ⛄
-                    <span className="bg-rose-500 text-white text-[10px] px-3 py-1 rounded-full">{dailyAnalysis.absentCount}</span>
-                  </h4>
-                  <div className="space-y-4 max-h-[800px] overflow-y-auto pr-2 custom-scrollbar">
-                    {dailyAnalysis.absentList.map(s => (
-                        <div key={s.id} className="p-5 bg-white rounded-3xl border border-stone-100 shadow-sm transition-all hover:shadow-md">
-                            <div className="font-bold text-stone-700 text-xs">{s.name}</div>
-                            <div className="text-[10px] text-stone-400 font-bold mt-1 uppercase mb-4">{s.id} • {s.role}</div>
-                            <div className="grid grid-cols-3 gap-1.5">
-                                <button onClick={() => handleQuickLeave(s, 'personal_leave')} className="py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[9px] font-black transition-colors border border-amber-100">ลากิจ</button>
-                                <button onClick={() => handleQuickLeave(s, 'sick_leave')} className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[9px] font-black transition-colors border border-rose-100">ลาป่วย</button>
-                                <button onClick={() => handleQuickLeave(s, 'duty')} className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black transition-colors border border-blue-100">ไปราชการ</button>
-                            </div>
-                        </div>
-                    ))}
-                  </div>
+              <div className="w-full lg:w-80 flex flex-col gap-6">
+                <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 no-print flex-1 overflow-hidden flex flex-col">
+                    <h4 className="font-black text-stone-800 mb-6 flex items-center justify-between shrink-0">
+                      ยังไม่ลงชื่อ ⛄
+                      <span className="bg-rose-500 text-white text-[10px] px-3 py-1 rounded-full">{dailyAnalysis.absentCount}</span>
+                    </h4>
+                    <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
+                      {dailyAnalysis.absentList.map(s => (
+                          <div key={s.id} className="p-5 bg-white rounded-3xl border border-stone-100 shadow-sm transition-all hover:shadow-md">
+                              <div className="font-bold text-stone-700 text-xs">{s.name}</div>
+                              <div className="text-[10px] text-stone-400 font-bold mt-1 uppercase mb-4">{s.id} • {s.role}</div>
+                              <div className="grid grid-cols-3 gap-1.5">
+                                  <button onClick={() => handleQuickLeave(s, 'personal_leave')} className="py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[9px] font-black transition-colors border border-amber-100">ลากิจ</button>
+                                  <button onClick={() => handleQuickLeave(s, 'sick_leave')} className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[9px] font-black transition-colors border border-rose-100">ลาป่วย</button>
+                                  <button onClick={() => handleQuickLeave(s, 'duty')} className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black transition-colors border border-blue-100">ไปราชการ</button>
+                              </div>
+                          </div>
+                      ))}
+                    </div>
+                </div>
+
+                {/* Pie Chart Proportion */}
+                <div className="bg-white p-8 rounded-[3rem] border-4 border-rose-50 shadow-xl no-print">
+                   <h4 className="font-black text-stone-800 mb-6 text-center text-sm uppercase tracking-widest">สัดส่วนการมาปฏิบัติงาน</h4>
+                   <div className="h-64 w-full">
+                     <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={chartData}
+                            innerRadius={60}
+                            outerRadius={80}
+                            paddingAngle={5}
+                            dataKey="value"
+                            stroke="none"
+                          >
+                            {chartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip 
+                            contentStyle={{ borderRadius: '1rem', border: 'none', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', fontWeight: 'bold' }}
+                          />
+                          <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold' }} />
+                        </PieChart>
+                     </ResponsiveContainer>
+                   </div>
+                </div>
               </div>
             </div>
           </div>
