@@ -111,7 +111,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const context = canvasRef.current.getContext('2d');
       const video = videoRef.current;
       if (context && video.videoWidth) {
-        // ปรับจูนขนาดภาพให้รหัส Base64 มีความยาวประมาณ 13k-17k chars
         const TARGET_WIDTH = 180; 
         const scale = TARGET_WIDTH / video.videoWidth;
         canvasRef.current.width = TARGET_WIDTH;
@@ -121,7 +120,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         context.filter = filter?.css || 'none';
         context.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
         
-        // คุณภาพ 0.35 ให้ความคมชัดพอดี และข้อมูลไม่ล้น Google Sheets
         const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.35); 
         setStep('verifying');
         
@@ -176,16 +174,16 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
             <h2 className="text-3xl md:text-4xl font-extrabold flex items-center justify-center gap-3 drop-shadow-lg">
               <span className="animate-sparkle text-amber-300">🎄</span> ยืนยันตัวตน
             </h2>
-            <p className="text-rose-100 text-sm mt-2 font-bold opacity-90 tracking-widest uppercase">Prachaksinlapakhom School 2026 ❄️</p>
+            <p className="text-rose-100 text-sm mt-2 font-bold opacity-90 tracking-widest uppercase">Prachaksinlapakhom School ❄️</p>
 
             {todayHoliday && (
-                <div className="my-8 p-4 bg-white/15 border border-white/20 rounded-3xl flex items-center justify-center gap-4 animate-pulse shadow-xl backdrop-blur-md">
-                     <span className="text-3xl">🎁</span>
+                <div className="my-8 p-6 bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 border-4 border-white/50 rounded-[2rem] flex items-center justify-center gap-5 animate-in zoom-in shadow-[0_20px_40px_-10px_rgba(251,191,36,0.5)]">
+                     <span className="text-4xl animate-float">🏝️</span>
                      <div className="text-center">
-                         <p className="text-[10px] text-amber-200 uppercase font-black tracking-widest">Holiday Break</p>
-                         <p className="text-xl font-black">{todayHoliday}</p>
+                         <p className="text-[11px] text-white/90 uppercase font-black tracking-[0.2em] mb-1">ยินดีด้วย วันนี้คือวันหยุด</p>
+                         <p className="text-2xl font-black text-white drop-shadow-md">{todayHoliday}</p>
                      </div>
-                     <span className="text-3xl">🦌</span>
+                     <span className="text-4xl animate-sway">🍹</span>
                 </div>
             )}
             
@@ -226,7 +224,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         )}
                         {locationError && <p className="text-rose-200 text-xs font-black animate-bounce bg-rose-900/40 p-3 rounded-xl border border-rose-400/30">📍 {locationError}</p>}
                         <button onClick={() => { setLocationError(''); setIsValidating(true); validateLocation().then(l => { setIsValidating(false); if(l) setStep('camera'); }); }} disabled={isValidating} className="w-full py-5 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white rounded-[2rem] font-black text-lg shadow-2xl active:scale-95 transition-all animate-pulse-ring-festive">
-                            {isValidating ? 'กำลังตรวจสอบพิกัด... ❄️' : 'ถ่ายภาพยืนยันตัวตน 🎄'}
+                            {isValidating ? 'ตรวจสอบพิกัด... ❄️' : 'ถ่ายภาพยืนยันตัวตน 🎄'}
                         </button>
                     </div>
                 </div>

@@ -1,17 +1,12 @@
 
 import { SpecialHoliday } from '../types';
 
-export interface Holiday {
-  date: string; // MM-DD for fixed, YYYY-MM-DD for specific
-  name: string;
-}
+const SPECIAL_HOLIDAYS_KEY = 'school_checkin_special_holidays_ranges';
 
-const SPECIAL_HOLIDAYS_KEY = 'school_checkin_special_holidays';
-
-// 1. วันหยุดคงที่ (Fixed Holidays) - ตรงกันทุกปี
+// วันหยุดคงที่ (Fixed Holidays)
 const FIXED_HOLIDAYS_BASE = [
   { date: '01-01', name: 'วันขึ้นปีใหม่' },
-  { date: '01-16', name: 'วันครู' }, // เพิ่มวันครู สำหรับโรงเรียน
+  { date: '01-16', name: 'วันครู' },
   { date: '04-06', name: 'วันจักรี' },
   { date: '04-13', name: 'วันสงกรานต์' },
   { date: '04-14', name: 'วันสงกรานต์' },
@@ -28,10 +23,9 @@ const FIXED_HOLIDAYS_BASE = [
   { date: '12-31', name: 'วันสิ้นปี' }
 ];
 
-// 2. วันหยุดตามปฏิทินจันทรคติ (Dynamic)
-// หมายเหตุ: ปี ค.ศ. 2025 ตรงกับ พ.ศ. 2568
+// วันหยุดตามปี (Dynamic)
 const DYNAMIC_HOLIDAYS: Record<number, { date: string, name: string }[]> = {
-  2025: [ // พ.ศ. 2568
+  2025: [
     { date: '02-12', name: 'วันมาฆบูชา' },
     { date: '04-07', name: 'วันหยุดชดเชยวันจักรี' },
     { date: '04-16', name: 'วันหยุดชดเชยวันสงกรานต์' },
@@ -40,10 +34,8 @@ const DYNAMIC_HOLIDAYS: Record<number, { date: string, name: string }[]> = {
     { date: '05-12', name: 'วันหยุดชดเชยวันวิสาขบูชา' },
     { date: '07-10', name: 'วันอาสาฬหบูชา' },
     { date: '07-11', name: 'วันเข้าพรรษา' },
-    { date: '08-12', name: 'วันแม่แห่งชาติ' },
-    // วันหยุดอื่นๆ ที่เป็น Fixed จะถูกดึงมาจาก FIXED_HOLIDAYS_BASE
   ],
-  2026: [ // พ.ศ. 2569
+  2026: [
     { date: '03-03', name: 'วันมาฆบูชา' },
     { date: '05-26', name: 'วันวิสาขบูชา' },
     { date: '07-29', name: 'วันอาสาฬหบูชา' },
@@ -56,19 +48,16 @@ export const getSpecialHolidays = (): SpecialHoliday[] => {
   return data ? JSON.parse(data) : [];
 };
 
-export const addSpecialHoliday = (date: string, name: string) => {
+export const addSpecialHolidayRange = (startDate: string, endDate: string, name: string) => {
   const list = getSpecialHolidays();
-  // Prevent duplicate dates
-  if (list.some(h => h.date === date)) {
-     return false; 
-  }
   const newHoliday: SpecialHoliday = {
     id: crypto.randomUUID(),
-    date, 
+    startDate,
+    endDate,
     name
   };
   list.push(newHoliday);
-  list.sort((a, b) => a.date.localeCompare(b.date)); // Sort by date
+  list.sort((a, b) => a.startDate.localeCompare(b.startDate));
   localStorage.setItem(SPECIAL_HOLIDAYS_KEY, JSON.stringify(list));
   return true;
 };
@@ -87,23 +76,27 @@ export const getHoliday = (date: Date): string | null => {
   const currentFullDate = `${year}-${month}-${day}`;
   const currentShortDate = `${month}-${day}`;
 
-  // 1. ตรวจสอบวันหยุดพิเศษ (Special Holidays - Admin Defined)
-  const specialHolidays = getSpecialHolidays();
-  const special = specialHolidays.find(h => h.date === currentFullDate);
-  if (special) return special.name;
+  // 1. ตรวจสอบวันเสาร์-อาทิตย์
+  const dayOfWeek = date.getDay();
+  if (dayOfWeek === 0) return 'วันอาทิตย์';
+  if (dayOfWeek === 6) return 'วันเสาร์';
 
-  // 2. ตรวจสอบวันหยุดคงที่ (Fixed)
-  const fixedHoliday = FIXED_HOLIDAYS_BASE.find(h => h.date === currentShortDate);
-  if (fixedHoliday) {
-    return fixedHoliday.name;
+  // 2. ตรวจสอบวันหยุดช่วง (Special Holiday Ranges - Admin Defined)
+  const ranges = getSpecialHolidays();
+  for (const range of ranges) {
+    if (currentFullDate >= range.startDate && currentFullDate <= range.endDate) {
+      return range.name;
+    }
   }
 
-  // 3. ตรวจสอบวันหยุดตามปฏิทิน (Dynamic)
+  // 3. ตรวจสอบวันหยุดคงที่ (Fixed)
+  const fixedHoliday = FIXED_HOLIDAYS_BASE.find(h => h.date === currentShortDate);
+  if (fixedHoliday) return fixedHoliday.name;
+
+  // 4. ตรวจสอบวันหยุดตามปฏิทิน (Dynamic)
   if (DYNAMIC_HOLIDAYS[year]) {
     const dynamicHoliday = DYNAMIC_HOLIDAYS[year].find(h => `${year}-${h.date}` === currentFullDate || h.date === currentShortDate);
-    if (dynamicHoliday) {
-      return dynamicHoliday.name;
-    }
+    if (dynamicHoliday) return dynamicHoliday.name;
   }
 
   return null;

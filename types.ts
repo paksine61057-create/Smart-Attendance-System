@@ -43,6 +43,13 @@ export interface DailySummary {
 
 export interface SpecialHoliday {
   id: string;
+  startDate: string; // YYYY-MM-DD
+  endDate: string;   // YYYY-MM-DD
+  name: string;
+}
+
+export interface SpecialHolidayItem {
+  id: string;
   date: string; // YYYY-MM-DD
   name: string;
 }
