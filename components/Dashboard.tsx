@@ -3,18 +3,15 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { jsPDF } from "jspdf";
 import autoTable from 'jspdf-autotable';
-import { getRecords, clearRecords, exportToCSV, fetchGlobalRecords, syncUnsyncedRecords, updateRecord, saveRecord, deleteRecord } from '../services/storageService';
-import { CheckInRecord, Staff, GeoLocation, AttendanceType } from '../types';
+import { getRecords, clearRecords, fetchGlobalRecords, syncUnsyncedRecords, deleteRecord } from '../services/storageService';
+import { CheckInRecord, Staff } from '../types';
 import { getAllStaff } from '../services/staffService';
 import { getHoliday } from '../services/holidayService';
 
 const Dashboard: React.FC = () => {
-  const getLocalYYYYMMDD = (dateInput: Date | number | string) => {
-      const d = new Date(dateInput);
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const day = String(d.getDate()).padStart(2, '0');
-      return `${year}-${month}-${day}`;
+  const getLocalYYYYMMDD = (dInput: any) => {
+      const d = new Date(dInput);
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   };
 
   const [activeTab, setActiveTab] = useState<'realtime' | 'official' | 'monthly'>('realtime');
@@ -24,11 +21,6 @@ const Dashboard: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(getLocalYYYYMMDD(new Date()));
   const [selectedMonth, setSelectedMonth] = useState<string>(getLocalYYYYMMDD(new Date()).slice(0, 7));
-  const [staffList, setStaffList] = useState<Staff[]>([]);
-  const [officialReportData, setOfficialReportData] = useState<any[]>([]);
-  const [monthlyReportData, setMonthlyReportData] = useState<any[]>([]);
-  
-  // Image Preview State
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const syncData = useCallback(async () => {
@@ -37,509 +29,192 @@ const Dashboard: React.FC = () => {
           await syncUnsyncedRecords();
           const cloudRecords = await fetchGlobalRecords();
           const localRecords = getRecords();
-          
-          const mergedRecords = [...cloudRecords];
-          const cloudSignatures = new Set(cloudRecords.map(r => `${r.timestamp}_${r.staffId}`));
+          const merged = [...cloudRecords];
+          const cloudSigs = new Set(cloudRecords.map(r => `${r.timestamp}_${r.staffId}`));
           
           localRecords.forEach(local => {
               const sig = `${local.timestamp}_${local.staffId}`;
-              if (!cloudSignatures.has(sig)) {
-                  mergedRecords.push(local);
-              } else {
-                  // [SMART MERGE] แก้ปัญหา Data too short จาก Cloud
-                  const cloudIndex = mergedRecords.findIndex(r => `${r.timestamp}_${r.staffId}` === sig);
-                  const cloudRec = mergedRecords[cloudIndex];
-                  
+              if (!cloudSigs.has(sig)) merged.push(local);
+              else {
+                  // [SMART MERGE] ถ้ารูป Cloud เสีย (สั้นเกินไป) ให้ดึงรูปจากเครื่องมาทับทันที
+                  const idx = merged.findIndex(r => `${r.timestamp}_${r.staffId}` === sig);
+                  const cloudImg = merged[idx].imageUrl || '';
                   const localImg = local.imageUrl || '';
-                  const cloudImg = cloudRec.imageUrl || '';
-
-                  // ถ้ารูปในเครื่องยาวกว่า หรือ Cloud สั้นผิดปกติ ให้ใช้รูปในเครื่องเสมอ
                   if (localImg.length > cloudImg.length || (localImg.length > 5000 && cloudImg.length < 1000)) {
-                      mergedRecords[cloudIndex] = { ...cloudRec, imageUrl: localImg };
+                      merged[idx] = { ...merged[idx], imageUrl: localImg };
                   }
               }
           });
-          
-          setAllRecords(mergedRecords.length > 0 ? mergedRecords : []);
-      } catch (e) {
-          setAllRecords(getRecords());
-      } finally {
-          setIsSyncing(false);
-      }
+          setAllRecords(merged);
+      } catch { setAllRecords(getRecords()); }
+      finally { setIsSyncing(false); }
   }, []);
 
-  useEffect(() => {
-    syncData();
-    setStaffList(getAllStaff());
-  }, [syncData]);
+  useEffect(() => { syncData(); }, [syncData]);
 
   useEffect(() => {
-    let todaysRecords: CheckInRecord[] = [];
-    if (allRecords.length > 0) {
-        todaysRecords = allRecords.filter(r => getLocalYYYYMMDD(r.timestamp) === selectedDate).sort((a, b) => a.timestamp - b.timestamp);
-        setFilteredRecords(todaysRecords);
-    } else {
-        setFilteredRecords([]);
-    }
+    const todayStr = selectedDate;
+    const records = allRecords.filter(r => getLocalYYYYMMDD(r.timestamp) === todayStr).sort((a,b) => a.timestamp - b.timestamp);
+    setFilteredRecords(records);
+    if (todayStr === getLocalYYYYMMDD(new Date())) {
+        const checkedIds = new Set(records.filter(r => r.type !== 'departure').map(r => r.staffId));
+        setMissingStaff(getAllStaff().filter(s => !checkedIds.has(s.id)));
+    } else setMissingStaff([]);
 
-    const allStaff = getAllStaff();
-    if (selectedDate === getLocalYYYYMMDD(new Date())) {
-        const checkedInStaffIds = new Set(todaysRecords.filter(r => ['arrival', 'authorized_late', 'duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type)).map(r => r.staffId));
-        setMissingStaff(allStaff.filter(s => !checkedInStaffIds.has(s.id)));
-    } else {
-        setMissingStaff([]);
-    }
-
-    const dailyStaffData = allStaff.map(staff => {
-        const staffRecords = todaysRecords.filter(r => r.staffId === staff.id);
-        const dutyOrLeave = staffRecords.find(r => ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type));
-        let arrivalTime = '-', departureTime = '-', note = '', arrivalStatus = 'Absent', departureStatus = '-';
-
-        if (dutyOrLeave) {
-            let label = dutyOrLeave.type === 'duty' ? 'ไปราชการ' : dutyOrLeave.type === 'sick_leave' ? 'ลาป่วย' : dutyOrLeave.type === 'personal_leave' ? 'ลากิจ' : 'ลาอื่นๆ';
-            arrivalTime = departureTime = label;
-            note = dutyOrLeave.reason || '';
-            arrivalStatus = departureStatus = 'Leave';
-        } else {
-            const arrival = staffRecords.find(r => r.type === 'arrival' || r.type === 'authorized_late');
-            const departure = staffRecords.find(r => r.type === 'departure');
-            if (arrival) {
-                arrivalTime = new Date(arrival.timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
-                arrivalStatus = arrival.status;
-                if (arrival.status === 'Late') note += `สาย: ${arrival.reason || '-'} `;
-                else if (arrival.status === 'Authorized Late') note += `อนุญาตเข้าสาย: ${arrival.reason || '-'} `;
-                else if (arrival.status === 'Admin Assist') note += `(Admin ลงให้) `;
-            }
-            if (departure) {
-                departureTime = new Date(departure.timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'});
-                departureStatus = departure.status;
-                if (departure.status === 'Early Leave') note += `กลับก่อน: ${departure.reason || '-'} `;
-            }
-        }
-        return { staffId: staff.id, name: staff.name, role: staff.role, arrivalTime, arrivalStatus, departureTime, departureStatus, note: note.trim() };
+    // Official Daily Report Calculation
+    const dailyData = getAllStaff().map(staff => {
+        const sRecs = records.filter(r => r.staffId === staff.id);
+        const leave = sRecs.find(r => ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type));
+        const arrival = sRecs.find(r => r.type === 'arrival' || r.type === 'authorized_late');
+        const departure = sRecs.find(r => r.type === 'departure');
+        
+        return {
+            name: staff.name, role: staff.role,
+            arrivalTime: leave ? leave.status : (arrival ? new Date(arrival.timestamp).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-'),
+            departureTime: leave ? leave.status : (departure ? new Date(departure.timestamp).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'}) : '-'),
+            note: (arrival?.status === 'Late' ? `สาย: ${arrival.reason || ''}` : '') + (departure?.status === 'Early Leave' ? ` กลับก่อน: ${departure.reason || ''}` : '')
+        };
     });
-    setOfficialReportData(dailyStaffData);
+    setOfficialReportData(dailyData);
 
-    const monthlyStaffData = allStaff.map(staff => {
-        const systemStartDate = new Date(2025, 11, 11); systemStartDate.setHours(0,0,0,0);
-        const lateRecords = allRecords.filter(r => r.staffId === staff.id && r.status === 'Late' && r.type === 'arrival' && getLocalYYYYMMDD(r.timestamp).startsWith(selectedMonth) && new Date(r.timestamp) >= systemStartDate);
-        lateRecords.sort((a, b) => a.timestamp - b.timestamp);
-        const lateDays = lateRecords.map(r => new Date(r.timestamp).getDate()).join(', ');
-
-        let notSignedInCount = 0;
-        const [y, m] = selectedMonth.split('-').map(Number);
-        const daysInMonth = new Date(y, m, 0).getDate();
-        const now = new Date(), currentYear = now.getFullYear(), currentMonth = now.getMonth() + 1, currentDay = now.getDate();
-        let limitDay = (y === currentYear && m === currentMonth) ? currentDay : (y > currentYear || (y === currentYear && m > currentMonth)) ? 0 : daysInMonth;
-
-        for (let d = 1; d <= limitDay; d++) {
-            const dateStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`, dateObj = new Date(dateStr);
-            dateObj.setHours(0,0,0,0);
-            if (dateObj < systemStartDate || dateObj.getDay() === 0 || dateObj.getDay() === 6 || getHoliday(dateObj)) continue;
-            if (!allRecords.some(r => r.staffId === staff.id && getLocalYYYYMMDD(r.timestamp) === dateStr && (r.type === 'arrival' || r.type === 'authorized_late' || r.type === 'duty' || r.type === 'sick_leave' || r.type === 'personal_leave' || r.type === 'other_leave'))) notSignedInCount++;
-        }
-        return { staffId: staff.id, name: staff.name, role: staff.role, lateCount: lateRecords.length, lateDays: lateDays, notSignedInCount: notSignedInCount, note: '' };
+    // Monthly Report Calculation
+    const [y, m] = selectedMonth.split('-').map(Number);
+    const mData = getAllStaff().map(staff => {
+        const lateDays = allRecords.filter(r => r.staffId === staff.id && r.status === 'Late' && getLocalYYYYMMDD(r.timestamp).startsWith(selectedMonth));
+        return { name: staff.name, role: staff.role, lateCount: lateDays.length, lateDates: lateDays.map(r => new Date(r.timestamp).getDate()).join(', ') };
     });
-    setMonthlyReportData(monthlyStaffData);
+    setMonthlyReportData(mData);
   }, [selectedDate, selectedMonth, allRecords]);
 
-  const onTimeCount = filteredRecords.filter(r => r.status === 'On Time' || r.status === 'Authorized Late' || r.status === 'Admin Assist').length;
-  const lateCount = filteredRecords.filter(r => r.status === 'Late').length;
-  const earlyLeaveCount = filteredRecords.filter(r => r.status === 'Early Leave').length;
-  const dutyCount = filteredRecords.filter(r => ['Duty', 'Sick Leave', 'Personal Leave', 'Other Leave'].includes(r.status)).length;
+  const [officialReportData, setOfficialReportData] = useState<any[]>([]);
+  const [monthlyReportData, setMonthlyReportData] = useState<any[]>([]);
 
-  const data = [
-    { name: 'มาปกติ', value: onTimeCount },
-    { name: 'มาสาย', value: lateCount },
-    { name: 'กลับก่อน', value: earlyLeaveCount },
-    { name: 'ลา/ราชการ', value: dutyCount },
+  const stats = [
+    { name: 'มาปกติ', value: filteredRecords.filter(r => r.status === 'On Time' || r.status === 'Normal').length },
+    { name: 'มาสาย', value: filteredRecords.filter(r => r.status === 'Late').length },
+    { name: 'กลับก่อน', value: filteredRecords.filter(r => r.status === 'Early Leave').length },
+    { name: 'ลา/ราชการ', value: filteredRecords.filter(r => ['Duty', 'Sick Leave', 'Personal Leave'].includes(r.status)).length },
   ];
-  
-  const chartData = data.filter(d => d.value > 0);
-  const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#3b82f6']; 
-
-  const handleBrowserPrint = () => window.print();
-
-  const handleOfficialPDF = () => {
-     const doc = new jsPDF();
-     doc.setFontSize(16);
-     doc.text("รายงานการปฏิบัติราชการ - โรงเรียนประจักษ์ศิลปาคม", 105, 20, { align: "center" });
-     doc.setFontSize(12);
-     doc.text(`วันที่: ${new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`, 105, 30, { align: "center" });
-     const tableBody = officialReportData.map((row, index) => [index + 1, `${row.name}`, row.role, row.arrivalTime, row.departureTime, row.note]);
-     autoTable(doc, { 
-        startY: 40, 
-        head: [['ลำดับ', 'ชื่อ-สกุล', 'ตำแหน่ง', 'เวลามา', 'เวลากลับ', 'หมายเหตุ']], 
-        body: tableBody, 
-        theme: 'grid'
-     });
-     doc.save(`Official_Report_${selectedDate}.pdf`);
-  };
-
-  const handleDelete = async (record: CheckInRecord) => {
-      if(confirm(`คุณต้องการลบข้อมูลนี้ใช่หรือไม่?\n\nชื่อ: ${record.name}\nเวลา: ${new Date(record.timestamp).toLocaleTimeString('th-TH')}`)) {
-          setAllRecords(allRecords.filter(r => r.id !== record.id));
-          try { await deleteRecord(record); } catch (e) { alert('เกิดข้อผิดพลาดในการลบข้อมูล'); }
-      }
-  };
-
-  const handleAdminAssistCheckIn = async (staff: Staff, type: 'duty' | 'sick' | 'personal') => {
-      let typeLabel = type === 'duty' ? 'ไปราชการ' : type === 'sick' ? 'ลาป่วย' : 'ลากิจ';
-      if (!confirm(`ยืนยันการบันทึก "${typeLabel}" ให้กับ ${staff.name}?`)) return;
-      const now = new Date(); now.setHours(8, 0, 0, 0);
-      const record: CheckInRecord = { id: crypto.randomUUID(), staffId: staff.id, name: staff.name, role: staff.role, type: type === 'duty' ? 'duty' : type === 'sick' ? 'sick_leave' : 'personal_leave', status: type === 'duty' ? 'Duty' : type === 'sick' ? 'Sick Leave' : 'Personal Leave', reason: 'Admin บันทึกให้', timestamp: now.getTime(), location: { lat: 0, lng: 0 } as GeoLocation, distanceFromBase: 0, aiVerification: 'Admin Override' };
-      await saveRecord(record);
-      alert(`บันทึกเรียบร้อย`);
-      syncData();
-  };
-
-  const handleClear = () => {
-    if (window.confirm('คุณต้องการล้างข้อมูลแคชในเครื่องนี้ใช่หรือไม่?')) {
-      clearRecords();
-      setAllRecords([]);
-      syncData();
-    }
-  };
+  const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#3b82f6'];
 
   const openImage = (url?: string) => {
     if (url && url.length > 20) {
-        // [RESILIENT] ตรวจสอบและเติม Header ของ Base64 หากขาดหายไป
-        let finalUrl = url;
-        if (!url.startsWith('data:')) {
-            finalUrl = `data:image/jpeg;base64,${url}`;
-        }
-        setPreviewImage(finalUrl);
+        setPreviewImage(url.startsWith('data:') ? url : `data:image/jpeg;base64,${url}`);
     }
-  };
-
-  const formatMonthYear = (monthStr: string) => {
-    if (!monthStr) return '';
-    const [y, m] = monthStr.split('-');
-    const date = new Date(parseInt(y), parseInt(m) - 1);
-    return date.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
   };
 
   return (
     <div className="w-full">
       <style>{`
         @media print {
-          @page { size: A4; margin: 10mm; }
-          body { margin: 0; padding: 0; background: white !important; }
           body * { visibility: hidden; }
           #printable-report, #printable-report * { visibility: visible; }
-          #printable-report { 
-            position: absolute; 
-            left: 0; 
-            top: 0; 
-            width: 100%; 
-            background: white !important; 
-            z-index: 9999; 
-            padding: 0;
-            margin: 0;
-          }
-          .no-print { display: none !important; }
-          table { width: 100%; border-collapse: collapse; border: 1px solid black !important; }
-          th, td { border: 1px solid black !important; padding: 4px 8px; color: black !important; font-size: 11pt; }
-          th { background-color: #f2f2f2 !important; -webkit-print-color-adjust: exact; }
+          #printable-report { position: absolute; left: 0; top: 0; width: 100%; background: white !important; }
         }
       `}</style>
 
-      {/* Image Preview Modal (Lightbox) */}
       {previewImage && (
-        <div 
-            className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl z-[100] flex items-center justify-center p-4 no-print"
-            onClick={() => setPreviewImage(null)}
-        >
-            <div className="relative max-w-2xl w-full flex flex-col items-center animate-in zoom-in duration-300">
-                <button 
-                    onClick={() => setPreviewImage(null)}
-                    className="absolute -top-14 right-0 text-white hover:text-rose-400 transition-colors bg-white/10 p-3 rounded-full backdrop-blur-md"
-                >
-                    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-                
-                <div className="p-3 bg-white rounded-[2.5rem] shadow-[0_0_100px_rgba(225,29,72,0.5)] border-8 border-rose-100 overflow-hidden relative">
-                    <img 
-                        src={previewImage} 
-                        alt="Evidence" 
-                        className="w-full h-auto rounded-[1.8rem] object-contain max-h-[70vh] shadow-inner" 
-                        onClick={(e) => e.stopPropagation()}
-                        onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Data+Broken+From+Cloud';
-                        }}
-                    />
-                    <div className="absolute top-6 right-6 text-4xl animate-sway">🎅</div>
+        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl z-[100] flex items-center justify-center p-4 no-print" onClick={() => setPreviewImage(null)}>
+            <div className="relative max-w-2xl w-full flex flex-col items-center animate-in zoom-in">
+                <button className="absolute -top-14 right-0 text-white bg-white/10 p-3 rounded-full">✕</button>
+                <div className="p-3 bg-white rounded-[2.5rem] shadow-2xl border-8 border-rose-100 overflow-hidden">
+                    <img src={previewImage} className="w-full h-auto rounded-[1.8rem] max-h-[70vh]" onError={(e) => (e.target as any).src = 'https://via.placeholder.com/400?text=Data+Broken'} />
                 </div>
-                <div className="mt-8 flex flex-col items-center">
-                    <p className="text-white font-black tracking-[0.2em] uppercase bg-rose-600 px-8 py-3 rounded-full shadow-2xl animate-pulse">
-                        Identity Verified ❄️
-                    </p>
-                    <p className="text-rose-200 text-[10px] font-bold mt-2 opacity-60">
-                        {previewImage.length > 500 ? `รหัสภาพสมบูรณ์: ${previewImage.length.toLocaleString()} ตัวอักษร` : 'ข้อมูลภาพสั้นเกินไป - เกิดข้อผิดพลาดจากคลาวด์'}
-                    </p>
-                </div>
+                <p className="text-white font-black tracking-widest uppercase bg-rose-600 px-8 py-3 rounded-full mt-8 shadow-xl animate-pulse">Identity Verified ❄️</p>
+                <p className="text-rose-200 text-[10px] mt-2 font-bold opacity-60">รหัสภาพ: {previewImage.length.toLocaleString()} ตัวอักษร</p>
             </div>
         </div>
       )}
 
-      {/* Dashboard Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-6 no-print">
-        <div className="bg-white/10 backdrop-blur-xl p-5 rounded-[2rem] border border-white/20 shadow-2xl relative overflow-hidden group">
-          <div className="absolute -top-4 -right-4 text-5xl opacity-20 group-hover:opacity-100 transition-opacity animate-sway">⛄</div>
-          <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3 relative z-10">
-             <span className="w-2.5 h-10 bg-gradient-to-b from-red-500 to-rose-600 rounded-full shadow-lg"></span>
-             Admin Dashboard 🎁
-          </h2>
-          <p className="text-amber-200 text-sm font-bold mt-1 pl-5 drop-shadow-sm uppercase tracking-widest relative z-10">Happy New Year 2026 Monitor</p>
+      <div className="flex flex-col md:flex-row justify-between items-end mb-8 gap-6 no-print">
+        <div className="bg-white/10 backdrop-blur-xl p-6 rounded-[2rem] border border-white/20 shadow-2xl relative overflow-hidden group">
+          <div className="absolute -top-4 -right-4 text-5xl opacity-20 group-hover:opacity-100 transition-all animate-sway">⛄</div>
+          <h2 className="text-3xl font-black text-white tracking-tight flex items-center gap-3">Admin Dashboard 🎁</h2>
+          <p className="text-amber-200 text-xs font-bold mt-1 pl-1 uppercase tracking-widest">Happy New Year 2026 Monitor</p>
         </div>
-        <div className="flex flex-wrap gap-4 items-center">
-             <button onClick={syncData} disabled={isSyncing} className="px-6 py-4 bg-white/15 text-white border-2 border-white/20 rounded-2xl font-black text-sm shadow-xl hover:bg-white/25 transition-all flex items-center gap-3 backdrop-blur-md active:scale-95">
-                <svg className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357-2H15"></path></svg>
+        <div className="flex gap-4 items-center">
+             <button onClick={syncData} disabled={isSyncing} className="px-6 py-4 bg-white/15 text-white border-2 border-white/20 rounded-2xl font-black text-sm shadow-xl hover:bg-white/25 transition-all">
                 {isSyncing ? 'Refreshing...' : 'Refresh & Sync ❄️'}
              </button>
-            <div className="relative">
-                {activeTab === 'monthly' ? (
-                    <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} className="px-5 py-3.5 bg-white border-4 border-rose-100 rounded-2xl text-rose-700 font-black text-sm shadow-2xl outline-none" />
-                ) : (
-                    <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="px-5 py-3.5 bg-white border-4 border-rose-100 rounded-2xl text-rose-700 font-black text-sm shadow-2xl outline-none" />
-                )}
-            </div>
+             {activeTab === 'monthly' ? <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="px-5 py-3.5 bg-white border-4 border-rose-100 rounded-2xl text-rose-700 font-black text-sm shadow-xl" /> : <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="px-5 py-3.5 bg-white border-4 border-rose-100 rounded-2xl text-rose-700 font-black text-sm shadow-xl" />}
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-3 mb-8 border-b border-white/10 pb-4 no-print bg-white/5 p-3 rounded-[2rem] backdrop-blur-md shadow-2xl">
-          <button onClick={() => setActiveTab('realtime')} className={`px-6 py-3 rounded-2xl text-xs font-black transition-all border-2 uppercase tracking-widest ${activeTab === 'realtime' ? 'bg-white text-rose-700 border-rose-200 shadow-xl' : 'text-white/60 hover:bg-white/10 border-transparent'}`}>Realtime Log</button>
-          <button onClick={() => setActiveTab('official')} className={`px-6 py-3 rounded-2xl text-xs font-black transition-all border-2 uppercase tracking-widest ${activeTab === 'official' ? 'bg-white text-rose-700 border-rose-200 shadow-xl' : 'text-white/60 hover:bg-white/10 border-transparent'}`}>รายงานประจำวัน (Daily)</button>
-          <button onClick={() => setActiveTab('monthly')} className={`px-6 py-3 rounded-2xl text-xs font-black transition-all border-2 uppercase tracking-widest ${activeTab === 'monthly' ? 'bg-white text-rose-700 border-rose-200 shadow-xl' : 'text-white/60 hover:bg-white/10 border-transparent'}`}>สรุปมาสายรายเดือน</button>
+      <div className="flex gap-3 mb-8 no-print bg-white/5 p-3 rounded-[2rem] backdrop-blur-md">
+          {['realtime', 'official', 'monthly'].map(t => (
+            <button key={t} onClick={() => setActiveTab(t as any)} className={`px-6 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 transition-all ${activeTab === t ? 'bg-white text-rose-700 border-rose-100 shadow-xl' : 'text-white/60 border-transparent'}`}>{t === 'realtime' ? 'Realtime Log' : t === 'official' ? 'รายงานประจำวัน' : 'สรุปรายเดือน'}</button>
+          ))}
       </div>
 
       {activeTab === 'realtime' ? (
-      <>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12 no-print">
-            {[
-                { label: 'มาทำงานวันนี้', count: filteredRecords.length, color: 'rose', icon: '🎅' },
-                { label: 'มาสาย', count: lateCount, color: 'red', icon: '⏰' },
-                { label: 'ลา/ราชการ', count: dutyCount, color: 'emerald', icon: '🏛️' },
-                { label: 'กลับก่อน', count: earlyLeaveCount, color: 'amber', icon: '🏃' }
-            ].map((stat, i) => (
-                <div key={i} className={`bg-white p-6 rounded-[2.5rem] shadow-[0_20px_50px_rgba(0,0,0,0.3)] border-4 border-${stat.color}-50 relative overflow-hidden group hover:-translate-y-2 transition-transform`}>
-                   <div className="absolute right-0 top-0 w-24 h-24 bg-stone-50 rounded-bl-[80px] -mr-4 -mt-4 transition-transform group-hover:scale-125 flex items-center justify-center pt-4 pl-4 text-3xl opacity-20">{stat.icon}</div>
-                   <div className="relative z-10">
-                       <span className={`inline-block px-3 py-1 bg-${stat.color}-100 text-${stat.color}-700 text-[10px] font-black uppercase tracking-[0.2em] rounded-full mb-3 shadow-inner`}>{stat.label}</span>
-                       <p className={`text-5xl font-black text-stone-800 drop-shadow-sm`}>{stat.count}</p>
-                   </div>
-                </div>
-            ))}
-        </div>
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-10 no-print">
-            <div className="lg:col-span-1 flex flex-col gap-8">
-                <div className="bg-white p-10 rounded-[3rem] shadow-[0_25px_60px_rgba(0,0,0,0.3)] border-4 border-rose-50 h-[400px] relative overflow-hidden">
-                    <div className="absolute -bottom-6 -right-6 text-6xl opacity-10 animate-sway">⛄</div>
-                    <h3 className="font-black text-stone-800 mb-8 flex items-center gap-3 text-lg"><span className="w-2 h-8 bg-rose-500 rounded-full"></span>สรุปสถิติ</h3>
-                    <div className="flex-1 h-64 relative">
-                        {filteredRecords.length > 0 ? (
+            <div className="lg:col-span-1 bg-white p-8 rounded-[3rem] shadow-2xl border-4 border-rose-50 h-fit">
+                <h3 className="font-black text-stone-800 mb-6 flex items-center gap-3"><span className="w-2 h-8 bg-rose-500 rounded-full" />สถิติวันนี้</h3>
+                <div className="h-64">
+                    {filteredRecords.length > 0 ? (
                         <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                            <Pie data={chartData} cx="50%" cy="50%" innerRadius={70} outerRadius={90} paddingAngle={8} dataKey="value" stroke="none">
-                            {chartData.map((entry, index) => <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />)}
-                            </Pie>
-                            <Tooltip contentStyle={{ borderRadius: '24px', border: 'none', boxShadow: '0 20px 50px rgba(0,0,0,0.2)', fontWeight: 'bold' }} />
-                            <Legend verticalAlign="bottom" height={40} iconType="circle" wrapperStyle={{ fontWeight: 'bold', fontSize: '11px' }}/>
-                        </PieChart>
+                            <PieChart><Pie data={stats.filter(s => s.value > 0)} cx="50%" cy="50%" innerRadius={60} outerRadius={80} dataKey="value" stroke="none">{stats.map((e, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}</Pie><Tooltip /><Legend /></PieChart>
                         </ResponsiveContainer>
-                        ) : <div className="h-full flex items-center justify-center text-stone-200 font-black text-2xl tracking-widest animate-pulse">NO RECORDS ❄️</div>}
-                    </div>
+                    ) : <div className="h-full flex items-center justify-center text-stone-300 font-black">NO RECORDS ❄️</div>}
                 </div>
-
                 {missingStaff.length > 0 && (
-                    <div className="bg-white rounded-[3rem] shadow-[0_25px_60px_rgba(0,0,0,0.3)] border-4 border-amber-50 overflow-hidden relative">
-                        <div className="absolute -top-4 -left-4 text-4xl opacity-10 animate-float">🎅</div>
-                        <div className="p-6 border-b-4 border-amber-50 bg-amber-50/30">
-                            <h3 className="font-black text-stone-800 flex items-center gap-3 text-sm">
-                                <span className="w-3 h-3 bg-amber-500 rounded-full animate-ping"></span>
-                                ยังไม่ลงชื่อ ({missingStaff.length} คน 🎁)
-                            </h3>
-                        </div>
-                        <div className="overflow-y-auto max-h-[350px] p-4">
-                             <table className="w-full text-xs">
-                                 <tbody>
-                                     {missingStaff.map(staff => (
-                                         <tr key={staff.id} className="border-b border-stone-50 last:border-0 hover:bg-stone-50 transition-colors">
-                                             <td className="p-4 text-stone-700 font-bold">{staff.name}</td>
-                                             <td className="p-4 text-right">
-                                                 <div className="flex gap-2 justify-end">
-                                                     <button onClick={() => handleAdminAssistCheckIn(staff, 'duty')} className="px-3 py-2 bg-emerald-50 text-emerald-700 rounded-xl hover:bg-emerald-100 text-[9px] font-black border border-emerald-100 transition-all uppercase">+ ราชการ</button>
-                                                     <button onClick={() => handleAdminAssistCheckIn(staff, 'sick')} className="px-3 py-2 bg-rose-50 text-rose-700 rounded-xl hover:bg-rose-100 text-[9px] font-black border border-rose-100 transition-all uppercase">+ ลา</button>
-                                                 </div>
-                                             </td>
-                                         </tr>
-                                     ))}
-                                 </tbody>
-                             </table>
+                    <div className="mt-8 pt-8 border-t-4 border-stone-50">
+                        <h4 className="font-black text-xs uppercase tracking-widest text-amber-500 mb-4">ยังไม่ลงชื่อ ({missingStaff.length})</h4>
+                        <div className="max-h-60 overflow-y-auto space-y-2">
+                            {missingStaff.map(s => <div key={s.id} className="text-[11px] font-bold text-stone-600 bg-stone-50 p-3 rounded-xl">{s.name}</div>)}
                         </div>
                     </div>
                 )}
             </div>
-
-            <div className="lg:col-span-2 bg-white rounded-[3rem] shadow-[0_30px_80px_rgba(0,0,0,0.3)] overflow-hidden flex flex-col h-[700px] border-4 border-rose-50 relative">
-                <div className="p-8 flex justify-between items-center bg-white sticky top-0 z-10 border-b-4 border-stone-50">
-                    <h3 className="font-black text-stone-800 flex items-center gap-3 text-xl"><span className="w-2 h-8 bg-emerald-500 rounded-full shadow-md"></span>รายการล่าสุด 🎄</h3>
-                    <button onClick={handleClear} className="text-[10px] font-black text-rose-500 bg-rose-50 px-5 py-2 rounded-full hover:bg-rose-100 border-2 border-rose-100 tracking-widest uppercase">Clear Cache</button>
+            <div className="lg:col-span-2 bg-white rounded-[3rem] shadow-2xl border-4 border-rose-50 overflow-hidden h-[700px] flex flex-col">
+                <div className="p-8 border-b-4 border-stone-50 bg-white sticky top-0 z-10 flex justify-between">
+                    <h3 className="font-black text-stone-800 text-xl">รายการล่าสุด 🎄</h3>
+                    <button onClick={() => window.confirm('ล้างข้อมูลแคช?') && (clearRecords(), syncData())} className="text-[10px] font-black text-rose-500">Clear Local</button>
                 </div>
-                <div className="overflow-y-auto flex-1 p-6">
-                    <table className="w-full text-sm text-left">
-                        <thead className="text-[10px] text-stone-400 uppercase tracking-[0.2em] font-black bg-stone-50/50">
-                            <tr>
-                                <th className="px-6 py-4 text-center">เวลา</th>
-                                <th className="px-6 py-4">ชื่อ-นามสกุล</th>
-                                <th className="px-6 py-4 text-center">สถานะ</th>
-                                <th className="px-6 py-4 text-center">หลักฐาน</th>
-                                <th className="px-6 py-4 text-center">จัดการ</th>
-                            </tr>
-                        </thead>
+                <div className="flex-1 overflow-y-auto p-6">
+                    <table className="w-full text-sm">
+                        <thead className="text-[10px] font-black uppercase text-stone-400"><tr><th className="p-4 text-center">เวลา</th><th className="p-4">ชื่อ-ตำแหน่ง</th><th className="p-4 text-center">สถานะ</th><th className="p-4 text-center">หลักฐาน</th></tr></thead>
                         <tbody className="divide-y divide-stone-50">
-                            {filteredRecords.map((record) => (
-                            <tr key={record.id} className="hover:bg-rose-50/30 transition-colors group">
-                                <td className="px-6 py-5 text-xs font-black text-center text-stone-600">
-                                    <div className="text-lg font-mono">{new Date(record.timestamp).toLocaleTimeString('th-TH', {hour: '2-digit', minute:'2-digit'})}</div>
-                                    <div className={`mt-2 inline-block px-3 py-1 rounded-full text-[9px] font-black tracking-widest uppercase ${record.type === 'arrival' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
-                                        {record.type === 'arrival' ? 'มา' : 'กลับ'}
-                                    </div>
-                                </td>
-                                <td className="px-6 py-5">
-                                    <div className="font-black text-stone-800 text-sm">{record.name}</div>
-                                    <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider mt-1">{record.role}</div>
-                                </td>
-                                <td className="px-6 py-5 text-center">
-                                    <span className={`px-4 py-1.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border-2 shadow-sm
-                                        ${record.status === 'Late' ? 'bg-red-50 text-red-600 border-red-100' : 
-                                          record.status === 'Early Leave' ? 'bg-amber-50 text-amber-600 border-amber-100' : 
-                                          record.status === 'On Time' || record.status === 'Normal' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                                          'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                                        {record.status}
-                                    </span>
-                                </td>
-                                <td className="px-6 py-5 text-center">
-                                    {(record.imageUrl && record.imageUrl.length > 20) ? (
-                                        <div className="flex flex-col items-center gap-1">
-                                            <button 
-                                                onClick={() => openImage(record.imageUrl)} 
-                                                className="px-6 py-2.5 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all flex items-center justify-center gap-2 mx-auto shadow-md active:scale-95"
-                                            >
-                                                ดูรูปภาพ ❄️
-                                            </button>
-                                            <span className={`text-[8px] font-bold ${record.imageUrl.length < 1000 ? 'text-rose-500' : 'text-stone-400'}`}>
-                                                Len: {record.imageUrl.length.toLocaleString()}
-                                            </span>
-                                        </div>
-                                    ) : <span className="text-stone-300 font-black">-</span>}
-                                </td>
-                                <td className="px-6 py-5 text-center">
-                                    <div className="flex items-center justify-center gap-4">
-                                        <button onClick={() => handleDelete(record)} className="p-2.5 bg-rose-50 text-rose-400 hover:text-rose-600 hover:bg-rose-100 rounded-xl transition-all shadow-sm border border-rose-100">
-                                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                                        </button>
-                                    </div>
-                                </td>
-                            </tr>
+                            {filteredRecords.map(r => (
+                                <tr key={r.id} className="hover:bg-rose-50/30">
+                                    <td className="p-5 text-center font-mono font-bold">{new Date(r.timestamp).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</td>
+                                    <td className="p-5"><div className="font-black text-stone-800">{r.name}</div><div className="text-[10px] text-stone-400">{r.role}</div></td>
+                                    <td className="p-5 text-center"><span className={`px-4 py-1.5 rounded-full text-[9px] font-black uppercase ${r.status === 'Late' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>{r.status}</span></td>
+                                    <td className="p-5 text-center">
+                                        {r.imageUrl ? <div className="flex flex-col items-center gap-1"><button onClick={() => openImage(r.imageUrl)} className="px-5 py-2 bg-stone-900 text-white rounded-xl text-[9px] font-black">ดูรูปภาพ ❄️</button><span className={`text-[8px] ${r.imageUrl.length < 1000 ? 'text-rose-500' : 'text-stone-300'}`}>Len: {r.imageUrl.length.toLocaleString()}</span></div> : '-'}
+                                    </td>
+                                </tr>
                             ))}
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-      </>
       ) : (
-        /* Printable Report Section */
-        <div className="bg-white rounded-[3rem] shadow-[0_30px_100px_rgba(0,0,0,0.4)] overflow-hidden min-h-[600px] border-4 border-rose-50 relative">
-            <div className="p-10 border-b-4 border-rose-50 flex flex-col md:flex-row justify-between items-center gap-6 bg-stone-50/40 no-print">
-                <div className="p-6 bg-white rounded-[2rem] border-4 border-rose-50 shadow-xl max-w-lg relative overflow-hidden">
-                    <h3 className="text-2xl font-black text-stone-800 flex items-center gap-3 relative z-10"><span className="text-3xl">❄️</span> {activeTab === 'monthly' ? 'สรุปการมาสายรายเดือน' : 'รายงานการมาปฏิบัติราชการ 🎄'}</h3>
-                    <p className="text-stone-500 font-bold text-sm mt-2 pl-2 relative z-10">โรงเรียนประจักษ์ศิลปาคม • {activeTab === 'monthly' ? `ประจำเดือน ${formatMonthYear(selectedMonth)}` : `ประจำ${new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`}</p>
-                </div>
-                <div className="flex gap-4">
-                  <button onClick={handleBrowserPrint} className="px-10 py-5 bg-stone-900 text-white rounded-[2rem] shadow-2xl hover:bg-stone-800 text-sm font-black uppercase tracking-widest flex items-center gap-3 transition-all transform hover:scale-105 active:scale-95">พิมพ์รายงาน (A4) 🎅</button>
-                  {activeTab === 'official' && <button onClick={handleOfficialPDF} className="px-8 py-5 bg-white text-stone-700 border-4 border-rose-100 rounded-[2rem] shadow-xl hover:bg-stone-50 text-sm font-black transition-all">Save PDF</button>}
-                </div>
+        <div id="printable-report" className="bg-white p-12 rounded-[3rem] shadow-2xl min-h-[600px] border-4 border-rose-50">
+            <div className="flex flex-col items-center mb-10">
+                <img src="https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png" className="w-20 mb-4" alt="Logo" />
+                <h1 className="text-2xl font-bold">โรงเรียนประจักษ์ศิลปาคม</h1>
+                <p className="font-bold text-stone-600 mt-2">{activeTab === 'monthly' ? `รายงานสรุปรายเดือน ประจำเดือน ${selectedMonth}` : `รายงานการมาปฏิบัติราชการ ประจำวันที่ ${new Date(selectedDate).toLocaleDateString('th-TH', {day:'numeric', month:'long', year:'numeric'})}`}</p>
             </div>
-            
-            <div id="printable-report" className="p-6 md:p-12 bg-white">
-                <div className="hidden print:flex flex-col items-center justify-center mb-8">
-                     <img src="https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png" className="w-20 h-20 object-contain mb-4" alt="Logo" />
-                     <h1 className="text-2xl font-bold text-black leading-tight">โรงเรียนประจักษ์ศิลปาคม</h1>
-                     <p className="text-base text-black font-bold mt-2 uppercase">
-                        {activeTab === 'monthly' ? `รายงานสรุปการมาสายรายเดือน ประจำเดือน ${formatMonthYear(selectedMonth)}` : `รายงานการมาปฏิบัติราชการ ประจำ${new Date(selectedDate).toLocaleDateString('th-TH', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}`}
-                     </p>
-                </div>
-
-                <table className="w-full text-left border-collapse border-2 border-black">
-                    <thead>
-                        <tr className="text-black text-xs font-bold uppercase tracking-wider bg-gray-50/50">
-                            {activeTab === 'monthly' ? (
-                                <>
-                                    <th className="px-3 py-3 border border-black text-center w-[5%]">ลำดับ</th>
-                                    <th className="px-3 py-3 border border-black w-[30%]">ชื่อ-นามสกุล</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[15%]">ตำแหน่ง</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[10%]">มาสาย (ครั้ง)</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[10%]">ไม่ลงชื่อ (วัน)</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[15%]">วันที่มาสาย</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[15%]">หมายเหตุ</th>
-                                </>
-                            ) : (
-                                <>
-                                    <th className="px-3 py-3 border border-black text-center w-[5%]">ลำดับ</th>
-                                    <th className="px-3 py-3 border border-black w-[35%]">ชื่อ-นามสกุล</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[15%]">ตำแหน่ง</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[12%]">เวลามา</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[12%]">เวลากลับ</th>
-                                    <th className="px-3 py-3 border border-black text-center w-[21%]">หมายเหตุ</th>
-                                </>
-                            )}
+            <table className="w-full border-collapse border-2 border-black">
+                <thead><tr className="bg-stone-50 text-xs font-bold uppercase"><th className="p-3 border border-black">ลำดับ</th><th className="p-3 border border-black text-left">ชื่อ-สกุล</th><th className="p-3 border border-black">ตำแหน่ง</th>{activeTab === 'monthly' ? <><th className="p-3 border border-black">สาย (ครั้ง)</th><th className="p-3 border border-black">วันที่</th></> : <><th className="p-3 border border-black">เวลามา</th><th className="p-3 border border-black">เวลากลับ</th><th className="p-3 border border-black">หมายเหตุ</th></>}</tr></thead>
+                <tbody>
+                    {(activeTab === 'monthly' ? monthlyReportData : officialReportData).map((row, i) => (
+                        <tr key={i} className="text-xs">
+                            <td className="p-2 border border-black text-center">{i+1}</td>
+                            <td className="p-2 border border-black font-bold">{row.name}</td>
+                            <td className="p-2 border border-black text-center">{row.role}</td>
+                            {activeTab === 'monthly' ? <><td className="p-2 border border-black text-center font-bold text-red-600">{row.lateCount || '-'}</td><td className="p-2 border border-black text-center">{row.lateDates}</td></> : <><td className="p-2 border border-black text-center font-mono">{row.arrivalTime}</td><td className="p-2 border border-black text-center font-mono">{row.departureTime}</td><td className="p-2 border border-black text-[10px]">{row.note}</td></>}
                         </tr>
-                    </thead>
-                    <tbody className="text-[11px] md:text-xs">
-                        {activeTab === 'monthly' ? (
-                            monthlyReportData.map((row, index) => (
-                                <tr key={row.staffId} className="border-b border-gray-300">
-                                    <td className="px-3 py-2 border-x border-gray-300 text-center font-mono">{index + 1}</td>
-                                    <td className="px-3 py-2 border-r border-gray-300 text-left font-bold">{row.name}</td>
-                                    <td className="px-3 py-2 border-r border-gray-300 text-center">{row.role}</td>
-                                    <td className="px-3 py-2 border-r border-gray-300 text-center font-bold">{row.lateCount > 0 ? row.lateCount : '-'}</td>
-                                    <td className="px-3 py-2 border-r border-gray-300 text-center font-bold text-red-600">{row.notSignedInCount > 0 ? row.notSignedInCount : '-'}</td>
-                                    <td className="px-3 py-2 border-r border-gray-300 text-[10px] text-center">{row.lateDays || '-'}</td>
-                                    <td className="px-3 py-2 text-center text-[10px] border-r border-gray-300">{row.note || ''}</td>
-                                </tr>
-                            ))
-                        ) : (
-                            officialReportData.map((row, index) => (
-                                <tr key={row.staffId} className="border-b border-gray-300">
-                                    <td className="px-3 py-2 border-x border-gray-300 text-center font-mono">{index + 1}</td>
-                                    <td className="px-3 py-2 border-r border-gray-300 text-left font-bold">{row.name}</td>
-                                    <td className="px-3 py-2 border-r border-gray-300 text-center">{row.role}</td>
-                                    <td className={`px-3 py-2 border-r border-gray-300 text-center font-bold font-mono ${row.arrivalStatus === 'Late' ? 'text-red-600' : 'text-black'}`}>{row.arrivalTime}</td>
-                                    <td className="px-3 py-2 border-r border-gray-300 text-center font-bold font-mono">{row.departureTime}</td>
-                                    <td className="px-3 py-2 border-r border-gray-300 text-center text-[10px]">{row.note || ''}</td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
-                
-                <div className="hidden print:flex justify-between items-start mt-20 px-12 break-inside-avoid">
-                    <div className="text-center w-64">
-                        <p className="text-sm font-bold mb-12">ลงชื่อ..........................................................</p>
-                        <p className="text-sm font-bold">เจ้าหน้าที่ฝ่ายบุคคล / ผู้ตรวจสอบ</p>
-                        <p className="text-xs text-gray-500 mt-2">วันที่......../......../........</p>
-                    </div>
-                    <div className="text-center w-64">
-                         <p className="text-sm font-bold mb-12">ลงชื่อ..........................................................</p>
-                        <p className="text-sm font-bold">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
-                        <p className="text-xs text-gray-500 mt-2">วันที่......../......../........</p>
-                    </div>
-                </div>
+                    ))}
+                </tbody>
+            </table>
+            <div className="flex justify-between mt-20 px-20">
+                <div className="text-center w-64"><div className="border-b-2 border-dotted border-black mb-2" /><p className="font-bold">ผู้ตรวจสอบ</p></div>
+                <div className="text-center w-64"><div className="border-b-2 border-dotted border-black mb-2" /><p className="font-bold">ผู้อำนวยการโรงเรียน</p></div>
             </div>
+            <button onClick={() => window.print()} className="mt-20 w-full py-5 bg-stone-900 text-white rounded-2xl font-black no-print hover:bg-rose-600 transition-all">พิมพ์รายงาน (A4) 🎅</button>
         </div>
       )}
     </div>
