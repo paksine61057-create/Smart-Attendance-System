@@ -24,7 +24,6 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
               record.type === 'personal_leave' ? 'ลากิจ' :
               record.type === 'other_leave' ? 'ลาอื่นๆ' :
               record.type === 'authorized_late' ? 'อนุญาตสาย' :
-              // Fix: Cast to string to prevent 'never' type error when all union members are already handled
               (record.type as string).replace('_', ' '),
       "Status": record.status,
       "Reason": record.reason || '-',
@@ -34,6 +33,7 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "imageBase64": record.imageUrl || "" 
     };
 
+    // Use text/plain to avoid preflight OPTIONS requests in no-cors mode
     await fetch(url, {
       method: 'POST',
       mode: 'no-cors',
@@ -195,7 +195,6 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     ts = isNaN(parsed) ? Number(rawTs) : parsed;
                 }
 
-                // Enhanced Type Mapping for cloud data
                 const rawType = String(getVal(['type', 'Type']) || "").toLowerCase();
                 let type: AttendanceType = 'arrival';
                 if (rawType.includes('มา')) type = 'arrival';
@@ -205,6 +204,14 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (rawType.includes('กิจ') || rawType === 'personal_leave' || rawType === 'personal leave') type = 'personal_leave';
                 else if (rawType.includes('อื่น') || rawType === 'other_leave' || rawType === 'other leave') type = 'other_leave';
                 else if (rawType.includes('อนุญาต') || rawType === 'authorized_late' || rawType === 'authorized late') type = 'authorized_late';
+
+                // Image handling from Cloud - try multiple column name variants
+                let cloudImage = getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64', 'หลักฐาน', 'รูปภาพ']);
+                
+                // If it's just a placeholder "-", treat as empty
+                if (cloudImage === "-" || (typeof cloudImage === 'string' && cloudImage.length < 20)) {
+                  cloudImage = "";
+                }
 
                 return {
                     id: getVal(['id']) || String(ts),
@@ -218,7 +225,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     location: { lat: 0, lng: 0 },
                     distanceFromBase: Number(getVal(['distance', 'Distance (m)']) || 0),
                     aiVerification: getVal(['aiVerification', 'AI Verification']) || "",
-                    imageUrl: getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64']) || ""
+                    imageUrl: cloudImage || ""
                 };
             });
         }

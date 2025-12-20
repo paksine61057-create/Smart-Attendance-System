@@ -115,7 +115,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const context = canvasRef.current.getContext('2d');
       const video = videoRef.current;
       if (context && video.videoWidth) {
-        const TARGET_WIDTH = 180; 
+        // Reduced size further to fit Google Sheets cell limits (50k chars)
+        const TARGET_WIDTH = 160; 
         const scale = TARGET_WIDTH / video.videoWidth;
         canvasRef.current.width = TARGET_WIDTH;
         canvasRef.current.height = video.videoHeight * scale;
@@ -124,7 +125,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         context.filter = filter?.css || 'none';
         context.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
         
-        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.35); 
+        // Lower quality (0.3) to ensure base64 string length < 50,000
+        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.3); 
         setStep('verifying');
         
         const [aiResult, loc] = await Promise.all([analyzeCheckInImage(imageBase64), validateLocation()]);

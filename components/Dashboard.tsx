@@ -20,7 +20,6 @@ const Dashboard: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   
-  // State for image preview with full data
   const [previewData, setPreviewData] = useState<{url: string, title: string, time: string, ai: string} | null>(null);
   
   const [aiSummary, setAiSummary] = useState<string>('');
@@ -43,7 +42,6 @@ const Dashboard: React.FC = () => {
 
   const staffList = useMemo(() => getAllStaff(), []);
 
-  // Sync data whenever selectedDate changes to ensure retrospective records are fetched
   const syncData = useCallback(async () => {
     setIsSyncing(true);
     try {
@@ -65,18 +63,19 @@ const Dashboard: React.FC = () => {
 
       const mergedMap = new Map<string, CheckInRecord>();
       
-      // Load cloud records first
       cloud.forEach(r => mergedMap.set(getSig(r), { ...r, syncedToSheets: true }));
       
-      // Overlay with local records (which might have higher quality thumbnails)
       validLocalRecords.forEach(l => {
         const sig = getSig(l);
         if (!mergedMap.has(sig)) {
           mergedMap.set(sig, l);
         } else {
           const existing = mergedMap.get(sig)!;
-          if (!existing.imageUrl && l.imageUrl) {
-            mergedMap.set(sig, { ...existing, imageUrl: l.imageUrl });
+          const cloudImg = existing.imageUrl || "";
+          const localImg = l.imageUrl || "";
+          
+          if (localImg.length > 100 && (cloudImg.length < 100 || cloudImg === "-")) {
+            mergedMap.set(sig, { ...existing, imageUrl: localImg });
           }
         }
       });
@@ -90,10 +89,16 @@ const Dashboard: React.FC = () => {
     } finally { setIsSyncing(false); }
   }, []);
 
-  // Effect to trigger sync on date change
   useEffect(() => { 
     syncData(); 
   }, [selectedDate, syncData]);
+
+  const formatImageUrl = (url: string | undefined): string => {
+    if (!url || url === "-" || url.length < 20) return "";
+    if (url.startsWith('data:')) return url;
+    // Assume it's a raw base64 string from cloud
+    return `data:image/jpeg;base64,${url}`;
+  };
 
   const filteredToday = useMemo(() => {
     return allRecords.filter(r => {
@@ -340,7 +345,7 @@ const Dashboard: React.FC = () => {
                 <p className="text-rose-500 text-xs font-black uppercase tracking-widest mt-1 bg-rose-50 inline-block px-3 py-1 rounded-full">{previewData.time}</p>
             </div>
             <div className="aspect-[4/5] w-full rounded-[2rem] overflow-hidden bg-slate-100 border-4 border-white shadow-inner mb-6 ring-1 ring-stone-200">
-                <img src={previewData.url.startsWith('data:') ? previewData.url : `data:image/jpeg;base64,${previewData.url}`} className="w-full h-full object-cover" alt="Verification" />
+                <img src={formatImageUrl(previewData.url)} className="w-full h-full object-cover" alt="Verification" onError={(e) => { (e.target as any).src = "https://via.placeholder.com/300?text=Image+Load+Error"; }} />
             </div>
             {previewData.ai && (
               <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 shadow-sm">
@@ -465,47 +470,52 @@ const Dashboard: React.FC = () => {
                         <tr>
                           <td colSpan={6} className="p-20 text-center text-stone-400 font-bold italic">ไม่พบข้อมูลการลงเวลาในวันที่เลือก ❄️</td>
                         </tr>
-                      ) : filteredToday.map(r => (
-                        <tr key={r.id} className="hover:bg-rose-50/20 transition-colors group">
-                          <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</td>
-                          <td className="p-5 font-bold text-stone-400">{r.staffId || '-'}</td>
-                          <td className="p-5">
-                            <div className="font-bold text-stone-800 whitespace-nowrap">{r.name}</div>
-                            <div className="text-[10px] text-stone-400 font-bold uppercase whitespace-nowrap">{r.role}</div>
-                          </td>
-                          <td className="p-5 text-center">
-                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-black whitespace-nowrap ${
-                              r.status.includes('Time') ? 'bg-emerald-100 text-emerald-700' : 
-                              r.status.includes('Late') ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
-                            }`}>{r.status === 'On Time' ? 'มาตรงเวลา' : r.status === 'Late' ? 'มาสาย' : r.status === 'Duty' ? 'ไปราชการ' : r.status.includes('Leave') ? 'ลา' : r.status}</span>
-                          </td>
-                          <td className="p-5 text-center">
-                            {r.imageUrl ? (
-                              <button 
-                                onClick={() => setPreviewData({
-                                    url: r.imageUrl!, 
-                                    title: r.name, 
-                                    time: new Date(r.timestamp).toLocaleTimeString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), 
-                                    ai: r.aiVerification || ''
-                                })} 
-                                className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-90 transition-all hover:ring-4 hover:ring-rose-100"
-                                title="กดเพื่อดูรูปขยายใหญ่"
-                              >
-                                <img 
-                                  src={r.imageUrl.startsWith('data:') ? r.imageUrl : `data:image/jpeg;base64,${r.imageUrl}`} 
-                                  className="w-full h-full object-cover opacity-80" 
-                                  alt="Thumbnail" 
-                                />
+                      ) : filteredToday.map(r => {
+                        const formattedUrl = formatImageUrl(r.imageUrl);
+                        const hasImage = formattedUrl !== "";
+                        return (
+                          <tr key={r.id} className="hover:bg-rose-50/20 transition-colors group">
+                            <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</td>
+                            <td className="p-5 font-bold text-stone-400">{r.staffId || '-'}</td>
+                            <td className="p-5">
+                              <div className="font-bold text-stone-800 whitespace-nowrap">{r.name}</div>
+                              <div className="text-[10px] text-stone-400 font-bold uppercase whitespace-nowrap">{r.role}</div>
+                            </td>
+                            <td className="p-5 text-center">
+                              <span className={`px-4 py-1.5 rounded-full text-[10px] font-black whitespace-nowrap ${
+                                r.status.includes('Time') ? 'bg-emerald-100 text-emerald-700' : 
+                                r.status.includes('Late') ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
+                              }`}>{r.status === 'On Time' ? 'มาตรงเวลา' : r.status === 'Late' ? 'มาสาย' : r.status === 'Duty' ? 'ไปราชการ' : r.status.includes('Leave') ? 'ลา' : r.status}</span>
+                            </td>
+                            <td className="p-5 text-center">
+                              {hasImage ? (
+                                <button 
+                                  onClick={() => setPreviewData({
+                                      url: r.imageUrl!, 
+                                      title: r.name, 
+                                      time: new Date(r.timestamp).toLocaleTimeString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), 
+                                      ai: r.aiVerification || ''
+                                  })} 
+                                  className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-90 transition-all hover:ring-4 hover:ring-rose-100"
+                                  title="กดเพื่อดูรูปขยายใหญ่"
+                                >
+                                  <img 
+                                    src={formattedUrl} 
+                                    className="w-full h-full object-cover opacity-90" 
+                                    alt="Thumbnail" 
+                                    onError={(e) => { (e.target as any).src = "https://via.placeholder.com/50?text=Error"; }}
+                                  />
+                                </button>
+                              ) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูปถ่าย</span>}
+                            </td>
+                            <td className="p-5 text-right">
+                              <button onClick={() => { if(confirm('ต้องการลบข้อมูลหรือไม่?')) deleteRecord(r).then(syncData) }} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                               </button>
-                            ) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูปถ่าย</span>}
-                          </td>
-                          <td className="p-5 text-right">
-                            <button onClick={() => { if(confirm('ต้องการลบข้อมูลหรือไม่?')) deleteRecord(r).then(syncData) }} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50">
-                              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -570,7 +580,7 @@ const Dashboard: React.FC = () => {
                                <td className="border border-stone-400 py-0.5 px-1 text-center whitespace-nowrap">
                                   <div className="flex items-center justify-center gap-1 group">
                                      {d.arrival}
-                                     {d.arrivalImg && (
+                                     {d.arrivalImg && d.arrivalImg.length > 50 && (
                                        <button 
                                           onClick={() => setPreviewData({url: d.arrivalImg!, title: d.name, time: `มาทำงาน: ${d.arrival}`, ai: d.arrivalAi})}
                                           className="no-print opacity-20 group-hover:opacity-100 transition-opacity text-rose-500 hover:scale-110 active:scale-95 cursor-pointer"
@@ -584,7 +594,7 @@ const Dashboard: React.FC = () => {
                                <td className="border border-stone-400 py-0.5 px-1 text-center whitespace-nowrap">
                                   <div className="flex items-center justify-center gap-1 group">
                                      {d.departure}
-                                     {d.departureImg && (
+                                     {d.departureImg && d.departureImg.length > 50 && (
                                        <button 
                                           onClick={() => setPreviewData({url: d.departureImg!, title: d.name, time: `กลับบ้าน: ${d.departure}`, ai: d.departureAi})}
                                           className="no-print opacity-20 group-hover:opacity-100 transition-opacity text-rose-500 hover:scale-110 active:scale-95 cursor-pointer"
