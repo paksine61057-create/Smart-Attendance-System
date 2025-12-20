@@ -30,9 +30,6 @@ const Dashboard: React.FC = () => {
   
   // Image Preview States
   const [previewImage, setPreviewImage] = useState<string | null>(null);
-  const [imageError, setImageError] = useState(false);
-
-  const [showAdminCheckInModal, setShowAdminCheckInModal] = useState(false);
 
   const syncData = useCallback(async () => {
       setIsSyncing(true);
@@ -40,11 +37,26 @@ const Dashboard: React.FC = () => {
           await syncUnsyncedRecords();
           const cloudRecords = await fetchGlobalRecords();
           const localRecords = getRecords();
+          
+          // ตรรกะการรวมข้อมูลที่ฉลาดขึ้น: 
+          // ถ้ารายการเดียวกันในเครื่องมีรูป แต่ใน Cloud ไม่มีรูป (หรือรูปเสีย/สั้นเกินไป) ให้ใช้ของในเครื่อง
           const mergedRecords = [...cloudRecords];
           const cloudSignatures = new Set(cloudRecords.map(r => `${r.timestamp}_${r.staffId}`));
+          
           localRecords.forEach(local => {
-              if (!cloudSignatures.has(`${local.timestamp}_${local.staffId}`)) mergedRecords.push(local);
+              const sig = `${local.timestamp}_${local.staffId}`;
+              if (!cloudSignatures.has(sig)) {
+                  mergedRecords.push(local);
+              } else {
+                  // ถ้ามีทั้งคู่ แต่ในเครื่องมีรูปที่ยาวกว่า (สมบูรณ์กว่า) ให้ใช้ของในเครื่อง
+                  const cloudIndex = mergedRecords.findIndex(r => `${r.timestamp}_${r.staffId}` === sig);
+                  const cloudRec = mergedRecords[cloudIndex];
+                  if (local.imageUrl && (!cloudRec.imageUrl || local.imageUrl.length > cloudRec.imageUrl.length)) {
+                      mergedRecords[cloudIndex] = local;
+                  }
+              }
           });
+          
           setAllRecords(mergedRecords.length > 0 ? mergedRecords : []);
       } catch (e) {
           setAllRecords(getRecords());
@@ -143,17 +155,6 @@ const Dashboard: React.FC = () => {
   const chartData = data.filter(d => d.value > 0);
   const COLORS = ['#10b981', '#ef4444', '#f59e0b', '#3b82f6']; 
 
-  const handleDownloadCSV = () => {
-    const csvContent = "data:text/csv;charset=utf-8," + exportToCSV(filteredRecords);
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `attendance_${selectedDate}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   const handleBrowserPrint = () => window.print();
 
   const handleOfficialPDF = () => {
@@ -198,9 +199,10 @@ const Dashboard: React.FC = () => {
   };
 
   const openImage = (url?: string) => {
-    if (url) {
-        setImageError(false);
-        setPreviewImage(url);
+    if (url && url.length > 20) {
+        // ตรวจสอบว่ามี Header ของ Base64 หรือไม่ ถ้าไม่มีให้เติม
+        const finalUrl = url.startsWith('data:') ? url : `data:image/jpeg;base64,${url}`;
+        setPreviewImage(finalUrl);
     }
   };
 
@@ -209,12 +211,6 @@ const Dashboard: React.FC = () => {
     const [y, m] = monthStr.split('-');
     const date = new Date(parseInt(y), parseInt(m) - 1);
     return date.toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
-  };
-
-  const handleForceSync = () => {
-      setPreviewImage(null);
-      setImageError(false);
-      syncData();
   };
 
   return (
@@ -245,50 +241,35 @@ const Dashboard: React.FC = () => {
       {/* Image Preview Modal (Lightbox) */}
       {previewImage && (
         <div 
-            className="fixed inset-0 bg-slate-900/90 backdrop-blur-md z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300 no-print"
-            onClick={() => { setPreviewImage(null); setImageError(false); }}
+            className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300 no-print"
+            onClick={() => setPreviewImage(null)}
         >
-            <div className="relative max-w-2xl w-full flex flex-col items-center">
+            <div className="relative max-w-2xl w-full flex flex-col items-center animate-in zoom-in duration-300">
                 <button 
-                    onClick={() => { setPreviewImage(null); setImageError(false); }}
-                    className="absolute -top-12 right-0 text-white hover:text-rose-400 transition-colors bg-white/10 p-2 rounded-full backdrop-blur-md"
+                    onClick={() => setPreviewImage(null)}
+                    className="absolute -top-14 right-0 text-white hover:text-rose-400 transition-colors bg-white/10 p-3 rounded-full backdrop-blur-md"
                 >
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
                 
-                <div className="p-2 bg-white rounded-[2rem] shadow-[0_0_80px_rgba(255,255,255,0.2)] border-8 border-rose-50 overflow-hidden relative min-h-[250px] flex items-center justify-center">
-                    {imageError ? (
-                        <div className="p-10 text-center flex flex-col items-center gap-4 bg-rose-50 rounded-[1.5rem]">
-                            <span className="text-6xl animate-bounce">⚠️</span>
-                            <div className="space-y-4">
-                                <h4 className="font-black text-rose-700 text-xl">พบข้อผิดพลาดของข้อมูลรูปภาพ</h4>
-                                <div className="text-rose-600 text-xs font-bold leading-relaxed max-w-[320px] space-y-3 text-left bg-white/50 p-5 rounded-xl border border-rose-100">
-                                    <p>● ข้อมูลนี้ถูกดึงมาจากระบบคลาวด์ (Cloud) และมีขนาดรหัส Base64 ยาวเกินขีดจำกัดเดิม (50,000 ตัวอักษร)</p>
-                                    <p>● ทำให้รหัสภาพถูก "ตัดตอน" ส่วนท้ายออกไป ข้อมูลรูปภาพจึงไม่สมบูรณ์และแสดงผลไม่ได้</p>
-                                    <p className="text-stone-800 font-black pt-2 border-t border-rose-100">💡 วิธีแก้: ระบบได้ปรับบีบอัดภาพใหม่ให้เล็กลงมากแล้วสำหรับรายการถัดไป เพื่อให้มั่นใจว่าจะบันทึกผ่านคลาวด์ได้ 100% ครับ</p>
-                                </div>
-                                <button 
-                                    onClick={(e) => { e.stopPropagation(); handleForceSync(); }}
-                                    className="px-6 py-3 bg-rose-600 text-white rounded-full font-black text-xs uppercase tracking-widest shadow-xl hover:bg-rose-700 transition-all active:scale-95"
-                                >
-                                    Force Sync Cloud ❄️
-                                </button>
-                            </div>
-                        </div>
-                    ) : (
-                        <img 
-                            src={previewImage} 
-                            alt="Check-in Evidence" 
-                            className="w-full h-auto rounded-[1.5rem] object-contain max-h-[75vh]" 
-                            onError={() => setImageError(true)}
-                            onClick={(e) => e.stopPropagation()}
-                        />
-                    )}
-                    <div className="absolute top-4 right-4 text-4xl animate-sway">🎅</div>
+                <div className="p-3 bg-white rounded-[2.5rem] shadow-[0_0_100px_rgba(225,29,72,0.3)] border-8 border-rose-100 overflow-hidden relative">
+                    <img 
+                        src={previewImage} 
+                        alt="Evidence" 
+                        className="w-full h-auto rounded-[1.8rem] object-contain max-h-[70vh] shadow-inner" 
+                        onClick={(e) => e.stopPropagation()}
+                        onError={(e) => {
+                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Image+Corrupted+on+Cloud';
+                        }}
+                    />
+                    <div className="absolute top-6 right-6 text-4xl animate-sway">🎅</div>
                 </div>
-                <p className="text-white font-black mt-6 tracking-widest uppercase bg-rose-600/80 px-6 py-2 rounded-full shadow-2xl">
-                    {imageError ? 'Cloud Sync Issue ❄️' : 'Evidence Found ❄️'}
-                </p>
+                <div className="mt-8 flex flex-col items-center gap-2">
+                    <p className="text-white font-black tracking-[0.2em] uppercase bg-rose-600 px-8 py-3 rounded-full shadow-2xl animate-pulse">
+                        Verified Evidence ❄️
+                    </p>
+                    <p className="text-rose-200 text-[10px] font-bold opacity-60 italic">หากภาพไม่ขึ้น แสดงว่าข้อมูลบนคลาวด์ถูกตัดทอน (เกิน 50k ตัวอักษร)</p>
+                </div>
             </div>
         </div>
       )}
@@ -304,12 +285,9 @@ const Dashboard: React.FC = () => {
           <p className="text-amber-200 text-sm font-bold mt-1 pl-5 drop-shadow-sm uppercase tracking-widest relative z-10">Happy New Year 2026 Monitor</p>
         </div>
         <div className="flex flex-wrap gap-4 items-center">
-             <button onClick={() => setShowAdminCheckInModal(true)} className="px-6 py-3.5 bg-rose-600 text-white rounded-2xl font-black text-sm shadow-[0_10px_30px_rgba(225,29,72,0.4)] hover:bg-rose-700 transition-all flex items-center gap-2 border-b-4 border-rose-800">
-                ลงเวลาแทน 🦌
-             </button>
-             <button onClick={syncData} disabled={isSyncing} className="px-5 py-3.5 bg-white/10 text-white border border-white/20 rounded-2xl font-black text-sm shadow-xl hover:bg-white/20 transition-all flex items-center gap-2 backdrop-blur-md">
-                <svg className={`w-4 h-4 ${isSyncing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357-2H15"></path></svg>
-                {isSyncing ? 'Syncing...' : 'Sync Cloud ❄️'}
+             <button onClick={syncData} disabled={isSyncing} className="px-6 py-4 bg-white/15 text-white border-2 border-white/20 rounded-2xl font-black text-sm shadow-xl hover:bg-white/25 transition-all flex items-center gap-3 backdrop-blur-md active:scale-95">
+                <svg className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357-2H15"></path></svg>
+                {isSyncing ? 'Refreshing...' : 'Refresh & Sync ❄️'}
              </button>
             <div className="relative">
                 {activeTab === 'monthly' ? (
@@ -441,9 +419,9 @@ const Dashboard: React.FC = () => {
                                     {(record.imageUrl && record.imageUrl.length > 20) ? (
                                         <button 
                                             onClick={() => openImage(record.imageUrl)} 
-                                            className="px-4 py-2 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-stone-800 transition-all flex items-center justify-center gap-2 mx-auto shadow-md hover:scale-105 active:scale-95"
+                                            className="px-6 py-2.5 bg-stone-900 text-white rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-600 transition-all flex items-center justify-center gap-2 mx-auto shadow-md active:scale-95"
                                         >
-                                            รูปภาพ
+                                            ดูรูปภาพ ❄️
                                         </button>
                                     ) : <span className="text-stone-300 font-black">-</span>}
                                 </td>
