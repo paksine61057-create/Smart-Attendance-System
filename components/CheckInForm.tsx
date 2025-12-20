@@ -81,16 +81,20 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   const validateLocation = async () => {
     const s = getSettings();
-    if (['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(attendanceType)) {
+    const anywhereTypes: AttendanceType[] = ['duty', 'sick_leave', 'personal_leave', 'other_leave'];
+    
+    if (anywhereTypes.includes(attendanceType)) {
         try {
             const pos = await getCurrentPosition();
             return { lat: pos.coords.latitude, lng: pos.coords.longitude };
         } catch { return { lat: 0, lng: 0 }; }
     }
+
     if (!s?.officeLocation) {
       setLocationError("ระบบยังไม่ได้ตั้งค่าพิกัดจุดเช็คอิน");
       return false;
     }
+
     try {
       const pos = await getCurrentPosition();
       const dist = getDistanceFromLatLonInMeters(pos.coords.latitude, pos.coords.longitude, s.officeLocation.lat, s.officeLocation.lng);
@@ -124,19 +128,30 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         setStep('verifying');
         
         const [aiResult, loc] = await Promise.all([analyzeCheckInImage(imageBase64), validateLocation()]);
-        if (!loc && !['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(attendanceType)) {
+        
+        const anywhereTypes: AttendanceType[] = ['duty', 'sick_leave', 'personal_leave', 'other_leave'];
+        if (!loc && !anywhereTypes.includes(attendanceType)) {
             setStep('camera'); 
             return;
         }
 
         const now = new Date();
         let status: any = 'Normal';
+        
         if (attendanceType === 'arrival') {
             const limit = new Date(); limit.setHours(8, 1, 0, 0);
             status = now >= limit ? 'Late' : 'On Time';
         } else if (attendanceType === 'departure') {
             const limit = new Date(); limit.setHours(16, 0, 0, 0);
             status = now < limit ? 'Early Leave' : 'Normal';
+        } else if (attendanceType === 'authorized_late') {
+            status = 'Authorized Late';
+        } else if (attendanceType === 'duty') {
+            status = 'Duty';
+        } else if (attendanceType === 'sick_leave') {
+            status = 'Sick Leave';
+        } else if (attendanceType === 'personal_leave') {
+            status = 'Personal Leave';
         } else {
             status = attendanceType.replace('_', ' ').split(' ').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
         }
@@ -165,6 +180,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   }, [currentUser, attendanceType, reason, currentDistance, activeFilterId, onSuccess]);
 
   if (step === 'info') {
+    const isSpecialType = ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(attendanceType);
+
     return (
       <div className="max-w-xl mx-auto relative mt-4">
         <div className="absolute -top-12 -left-12 text-7xl animate-float opacity-90 z-20 pointer-events-none">⛄</div>
@@ -201,7 +218,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
               {currentUser && (
                 <div className="animate-in slide-in-from-bottom-4 duration-700">
-                    <div className="bg-white/10 p-5 rounded-3xl border border-white/20 backdrop-blur-xl mb-8 flex items-center gap-4 shadow-xl">
+                    <div className="bg-white/10 p-5 rounded-3xl border border-white/20 backdrop-blur-xl mb-6 flex items-center gap-4 shadow-xl">
                         <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 border-4 border-white flex items-center justify-center font-black text-2xl shadow-lg relative overflow-hidden text-white">
                             {currentUser.name.charAt(0)}
                         </div>
@@ -210,21 +227,65 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                             <p className="text-rose-100 text-sm font-bold opacity-90">{currentUser.role} 🎁</p>
                         </div>
                     </div>
-                    <div className="space-y-5">
-                        <div className="grid grid-cols-2 gap-5">
-                            <button onClick={() => setAttendanceType('arrival')} className={`p-5 rounded-[2rem] border-4 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${attendanceType === 'arrival' ? 'bg-white border-emerald-400 text-emerald-800 scale-105 shadow-2xl' : 'bg-black/30 border-white/10 text-white/80'}`}>
-                                <span className="font-black text-xl">มาทำงาน</span>
-                            </button>
-                            <button onClick={() => setAttendanceType('departure')} className={`p-5 rounded-[2rem] border-4 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${attendanceType === 'departure' ? 'bg-white border-amber-400 text-amber-800 scale-105 shadow-2xl' : 'bg-black/30 border-white/10 text-white/80'}`}>
-                                <span className="font-black text-xl">กลับบ้าน</span>
-                            </button>
+                    
+                    <div className="space-y-6">
+                        {/* Group 1: Normal Operation - Improved Layout for older staff */}
+                        <div className="space-y-4">
+                           <p className="text-[9px] font-black text-white/50 uppercase tracking-widest text-left ml-2">การปฏิบัติงานปกติ (ตรวจสอบพิกัดโรงเรียน)</p>
+                           <div className="space-y-3">
+                               {/* Row 1: Main actions side-by-side for maximum size */}
+                               <div className="grid grid-cols-2 gap-4">
+                                   <button onClick={() => setAttendanceType('arrival')} className={`p-6 rounded-[2rem] border-4 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${attendanceType === 'arrival' ? 'bg-white border-emerald-400 text-emerald-800 scale-105 shadow-2xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
+                                       <span className="text-2xl">🌅</span>
+                                       <span className="font-black text-base">มาทำงาน</span>
+                                   </button>
+                                   <button onClick={() => setAttendanceType('departure')} className={`p-6 rounded-[2rem] border-4 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${attendanceType === 'departure' ? 'bg-white border-rose-400 text-rose-800 scale-105 shadow-2xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
+                                       <span className="text-2xl">🏠</span>
+                                       <span className="font-black text-base">กลับบ้าน</span>
+                                   </button>
+                               </div>
+                               {/* Row 2: Authorized late on its own row for clarity */}
+                               <button onClick={() => setAttendanceType('authorized_late')} className={`w-full p-5 rounded-[2rem] border-4 transition-all duration-300 flex items-center justify-center gap-4 ${attendanceType === 'authorized_late' ? 'bg-white border-amber-400 text-amber-800 scale-105 shadow-2xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
+                                   <span className="text-2xl">🕒</span>
+                                   <div className="text-left">
+                                      <span className="font-black text-base block">ขออนุญาตเข้าสาย</span>
+                                      <span className="text-[9px] font-bold opacity-70 uppercase tracking-tighter">(กรณีได้รับอนุญาตจากผู้อำนวยการแล้ว)</span>
+                                   </div>
+                               </button>
+                           </div>
                         </div>
-                        {((attendanceType === 'departure' && new Date().getHours() < 16) || (attendanceType === 'arrival' && new Date().getHours() >= 8)) && (
-                            <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="w-full p-4 bg-white border-4 border-amber-200 rounded-2xl outline-none text-stone-800 font-bold shadow-lg" placeholder="ระบุเหตุผลการมาสาย/กลับก่อน..." rows={2} />
+
+                        {/* Group 2: Leave & Duty */}
+                        <div className="space-y-3 pt-2">
+                           <p className="text-[9px] font-black text-white/50 uppercase tracking-widest text-left ml-2">ลา / ไปราชการ (ลงเวลาที่ไหนก็ได้)</p>
+                           <div className="grid grid-cols-3 gap-3">
+                               <button onClick={() => setAttendanceType('duty')} className={`p-4 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${attendanceType === 'duty' ? 'bg-white border-blue-400 text-blue-800 scale-105 shadow-xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
+                                   <span className="text-lg">🏛️</span>
+                                   <span className="font-black text-[10px]">ไปราชการ</span>
+                               </button>
+                               <button onClick={() => setAttendanceType('sick_leave')} className={`p-4 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${attendanceType === 'sick_leave' ? 'bg-white border-orange-400 text-orange-800 scale-105 shadow-xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
+                                   <span className="text-lg">🤒</span>
+                                   <span className="font-black text-[10px]">ลาป่วย</span>
+                               </button>
+                               <button onClick={() => setAttendanceType('personal_leave')} className={`p-4 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${attendanceType === 'personal_leave' ? 'bg-white border-red-400 text-red-800 scale-105 shadow-xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
+                                   <span className="text-lg">🙏</span>
+                                   <span className="font-black text-[10px]">ลากิจ</span>
+                               </button>
+                           </div>
+                        </div>
+
+                        {/* Reason Textarea - Shown for special types or late/early conditions */}
+                        {(isSpecialType || (attendanceType === 'departure' && new Date().getHours() < 16) || (attendanceType === 'arrival' && new Date().getHours() >= 8)) && (
+                            <div className="animate-in fade-in zoom-in">
+                                <label className="block text-[9px] font-black text-amber-200 uppercase tracking-widest text-left ml-2 mb-2">โปรดระบุเหตุผล / รายละเอียด</label>
+                                <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="w-full p-4 bg-white border-4 border-amber-200 rounded-2xl outline-none text-stone-800 font-bold shadow-lg focus:ring-4 focus:ring-amber-400/30 transition-all" placeholder="พิมพ์เหตุผลที่นี่..." rows={2} />
+                            </div>
                         )}
+
                         {locationError && <p className="text-rose-200 text-xs font-black animate-bounce bg-rose-900/40 p-3 rounded-xl border border-rose-400/30">📍 {locationError}</p>}
-                        <button onClick={() => { setLocationError(''); setIsValidating(true); validateLocation().then(l => { setIsValidating(false); if(l) setStep('camera'); }); }} disabled={isValidating} className="w-full py-5 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white rounded-[2rem] font-black text-lg shadow-2xl active:scale-95 transition-all animate-pulse-ring-festive">
-                            {isValidating ? 'ตรวจสอบพิกัด... ❄️' : 'ถ่ายภาพยืนยันตัวตน 🎄'}
+                        
+                        <button onClick={() => { setLocationError(''); setIsValidating(true); validateLocation().then(l => { setIsValidating(false); if(l) setStep('camera'); }); }} disabled={isValidating} className="w-full py-5 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all animate-pulse-ring-festive mt-4">
+                            {isValidating ? 'กำลังค้นหาพิกัด... ❄️' : 'ถ่ายรูปหน้าสวยๆ เพื่อบันทึก 📸'}
                         </button>
                     </div>
                 </div>
@@ -255,7 +316,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
           </button>
         </div>
         <div className="absolute top-8 left-0 right-0 flex justify-center">
-            <div className="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">DISTANCE: {currentDistance ? Math.round(currentDistance) : '...'} M ❄️</div>
+            <div className="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
+                {['duty', 'sick_leave', 'personal_leave'].includes(attendanceType) ? 'พิกัดนอกสถานที่ OK 📍' : `ระยะห่าง: ${currentDistance ? Math.round(currentDistance) : '...'} เมตร ❄️`}
+            </div>
         </div>
       </div>
     );
@@ -264,16 +327,16 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   if (step === 'verifying') return (
     <div className="max-w-md mx-auto p-20 bg-white/10 backdrop-blur-xl rounded-[3rem] text-white text-center flex flex-col items-center justify-center border-4 border-white/20 shadow-2xl">
         <div className="w-24 h-24 border-8 border-t-amber-400 rounded-full animate-spin mb-8" />
-        <h3 className="text-3xl font-black">AI Santa Verifying...</h3>
-        <p className="font-bold opacity-60 mt-2 uppercase tracking-widest">Checking your festive face ❄️</p>
+        <h3 className="text-3xl font-black text-amber-200">ตรวจสอบใบหน้า...</h3>
+        <p className="font-bold opacity-60 mt-2 uppercase tracking-widest text-xs">AI กำลังวิเคราะห์ภาพถ่ายของคุณ ❄️</p>
     </div>
   );
   
   if (step === 'result') return (
     <div className="max-w-md mx-auto p-20 bg-emerald-500 rounded-[3rem] text-white text-center flex flex-col items-center justify-center shadow-2xl animate-in zoom-in border-8 border-white">
         <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mb-8 animate-bounce"><svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
-        <h3 className="text-5xl font-black">DONE! 🎉</h3>
-        <p className="font-black text-xl mt-4 opacity-90 uppercase tracking-widest underline decoration-wavy">Verified 🦌</p>
+        <h3 className="text-5xl font-black">สำเร็จแล้ว!</h3>
+        <p className="font-black text-xl mt-4 opacity-90 uppercase tracking-widest underline decoration-wavy">บันทึกข้อมูลเรียบร้อย 🦌</p>
     </div>
   );
   
