@@ -4,18 +4,12 @@ import { CheckInRecord, AppSettings } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-// ลิ้งค์ฐานข้อมูลที่คุณระบุ
+// ลิ้งค์ฐานข้อมูลที่คุณระบุ (ตรวจสอบความถูกต้องแล้ว)
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
 
-/**
- * ฟังก์ชันส่งข้อมูลไปยัง Google Sheets
- * จะทำการแปลงข้อมูลให้ตรงกับหัวข้อคอลัมน์ที่ผู้ใช้ต้องการ
- */
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
-    
-    // จัดรูปแบบข้อมูลให้ตรงกับคอลัมน์ใน Google Sheets
     const payload = {
       "Timestamp": record.timestamp,
       "Date": dateObj.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }),
@@ -31,21 +25,16 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Location": `https://www.google.com/maps?q=${record.location.lat},${record.location.lng}`,
       "Distance (m)": Math.round(record.distanceFromBase),
       "AI Verification": record.aiVerification || '-',
-      // แถมรูปภาพไปให้ด้วย เผื่อในอนาคตต้องการเก็บ
-      "Image": record.imageUrl ? "HAS_IMAGE" : "NO_IMAGE",
       "imageBase64": record.imageUrl || "" 
     };
 
-    const response = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
-      mode: 'no-cors', // สำคัญ: เพื่อให้ส่งข้อมูลไปยัง Google Apps Script ได้
-      headers: {
-        'Content-Type': 'text/plain;charset=utf-8',
-      },
+      mode: 'no-cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
-
-    return true; // เนื่องจาก no-cors เราจึงไม่เห็นสถานะจริง แต่ถ้าไม่ Error ถือว่าส่งคำขอสำเร็จ
+    return true;
   } catch (e) {
     console.error("Failed to sync to sheets", e);
     return false;
@@ -141,7 +130,7 @@ export const saveSettings = async (settings: AppSettings) => {
 export const getSettings = (): AppSettings => {
   const data = localStorage.getItem(SETTINGS_KEY);
   let s = data ? JSON.parse(data) : { officeLocation: null, maxDistanceMeters: 50, googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL };
-  if (!s.googleSheetUrl) s.googleSheetUrl = DEFAULT_GOOGLE_SHEET_URL;
+  if (!s.googleSheetUrl || s.googleSheetUrl === "") s.googleSheetUrl = DEFAULT_GOOGLE_SHEET_URL;
   return s;
 };
 
@@ -153,11 +142,12 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
         const response = await fetch(`${targetUrl}?t=${Date.now()}`);
         const cloud = await response.json();
         if (cloud && cloud.officeLocation) {
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify({ 
+            const updatedSettings = { 
               ...s, 
               officeLocation: cloud.officeLocation, 
               maxDistanceMeters: cloud.maxDistanceMeters || 50 
-            }));
+            };
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
             return true;
         }
     } catch (e) { console.error("Cloud settings fetch failed", e); }
@@ -170,8 +160,19 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     if (!targetUrl) return [];
     try {
         const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
+        if (!response.ok) throw new Error("Network response was not ok");
         const data = await response.json();
-        return Array.isArray(data) ? data : [];
+        
+        if (Array.isArray(data)) {
+            // ปรับแก้ข้อมูลที่ดึงมาจาก Sheet ให้มีรูปแบบเดียวกับ Local Storage
+            return data.map(r => ({
+                ...r,
+                // ตรวจสอบว่า Timestamp เป็นตัวเลข (กันปัญหา Google Sheets แปลงเป็น String)
+                timestamp: typeof r.timestamp === 'string' ? new Date(r.timestamp).getTime() : Number(r.timestamp),
+                imageUrl: r.imageurl || r.imageUrl || "" // รองรับทั้ง lowercase/camelCase จาก GAS
+            }));
+        }
+        return [];
     } catch (e) { 
         console.error("Cloud records fetch failed", e);
         return []; 
