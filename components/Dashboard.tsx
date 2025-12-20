@@ -196,7 +196,7 @@ const Dashboard: React.FC = () => {
     });
   }, [allRecords, selectedDate, staffList]);
 
-  // Handle Export PDF with Compact Rows and Inset Borders
+  // Handle Export PDF - Strictly 1 Page
   const handleExportPDF = (type: 'daily' | 'monthly') => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const data = type === 'daily' ? officialData : monthlyLatenessData;
@@ -245,17 +245,27 @@ const Dashboard: React.FC = () => {
         },
         columnStyles: {
             0: { cellWidth: 10 },
-            1: { halign: 'left', cellWidth: 32, overflow: 'hidden' }, // บีบรายชื่อ (32มม) และไม่ตัดบรรทัด
-            2: { halign: 'center', cellWidth: 30, overflow: 'hidden' }, // จัดกึ่งกลางตำแหน่ง (30มม)
+            1: { halign: 'left', cellWidth: 32, overflow: 'hidden' }, 
+            2: { halign: 'center', cellWidth: 30, overflow: 'hidden' }, 
             3: { cellWidth: 14 },
             4: { cellWidth: 14 }
-            // คอลัมน์ที่เหลือ (หมายเหตุ / วันที่) จะยาวขึ้นโดยอัตโนมัติ
         },
-        margin: { left: 15, right: 15, top: 15, bottom: 15 }, 
+        margin: { left: 15, right: 15, top: 15, bottom: 25 }, // เว้นที่ด้านล่างให้ลายเซ็น
+        pageBreak: 'avoid', // พยายามไม่ให้ขึ้นหน้าใหม่ในแต่ละแถว
     });
 
+    // Enforce 1-Page Limit: ลบหน้าที่เกินออกทั้งหมด (ถ้ามี)
+    let pageCount = doc.getNumberOfPages();
+    while (pageCount > 1) {
+        doc.deletePage(pageCount);
+        pageCount = doc.getNumberOfPages();
+    }
+
+    // Draw Signature - วาดในหน้าแรกหน้าเดียว
+    doc.setPage(1); 
     const finalY = (doc as any).lastAutoTable.finalY;
-    const sigY = Math.min(finalY + 10, 280); 
+    // หากตารางยาวเกินไป ให้วางลายเซ็นไว้ที่ตำแหน่งเกือบล่างสุดของหน้า 1
+    const sigY = Math.min(finalY + 8, 282); 
     
     doc.setFontSize(9);
     doc.text('(ลงชื่อ)...........................................................', 68, sigY, { align: 'center' });
