@@ -4,7 +4,7 @@ import { CheckInRecord, AppSettings } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-// ลิ้งค์ฐานข้อมูลที่คุณระบุ (ตรวจสอบความถูกต้องแล้ว)
+// URL พื้นฐานที่ผู้ใช้ระบุ
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
@@ -150,7 +150,7 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
             return true;
         }
-    } catch (e) { console.error("Cloud settings fetch failed", e); }
+    } catch (e) { console.debug("Cloud settings not found, using local."); }
     return false;
 }
 
@@ -160,21 +160,38 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     if (!targetUrl) return [];
     try {
         const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
-        if (!response.ok) throw new Error("Network response was not ok");
+        if (!response.ok) throw new Error("Google Sheets response was not ok");
         const data = await response.json();
         
         if (Array.isArray(data)) {
-            // ปรับแก้ข้อมูลที่ดึงมาจาก Sheet ให้มีรูปแบบเดียวกับ Local Storage
-            return data.map(r => ({
-                ...r,
-                // ตรวจสอบว่า Timestamp เป็นตัวเลข (กันปัญหา Google Sheets แปลงเป็น String)
-                timestamp: typeof r.timestamp === 'string' ? new Date(r.timestamp).getTime() : Number(r.timestamp),
-                imageUrl: r.imageurl || r.imageUrl || "" // รองรับทั้ง lowercase/camelCase จาก GAS
-            }));
+            return data.map((r: any) => {
+                // จัดการ Timestamp ให้เป็นตัวเลขเสมอ
+                let ts = r.timestamp;
+                if (typeof ts === 'string') {
+                    const parsed = new Date(ts).getTime();
+                    ts = isNaN(parsed) ? Number(ts) : parsed;
+                }
+
+                return {
+                    id: r.id || String(ts),
+                    staffId: r.staffId || r.staffid || "",
+                    name: r.name || "",
+                    role: r.role || "",
+                    timestamp: Number(ts),
+                    type: (r.type || "arrival").toLowerCase().includes("มา") ? "arrival" : 
+                          (r.type || "").toLowerCase().includes("กลับ") ? "departure" : r.type,
+                    status: r.status || "Normal",
+                    reason: r.reason || "",
+                    location: r.location || { lat: 0, lng: 0 },
+                    distanceFromBase: Number(r.distanceFromBase || 0),
+                    aiVerification: r.aiVerification || "",
+                    imageUrl: r.imageUrl || r.imageurl || r.image || ""
+                };
+            });
         }
         return [];
     } catch (e) { 
-        console.error("Cloud records fetch failed", e);
+        console.error("Cloud fetch failed:", e);
         return []; 
     }
 };
