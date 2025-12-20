@@ -28,7 +28,7 @@ const Dashboard: React.FC = () => {
   const [officialReportData, setOfficialReportData] = useState<any[]>([]);
   const [monthlyReportData, setMonthlyReportData] = useState<any[]>([]);
   
-  // Image Preview States
+  // Image Preview State
   const [previewImage, setPreviewImage] = useState<string | null>(null);
 
   const syncData = useCallback(async () => {
@@ -38,8 +38,6 @@ const Dashboard: React.FC = () => {
           const cloudRecords = await fetchGlobalRecords();
           const localRecords = getRecords();
           
-          // ตรรกะการรวมข้อมูลที่ฉลาดขึ้น: 
-          // ถ้ารายการเดียวกันในเครื่องมีรูป แต่ใน Cloud ไม่มีรูป (หรือรูปเสีย/สั้นเกินไป) ให้ใช้ของในเครื่อง
           const mergedRecords = [...cloudRecords];
           const cloudSignatures = new Set(cloudRecords.map(r => `${r.timestamp}_${r.staffId}`));
           
@@ -48,11 +46,15 @@ const Dashboard: React.FC = () => {
               if (!cloudSignatures.has(sig)) {
                   mergedRecords.push(local);
               } else {
-                  // ถ้ามีทั้งคู่ แต่ในเครื่องมีรูปที่ยาวกว่า (สมบูรณ์กว่า) ให้ใช้ของในเครื่อง
+                  // [SMART MERGE] ถ้ารูปในเครื่องสมบูรณ์กว่าคลาวด์ ให้ใช้รูปในเครื่องเสมอ
                   const cloudIndex = mergedRecords.findIndex(r => `${r.timestamp}_${r.staffId}` === sig);
                   const cloudRec = mergedRecords[cloudIndex];
-                  if (local.imageUrl && (!cloudRec.imageUrl || local.imageUrl.length > cloudRec.imageUrl.length)) {
-                      mergedRecords[cloudIndex] = local;
+                  
+                  // ถ้ารายการคลาวด์ไม่มีรูป แต่ในเครื่องมี ให้สลับ
+                  if (local.imageUrl && local.imageUrl.length > 20) {
+                      if (!cloudRec.imageUrl || local.imageUrl.length > cloudRec.imageUrl.length) {
+                          mergedRecords[cloudIndex] = { ...cloudRec, imageUrl: local.imageUrl };
+                      }
                   }
               }
           });
@@ -200,7 +202,7 @@ const Dashboard: React.FC = () => {
 
   const openImage = (url?: string) => {
     if (url && url.length > 20) {
-        // ตรวจสอบว่ามี Header ของ Base64 หรือไม่ ถ้าไม่มีให้เติม
+        // [RESOLVED] เติม MIME Header ถ้าหายไป เพื่อให้รูปภาพแสดงผลได้
         const finalUrl = url.startsWith('data:') ? url : `data:image/jpeg;base64,${url}`;
         setPreviewImage(finalUrl);
     }
@@ -241,7 +243,7 @@ const Dashboard: React.FC = () => {
       {/* Image Preview Modal (Lightbox) */}
       {previewImage && (
         <div 
-            className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300 no-print"
+            className="fixed inset-0 bg-slate-900/95 backdrop-blur-xl z-[100] flex items-center justify-center p-4 no-print"
             onClick={() => setPreviewImage(null)}
         >
             <div className="relative max-w-2xl w-full flex flex-col items-center animate-in zoom-in duration-300">
@@ -252,24 +254,25 @@ const Dashboard: React.FC = () => {
                     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                 </button>
                 
-                <div className="p-3 bg-white rounded-[2.5rem] shadow-[0_0_100px_rgba(225,29,72,0.3)] border-8 border-rose-100 overflow-hidden relative">
+                <div className="p-3 bg-white rounded-[2.5rem] shadow-[0_0_100px_rgba(225,29,72,0.4)] border-8 border-rose-100 overflow-hidden relative">
                     <img 
                         src={previewImage} 
                         alt="Evidence" 
-                        className="w-full h-auto rounded-[1.8rem] object-contain max-h-[70vh] shadow-inner" 
+                        className="w-full h-auto rounded-[1.8rem] object-contain max-h-[75vh]" 
                         onClick={(e) => e.stopPropagation()}
                         onError={(e) => {
-                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Image+Corrupted+on+Cloud';
+                            // ถ้าโหลดภาพไม่ขึ้นจริงๆ ให้แสดงตัวบอก
+                            (e.target as HTMLImageElement).src = 'https://via.placeholder.com/400x300?text=Image+Corrupted+or+Incomplete';
                         }}
                     />
                     <div className="absolute top-6 right-6 text-4xl animate-sway">🎅</div>
                 </div>
-                <div className="mt-8 flex flex-col items-center gap-2">
-                    <p className="text-white font-black tracking-[0.2em] uppercase bg-rose-600 px-8 py-3 rounded-full shadow-2xl animate-pulse">
-                        Verified Evidence ❄️
-                    </p>
-                    <p className="text-rose-200 text-[10px] font-bold opacity-60 italic">หากภาพไม่ขึ้น แสดงว่าข้อมูลบนคลาวด์ถูกตัดทอน (เกิน 50k ตัวอักษร)</p>
-                </div>
+                <p className="mt-6 text-white font-black bg-rose-600 px-8 py-3 rounded-full shadow-2xl tracking-widest uppercase animate-pulse">
+                   Verified Evidence Found ❄️
+                </p>
+                <p className="text-rose-200 text-[10px] mt-2 font-bold opacity-60">
+                   *รหัสรหัสภาพถูกบันทึกที่ช่วงความยาว 12k - 16k ตัวอักษร
+                </p>
             </div>
         </div>
       )}
