@@ -11,11 +11,18 @@ function App() {
   const [adminPassword, setAdminPassword] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [isReady, setIsReady] = useState(false);
 
   // Sync settings on load
   useEffect(() => {
     const initConfig = async () => {
-        await syncSettingsFromCloud();
+        try {
+            await syncSettingsFromCloud();
+        } catch (e) {
+            console.error("Initial sync failed", e);
+        } finally {
+            setIsReady(true);
+        }
     };
     initConfig();
   }, []);
@@ -36,6 +43,14 @@ function App() {
     setIsAdmin(false);
     setShowSettings(false);
   };
+
+  if (!isReady) {
+    return (
+        <div className="min-h-screen bg-slate-900 flex items-center justify-center">
+            <div className="text-white font-bold animate-pulse">กำลังโหลดข้อมูลปี 2026... ❄️</div>
+        </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans relative overflow-x-hidden text-slate-800">
