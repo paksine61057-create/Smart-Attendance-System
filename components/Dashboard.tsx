@@ -171,32 +171,54 @@ const Dashboard: React.FC = () => {
   const monthlyLatenessData = useMemo(() => {
     const [year, month] = selectedDate.split('-').map(Number);
     const currentMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+    
+    // กรอง Records ทั้งหมดที่อยู่ในเดือนนี้
     const monthlyRecords = allRecords.filter(r => {
         const d = new Date(r.timestamp);
         const prefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
         return prefix === currentMonthPrefix;
     });
+
     const now = new Date();
     const isCurrentMonth = (year === now.getFullYear() && (month - 1) === now.getMonth());
     const lastDayToCount = isCurrentMonth ? now.getDate() : new Date(year, month, 0).getDate();
+    
+    // หา "วันทำงานจริง" (Working Days)
     const workingDays: string[] = [];
     for (let d = 1; d <= lastDayToCount; d++) {
       const dateObj = new Date(year, month - 1, d);
       if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
+      
       const dayOfWeek = dateObj.getDay();
       const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
       const holiday = getHoliday(dateObj);
+      
+      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      
+      // เงื่อนไข: ไม่ใช่วันเสาร์อาทิตย์ และ ไม่ใช่วันหยุดพิเศษ
       if (!isWeekend && !holiday) {
-        workingDays.push(`${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+        // เงื่อนไขเพิ่มเติม: จะต้องมีอย่างน้อย 1 คนลงเวลาในวันนั้น (พิสูจน์ว่าเป็นวันทำงานจริง ไม่ใช่วันหยุดฉุกเฉิน)
+        const hasAnyRecordToday = monthlyRecords.some(r => {
+           const rd = new Date(r.timestamp);
+           const rDateStr = `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}`;
+           return rDateStr === dateStr;
+        });
+        
+        if (hasAnyRecordToday) {
+            workingDays.push(dateStr);
+        }
       }
     }
+
     return staffList.map((staff, index) => {
       const staffRecords = monthlyRecords.filter(r => r.staffId === staff.id);
       const lateRecords = staffRecords.filter(r => r.status === 'Late');
+      
       const lateDates = lateRecords.map(r => {
         const d = new Date(r.timestamp);
         return d.toLocaleDateString('th-TH', { day: 'numeric', month: 'short' });
       }).join(', ');
+
       let absentCount = 0;
       workingDays.forEach(wDate => {
         const hasArrivalOrEquivalent = staffRecords.some(r => {
@@ -206,6 +228,7 @@ const Dashboard: React.FC = () => {
         });
         if (!hasArrivalOrEquivalent) absentCount++;
       });
+
       return {
         no: index + 1,
         name: staff.name,
@@ -323,7 +346,6 @@ const Dashboard: React.FC = () => {
     await saveRecord(record);
     setManualReason('');
     
-    // สำคัญ: อัปเดตวันที่หลักของระบบเพื่อให้ข้อมูลที่บันทึกโชว์ทันที
     setSelectedDate(manualDate);
     
     alert(`บันทึกข้อมูลเรียบร้อยสำหรับวันที่ ${new Date(manualDate).toLocaleDateString('th-TH')}`);
@@ -364,8 +386,8 @@ const Dashboard: React.FC = () => {
         {[
           { id: 'today', label: 'รายการประจำวัน', emoji: '📅' },
           { id: 'official', label: 'สรุปการปฏิบัติงาน', emoji: '📜' },
-          { id: 'monthly', label: 'สรุปมาสายรายเดือน', emoji: '📊' },
-          { id: 'manual', label: 'ลงเวลาแทนบุคลากร', emoji: '✍️' }
+          { id: 'monthly', label: 'สรุปรายเดือน', emoji: '📊' },
+          { id: 'manual', label: 'ลงเวลาแทน', emoji: '✍️' }
         ].map(tab => (
           <button
             key={tab.id}
@@ -563,7 +585,7 @@ const Dashboard: React.FC = () => {
              <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[6mm] md:px-[15mm] py-[5mm] md:py-[8mm] min-h-[297mm] border border-stone-200">
                 <div className="flex flex-col items-center text-center mb-5">
                    <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-10 h-10 md:w-14 md:h-14 object-contain mb-1.5" />
-                   <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">รายงานการมาสายของครูและบุคลากรทางการศึกษา</h1>
+                   <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">รายงานการปฏิบัติงานของครูและบุคลากรทางการศึกษา</h1>
                    <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
                    <h2 className="text-[9px] font-bold text-stone-700">ประจำเดือน {new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</h2>
                 </div>
