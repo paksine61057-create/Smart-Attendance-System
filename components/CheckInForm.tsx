@@ -186,21 +186,27 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const video = videoRef.current;
       
       if (context && video.videoWidth) {
-        // FIX: ปรับขนาดภาพให้เล็กลงเพื่อความเสถียรของ Cloud (รหัสภาพต้องไม่เกิน 50,000 ตัวอักษร)
-        const MAX_WIDTH = 320;
-        const scale = MAX_WIDTH / video.videoWidth;
-        const width = MAX_WIDTH;
+        // [IMPORTANT] ปรับปรุงขนาดภาพให้เป็น "Safe-Resolution" (280px)
+        // เพื่อให้รหัส Base64 มีความยาวไม่เกิน 50,000 อักขระ ป้องกัน Google Sheets ตัดทอนข้อมูล
+        const TARGET_WIDTH = 280;
+        const scale = TARGET_WIDTH / video.videoWidth;
+        const width = TARGET_WIDTH;
         const height = video.videoHeight * scale;
 
         canvasRef.current.width = width;
         canvasRef.current.height = height;
         
+        // ล้างค่าฟิลเตอร์ก่อนวาดใหม่
+        context.filter = 'none';
         const activeFilter = CAMERA_FILTERS.find(f => f.id === activeFilterId);
-        context.filter = activeFilter && activeFilter.id !== 'normal' ? activeFilter.css : 'none';
+        if (activeFilter && activeFilter.id !== 'normal') {
+          context.filter = activeFilter.css;
+        }
         
         context.drawImage(video, 0, 0, width, height);
-        // FIX: ปรับลดคุณภาพเหลือ 0.3 เพื่อความปลอดภัยของข้อมูล
-        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.3);
+        
+        // ใช้คุณภาพ 0.35 เพื่อให้ภาพยังดูดีแต่ขนาดไฟล์เล็กมากพอที่จะบันทึกได้อย่างปลอดภัย
+        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.35);
         
         setCapturedImage(imageBase64);
         setStep('verifying');
