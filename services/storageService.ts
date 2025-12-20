@@ -4,7 +4,7 @@ import { CheckInRecord, AppSettings } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-// URL พื้นฐานที่ผู้ใช้ระบุ
+// URL ฐานข้อมูลที่คุณระบุ
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
@@ -150,7 +150,7 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
             return true;
         }
-    } catch (e) { console.debug("Cloud settings not found, using local."); }
+    } catch (e) { /* ignore */ }
     return false;
 }
 
@@ -158,34 +158,54 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     const s = getSettings();
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     if (!targetUrl) return [];
+    
     try {
         const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
-        if (!response.ok) throw new Error("Google Sheets response was not ok");
-        const data = await response.json();
+        if (!response.ok) throw new Error("HTTP Error");
         
+        const contentType = response.headers.get("content-type");
+        if (contentType && contentType.indexOf("application/json") === -1) {
+            console.error("GAS returned non-JSON response. Check Deployment settings (Anyone/Me).");
+            return [];
+        }
+
+        const data = await response.json();
+        console.log("Cloud Raw Data:", data); // Debugging
+
         if (Array.isArray(data)) {
             return data.map((r: any) => {
-                // จัดการ Timestamp ให้เป็นตัวเลขเสมอ
-                let ts = r.timestamp;
-                if (typeof ts === 'string') {
-                    const parsed = new Date(ts).getTime();
-                    ts = isNaN(parsed) ? Number(ts) : parsed;
+                // ฟังก์ชันช่วยดึงค่าแบบไม่สนตัวพิมพ์เล็ก-ใหญ่
+                const getVal = (keys: string[]) => {
+                    for (const k of keys) {
+                        const lowK = k.toLowerCase().replace(/\s/g, '');
+                        // ลองหาตรงๆ หรือหาแบบตัดช่องว่าง/ตัวเล็ก
+                        for (const objKey in r) {
+                            if (objKey.toLowerCase().replace(/\s/g, '') === lowK) return r[objKey];
+                        }
+                    }
+                    return null;
+                };
+
+                let rawTs = getVal(['timestamp', 'Timestamp']);
+                let ts = Date.now();
+                if (rawTs) {
+                    const parsed = new Date(rawTs).getTime();
+                    ts = isNaN(parsed) ? Number(rawTs) : parsed;
                 }
 
                 return {
-                    id: r.id || String(ts),
-                    staffId: r.staffId || r.staffid || "",
-                    name: r.name || "",
-                    role: r.role || "",
-                    timestamp: Number(ts),
-                    type: (r.type || "arrival").toLowerCase().includes("มา") ? "arrival" : 
-                          (r.type || "").toLowerCase().includes("กลับ") ? "departure" : r.type,
-                    status: r.status || "Normal",
-                    reason: r.reason || "",
-                    location: r.location || { lat: 0, lng: 0 },
-                    distanceFromBase: Number(r.distanceFromBase || 0),
-                    aiVerification: r.aiVerification || "",
-                    imageUrl: r.imageUrl || r.imageurl || r.image || ""
+                    id: getVal(['id']) || String(ts),
+                    staffId: getVal(['staffId', 'staffid', 'Staff ID']) || "",
+                    name: getVal(['name', 'Name']) || "Unknown",
+                    role: getVal(['role', 'Role']) || "",
+                    timestamp: ts,
+                    type: String(getVal(['type', 'Type']) || "").toLowerCase().includes('มา') ? 'arrival' : 'departure',
+                    status: getVal(['status', 'Status']) || "Normal",
+                    reason: getVal(['reason', 'Reason']) || "",
+                    location: { lat: 0, lng: 0 },
+                    distanceFromBase: Number(getVal(['distance', 'Distance (m)']) || 0),
+                    aiVerification: getVal(['aiVerification', 'AI Verification']) || "",
+                    imageUrl: getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64']) || ""
                 };
             });
         }
