@@ -49,32 +49,28 @@ const Dashboard: React.FC = () => {
       const local = getRecords();
       
       const getSig = (r: CheckInRecord) => `${r.timestamp}_${String(r.staffId || '').toUpperCase().trim()}_${r.type}`;
-      const cloudSigs = new Set(cloud.map(getSig));
       
-      const validLocalRecords = local.filter(l => {
-        if (!l.syncedToSheets) return true;
-        return cloudSigs.has(getSig(l));
-      });
-
-      if (validLocalRecords.length !== local.length) {
-        localStorage.setItem('school_checkin_records', JSON.stringify(validLocalRecords));
-      }
-
       const mergedMap = new Map<string, CheckInRecord>();
       
-      cloud.forEach(r => mergedMap.set(getSig(r), { ...r, syncedToSheets: true }));
+      // 1. นำข้อมูลจาก Cloud ตั้งต้น (ข้อมูลที่นี่จะสะอาด มี URL รูปภาพเรียบร้อย)
+      cloud.forEach(r => {
+        mergedMap.set(getSig(r), { ...r, syncedToSheets: true });
+      });
       
-      validLocalRecords.forEach(l => {
+      // 2. ตรวจสอบข้อมูลใน Local เพื่อดึงรายการที่พึ่งบันทึกและยังไม่ได้ Sync
+      local.forEach(l => {
         const sig = getSig(l);
         if (!mergedMap.has(sig)) {
+          // รายการใหม่ที่ยังไม่ขึ้น Cloud ให้ใช้ภาพ Base64 จากเครื่องไปก่อน
           mergedMap.set(sig, l);
         } else {
-          const existing = mergedMap.get(sig)!;
-          const cloudImg = existing.imageUrl || "";
-          const localImg = l.imageUrl || "";
+          // รายการที่มีอยู่ทั้งสองที่: ให้ใช้ของ Cloud เป็นหลัก (เพราะภาพเป็น URL แล้ว)
+          // แต่ถ้าใน Cloud ไม่มีภาพ แต่ Local มีภาพ (กรณี Sync พลาด) ให้เก็บภาพ Local ไว้
+          const cloudRecord = mergedMap.get(sig)!;
+          const isCloudImgValid = cloudRecord.imageUrl && cloudRecord.imageUrl.startsWith('http');
           
-          if (localImg.length > 100 && (cloudImg.length < 100 || cloudImg === "-")) {
-            mergedMap.set(sig, { ...existing, imageUrl: localImg });
+          if (!isCloudImgValid && l.imageUrl && l.imageUrl.length > 100) {
+            mergedMap.set(sig, { ...cloudRecord, imageUrl: l.imageUrl });
           }
         }
       });
@@ -104,7 +100,6 @@ const Dashboard: React.FC = () => {
         const fileIdMatch = cleanUrl.match(/\/d\/(.+?)\//) || cleanUrl.match(/id=(.+?)(&|$)/);
         if (fileIdMatch && fileIdMatch[1]) {
            fileId = fileIdMatch[1];
-           // ใช้ Proxy ลิงก์ของ Google เพื่อดึงภาพจาก Drive มาแสดงใน <img> ตรงๆ
            return `https://lh3.googleusercontent.com/d/${fileId}`;
         }
       }

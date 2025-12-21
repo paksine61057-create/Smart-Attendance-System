@@ -4,14 +4,11 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-// URL ฐานข้อมูลที่คุณระบุ
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
-    
-    // ตัด prefix "data:image/jpeg;base64," ออกก่อนส่ง เพื่อให้ Apps Script นำไปสร้างไฟล์ได้ทันที
     const cleanImageBase64 = (record.imageUrl || "").replace(/^data:image\/\w+;base64,/, "");
 
     const payload = {
@@ -205,7 +202,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (rawType.includes('อื่น') || rawType === 'other_leave' || rawType === 'other leave') type = 'other_leave';
                 else if (rawType.includes('อนุญาต') || rawType === 'authorized_late' || rawType === 'authorized late') type = 'authorized_late';
 
-                // ดึงข้อมูลรูปภาพ (ซึ่งจะเป็น URL ของ Google Drive แล้ว)
+                // ดึงข้อมูลรูปภาพ (Drive URL)
                 let cloudImage = String(getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64', 'หลักฐาน', 'รูปภาพ']) || "").trim();
                 
                 if (cloudImage === "-" || cloudImage.length < 5) {
