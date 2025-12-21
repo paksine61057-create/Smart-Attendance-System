@@ -7,7 +7,6 @@ import { getHoliday } from '../services/holidayService';
 import { CheckInRecord, Staff, AttendanceType } from '../types';
 import { jsPDF } from 'jspdf';
 import 'jspdf-autotable';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip, Legend } from 'recharts';
 
 type TabType = 'today' | 'official' | 'monthly' | 'manual';
 
@@ -94,19 +93,23 @@ const Dashboard: React.FC = () => {
   }, [selectedDate, syncData]);
 
   const formatImageUrl = (url: string | undefined): string => {
-    if (!url || url === "-" || url.length < 5) return "";
-    if (url.startsWith('data:')) return url;
-    if (url.startsWith('http')) {
-      if (url.includes('drive.google.com') && url.includes('/view')) {
-        const fileIdMatch = url.match(/\/d\/(.+?)\//);
+    if (!url || url === "-" || url === "null" || url === "undefined" || url.length < 5) return "";
+    const cleanUrl = url.trim();
+    if (cleanUrl.startsWith('data:')) return cleanUrl;
+    if (cleanUrl.startsWith('http')) {
+      if (cleanUrl.includes('drive.google.com') && cleanUrl.includes('/view')) {
+        const fileIdMatch = cleanUrl.match(/\/d\/(.+?)\//);
         if (fileIdMatch && fileIdMatch[1]) return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}`;
-      } else if (url.includes('drive.google.com') && url.includes('id=')) {
-         const fileIdMatch = url.match(/id=(.+?)(&|$)/);
+      } else if (cleanUrl.includes('drive.google.com') && cleanUrl.includes('id=')) {
+         const fileIdMatch = cleanUrl.match(/id=(.+?)(&|$)/);
          if (fileIdMatch && fileIdMatch[1]) return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}`;
       }
-      return url;
+      return cleanUrl;
     }
-    return `data:image/jpeg;base64,${url}`;
+    if (cleanUrl.length > 100 && !cleanUrl.includes(':')) {
+       return `data:image/jpeg;base64,${cleanUrl}`;
+    }
+    return cleanUrl;
   };
 
   const filteredToday = useMemo(() => {
@@ -131,6 +134,7 @@ const Dashboard: React.FC = () => {
       let departureImg = departure?.imageUrl || null;
       let arrivalAi = arrival?.aiVerification || '';
       let departureAi = departure?.aiVerification || '';
+      let mainRecord = arrival || special || departure;
 
       const statusMap: Record<string, string> = {
         'Duty': 'ไปราชการ', 'Sick Leave': 'ลาป่วย', 'Personal Leave': 'ลากิจ', 'Other Leave': 'ลาอื่นๆ', 'Authorized Late': 'อนุญาตสาย', 'Admin Assist': 'แอดมินลงเวลาให้'
@@ -161,7 +165,19 @@ const Dashboard: React.FC = () => {
         }
       }
 
-      return { no: index + 1, name: staff.name, role: staff.role, arrival: arrivalValue, departure: departureValue, remark, arrivalImg, departureImg, arrivalAi, departureAi };
+      return { 
+        no: index + 1, 
+        name: staff.name, 
+        role: staff.role, 
+        arrival: arrivalValue, 
+        departure: departureValue, 
+        remark, 
+        arrivalImg, 
+        departureImg, 
+        arrivalAi, 
+        departureAi,
+        rawTimestamp: mainRecord?.timestamp || null
+      };
     });
   }, [staffList, filteredToday]);
 
@@ -246,7 +262,7 @@ const Dashboard: React.FC = () => {
     doc.text(title, 105, 18, { align: 'center' });
 
     (doc as any).autoTable({
-        startY: 20, // Move table up closer to the title (was 22)
+        startY: 20, 
         head: headers,
         body: body,
         theme: 'grid',
@@ -272,7 +288,6 @@ const Dashboard: React.FC = () => {
 
     const finalY = (doc as any).lastAutoTable.finalY;
     doc.setFontSize(9.5);
-    // Signature block moved closer to table bottom (using smaller offset)
     doc.text('(ลงชื่อ)...........................................................', 65, finalY + 8, { align: 'center' });
     doc.text('กลุ่มบริหารงานบุคคล', 65, finalY + 13, { align: 'center' });
     doc.text('(ลงชื่อ)...........................................................', 145, finalY + 8, { align: 'center' });
@@ -320,32 +335,39 @@ const Dashboard: React.FC = () => {
     await saveRecord(record); setManualReason(''); setSelectedDate(manualDate); await syncData(); setActiveTab('today');
   };
 
-  const webFontSize = '11px'; 
+  const openPreview = (url: string | null, name: string, timestamp: number | null, ai: string) => {
+    if (!url) return;
+    const timeStr = timestamp 
+        ? new Date(timestamp).toLocaleTimeString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) 
+        : '-';
+    setPreviewData({ url, title: name, time: timeStr, ai });
+  };
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-20">
       {previewData && (
-        <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-2xl z-[100] flex items-center justify-center p-4 no-print animate-in fade-in duration-300" onClick={() => setPreviewData(null)}>
-          <div className="bg-white rounded-[3rem] p-8 max-w-md w-full shadow-2xl border border-white/20 relative" onClick={e => e.stopPropagation()}>
-            <button onClick={() => setPreviewData(null)} className="absolute -top-4 -right-4 bg-white p-3 rounded-full shadow-xl hover:bg-stone-100 transition-all text-stone-500 hover:text-rose-600 active:scale-90 border border-stone-100">
-               <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-xl z-[100] flex items-center justify-center p-4 no-print animate-in fade-in duration-300" onClick={() => setPreviewData(null)}>
+          <div className="bg-white rounded-[3rem] p-8 max-w-md w-full shadow-2xl border-4 border-white/50 relative" onClick={e => e.stopPropagation()}>
+            <button onClick={() => setPreviewData(null)} className="absolute -top-4 -right-4 bg-rose-600 p-3 rounded-full shadow-xl hover:bg-rose-700 transition-all text-white active:scale-90 border-4 border-white">
+               <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
             </button>
-            <div className="mb-6">
+            <div className="mb-6 text-center">
                 <h3 className="text-2xl font-black text-stone-800 leading-tight">{previewData.title}</h3>
-                <p className="text-rose-500 text-xs font-black uppercase tracking-widest mt-1 bg-rose-50 inline-block px-3 py-1 rounded-full">{previewData.time}</p>
+                <p className="text-rose-500 text-xs font-black uppercase tracking-widest mt-2 bg-rose-50 inline-block px-4 py-1.5 rounded-full border border-rose-100">{previewData.time}</p>
             </div>
-            <div className="aspect-[4/5] w-full rounded-[2rem] overflow-hidden bg-slate-100 border-4 border-white shadow-inner mb-6 ring-1 ring-stone-200">
-                <img src={formatImageUrl(previewData.url)} className="w-full h-full object-cover" alt="Verification" onError={(e) => { (e.target as any).src = "https://via.placeholder.com/300?text=Image+Load+Error"; }} />
+            <div className="aspect-[4/5] w-full rounded-[2.5rem] overflow-hidden bg-stone-100 border-4 border-stone-100 shadow-inner mb-6 relative">
+                <img src={formatImageUrl(previewData.url)} className="w-full h-full object-cover" alt="Identity Verification" onError={(e) => { (e.target as any).src = "https://via.placeholder.com/400x500?text=Image+Load+Error"; }} />
             </div>
             {previewData.ai && (
-              <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100 shadow-sm">
+              <div className="bg-emerald-50 p-5 rounded-3xl border-2 border-emerald-100 shadow-sm">
                 <div className="flex items-center gap-2 mb-2">
-                   <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                   <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">AI Verification Analysis</p>
+                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+                   <p className="text-[10px] font-black text-emerald-400 uppercase tracking-widest">AI Vision Analysis</p>
                 </div>
                 <p className="text-xs font-bold text-emerald-800 leading-relaxed italic">"{previewData.ai}"</p>
               </div>
             )}
+            <button onClick={() => setPreviewData(null)} className="w-full mt-6 py-4 bg-stone-900 text-white rounded-2xl font-black text-sm hover:bg-stone-800 transition-all">ปิดหน้าต่าง ❄️</button>
           </div>
         </div>
       )}
@@ -435,7 +457,19 @@ const Dashboard: React.FC = () => {
                           <td className="p-5 font-bold text-stone-400">{r.staffId || '-'}</td>
                           <td className="p-5"><div className="font-bold text-stone-800 whitespace-nowrap">{r.name}</div><div className="text-[10px] text-stone-400 font-bold uppercase whitespace-nowrap">{r.role}</div></td>
                           <td className="p-5 text-center"><span className={`px-4 py-1.5 rounded-full text-[10px] font-black whitespace-nowrap ${r.status.includes('Time') ? 'bg-emerald-100 text-emerald-700' : r.status.includes('Late') ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}`}>{r.status === 'On Time' ? 'มาตรงเวลา' : r.status === 'Late' ? 'มาสาย' : r.status === 'Duty' ? 'ไปราชการ' : r.status.includes('Leave') ? 'ลา' : r.status}</span></td>
-                          <td className="p-5 text-center">{r.imageUrl && r.imageUrl.length > 5 ? (<button onClick={() => setPreviewData({url: r.imageUrl!, title: r.name, time: new Date(r.timestamp).toLocaleTimeString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), ai: r.aiVerification || ''})} className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-90 transition-all hover:ring-4 hover:ring-rose-100" title="กดเพื่อดูรูปขยายใหญ่"><img src={formatImageUrl(r.imageUrl)} className="w-full h-full object-cover opacity-90" alt="Thumbnail" onError={(e) => { (e.target as any).src = "https://via.placeholder.com/50?text=Error"; }} /></button>) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูปถ่าย</span>}</td>
+                          <td className="p-5 text-center">
+                            {r.imageUrl && r.imageUrl.length > 5 ? (
+                                <button 
+                                    onClick={() => openPreview(r.imageUrl!, r.name, r.timestamp, r.aiVerification || '')} 
+                                    className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-90 transition-all hover:ring-4 hover:ring-rose-100" 
+                                    title="กดเพื่อดูรูปขยายใหญ่"
+                                >
+                                    <img src={formatImageUrl(r.imageUrl)} className="w-full h-full object-cover opacity-90" alt="Thumbnail" />
+                                </button>
+                            ) : (
+                                <span className="text-[10px] text-stone-300 italic">ไม่มีรูปถ่าย</span>
+                            )}
+                          </td>
                           <td className="p-5 text-right"><button onClick={() => { if(confirm('ต้องการลบข้อมูลหรือไม่?')) deleteRecord(r).then(syncData) }} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
                         </tr>
                       ))}
@@ -495,7 +529,7 @@ const Dashboard: React.FC = () => {
                       </thead>
                       <tbody style={{ fontSize: '10.5px' }}>
                          {officialData.map(d => (
-                            <tr key={d.no} className="hover:bg-stone-50/50">
+                            <tr key={d.no} className="hover:bg-stone-50/50 relative">
                                <td className="border border-stone-400 py-1.5 px-1 text-center font-mono">{d.no}</td>
                                <td className="border border-stone-400 py-1.5 px-4 text-left font-bold text-stone-800 whitespace-nowrap">{d.name}</td>
                                <td className="border border-stone-400 py-1.5 px-2 text-center text-stone-500 whitespace-nowrap">{d.role}</td>
