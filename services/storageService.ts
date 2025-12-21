@@ -10,7 +10,13 @@ const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
+    
+    // ตัด prefix "data:image/jpeg;base64," ออกก่อนส่ง เพื่อให้ Apps Script Decode ได้ทันที
+    const cleanImageBase64 = (record.imageUrl || "").replace(/^data:image\/\w+;base64,/, "");
+
     const payload = {
+      "action": "insertRecord",
+      "id": record.id,
       "Timestamp": record.timestamp,
       "Date": dateObj.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       "Time": dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -30,10 +36,9 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Location": `https://www.google.com/maps?q=${record.location.lat},${record.location.lng}`,
       "Distance (m)": Math.round(record.distanceFromBase),
       "AI Verification": record.aiVerification || '-',
-      "imageBase64": record.imageUrl || "" 
+      "imageBase64": cleanImageBase64 // ส่ง Base64 เปล่าๆ ไปให้ Script สร้างไฟล์ใน Drive
     };
 
-    // Use text/plain to avoid preflight OPTIONS requests in no-cors mode
     await fetch(url, {
       method: 'POST',
       mode: 'no-cors',
@@ -169,11 +174,6 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
         const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
         if (!response.ok) throw new Error("HTTP Error");
         
-        const contentType = response.headers.get("content-type");
-        if (contentType && contentType.indexOf("application/json") === -1) {
-            return [];
-        }
-
         const data = await response.json();
 
         if (Array.isArray(data)) {
@@ -205,16 +205,15 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (rawType.includes('อื่น') || rawType === 'other_leave' || rawType === 'other leave') type = 'other_leave';
                 else if (rawType.includes('อนุญาต') || rawType === 'authorized_late' || rawType === 'authorized late') type = 'authorized_late';
 
-                // Image handling from Cloud - try multiple column name variants
+                // ดึงข้อมูลรูปภาพ
                 let cloudImage = String(getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64', 'หลักฐาน', 'รูปภาพ']) || "").trim();
                 
-                // If it's just a placeholder "-", treat as empty
                 if (cloudImage === "-" || cloudImage.length < 5) {
                   cloudImage = "";
                 }
 
                 return {
-                    id: String(getVal(['id']) || ts),
+                    id: String(getVal(['id', 'Timestamp']) || ts),
                     staffId: getVal(['staffId', 'staffid', 'Staff ID']) || "",
                     name: getVal(['name', 'Name']) || "Unknown",
                     role: getVal(['role', 'Role']) || "",

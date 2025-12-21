@@ -95,20 +95,25 @@ const Dashboard: React.FC = () => {
   const formatImageUrl = (url: string | undefined): string => {
     if (!url || url === "-" || url === "null" || url === "undefined" || url.length < 5) return "";
     const cleanUrl = url.trim();
+
     if (cleanUrl.startsWith('data:')) return cleanUrl;
+
     if (cleanUrl.startsWith('http')) {
-      if (cleanUrl.includes('drive.google.com') && cleanUrl.includes('/view')) {
-        const fileIdMatch = cleanUrl.match(/\/d\/(.+?)\//);
-        if (fileIdMatch && fileIdMatch[1]) return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}`;
-      } else if (cleanUrl.includes('drive.google.com') && cleanUrl.includes('id=')) {
-         const fileIdMatch = cleanUrl.match(/id=(.+?)(&|$)/);
-         if (fileIdMatch && fileIdMatch[1]) return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}`;
+      if (cleanUrl.includes('drive.google.com')) {
+        let fileId = "";
+        const fileIdMatch = cleanUrl.match(/\/d\/(.+?)\//) || cleanUrl.match(/id=(.+?)(&|$)/);
+        if (fileIdMatch && fileIdMatch[1]) {
+           fileId = fileIdMatch[1];
+           return `https://lh3.googleusercontent.com/d/${fileId}`;
+        }
       }
       return cleanUrl;
     }
+
     if (cleanUrl.length > 100 && !cleanUrl.includes(':')) {
        return `data:image/jpeg;base64,${cleanUrl}`;
     }
+
     return cleanUrl;
   };
 
@@ -131,9 +136,7 @@ const Dashboard: React.FC = () => {
       let departureValue = '-';
       let remark = '';
       let arrivalImg = arrival?.imageUrl || null;
-      let departureImg = departure?.imageUrl || null;
       let arrivalAi = arrival?.aiVerification || '';
-      let departureAi = departure?.aiVerification || '';
       let mainRecord = arrival || special || departure;
 
       const statusMap: Record<string, string> = {
@@ -161,7 +164,7 @@ const Dashboard: React.FC = () => {
           if (departure.status === 'Early Leave') {
             const leaveMsg = 'กลับก่อน' + (departure.reason ? ` (${departure.reason})` : '');
             remark = remark ? `${remark}, ${leaveMsg}` : leaveMsg;
-          } else if (departure.status === 'Admin Assist' && !remark.includes('แอดมิน')) remark = remark ? `${remark}, แอดมินลงเวลาให้` : 'แอดมินลงเวลาให้';
+          } else if (departure.status === 'Admin Assist' && !remark.includes('แอดมิน')) remark = remark ? `${remark}, แอดมินลงเวลาให้` : 'แอดมิตลงเวลาให้';
         }
       }
 
@@ -173,9 +176,7 @@ const Dashboard: React.FC = () => {
         departure: departureValue, 
         remark, 
         arrivalImg, 
-        departureImg, 
         arrivalAi, 
-        departureAi,
         rawTimestamp: mainRecord?.timestamp || null
       };
     });
@@ -356,7 +357,12 @@ const Dashboard: React.FC = () => {
                 <p className="text-rose-500 text-xs font-black uppercase tracking-widest mt-2 bg-rose-50 inline-block px-4 py-1.5 rounded-full border border-rose-100">{previewData.time}</p>
             </div>
             <div className="aspect-[4/5] w-full rounded-[2.5rem] overflow-hidden bg-stone-100 border-4 border-stone-100 shadow-inner mb-6 relative">
-                <img src={formatImageUrl(previewData.url)} className="w-full h-full object-cover" alt="Identity Verification" onError={(e) => { (e.target as any).src = "https://via.placeholder.com/400x500?text=Image+Load+Error"; }} />
+                <img 
+                   src={formatImageUrl(previewData.url)} 
+                   className="w-full h-full object-cover" 
+                   alt="Identity Verification" 
+                   onError={(e) => { (e.target as any).src = "https://via.placeholder.com/400x500?text=Image+Load+Error"; }} 
+                />
             </div>
             {previewData.ai && (
               <div className="bg-emerald-50 p-5 rounded-3xl border-2 border-emerald-100 shadow-sm">
@@ -443,6 +449,7 @@ const Dashboard: React.FC = () => {
                   </button>
                 </div>
                 {aiSummary && <div className="mb-8 p-6 bg-emerald-50 rounded-3xl border border-emerald-100 text-emerald-800 animate-in zoom-in text-sm font-medium leading-relaxed shadow-inner"><p className="font-black text-[10px] uppercase tracking-widest mb-2 text-emerald-400">สรุปภาพรวมโดย AI</p>{aiSummary}</div>}
+                
                 <div className="overflow-x-auto rounded-3xl border border-stone-100">
                   <table className="w-full text-left">
                     <thead>
@@ -461,10 +468,15 @@ const Dashboard: React.FC = () => {
                             {r.imageUrl && r.imageUrl.length > 5 ? (
                                 <button 
                                     onClick={() => openPreview(r.imageUrl!, r.name, r.timestamp, r.aiVerification || '')} 
-                                    className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-90 transition-all hover:ring-4 hover:ring-rose-100" 
+                                    className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-95 transition-all hover:ring-4 hover:ring-rose-100" 
                                     title="กดเพื่อดูรูปขยายใหญ่"
                                 >
-                                    <img src={formatImageUrl(r.imageUrl)} className="w-full h-full object-cover opacity-90" alt="Thumbnail" />
+                                    <img 
+                                      src={formatImageUrl(r.imageUrl)} 
+                                      className="w-full h-full object-cover opacity-90" 
+                                      alt="Thumbnail" 
+                                      loading="lazy"
+                                    />
                                 </button>
                             ) : (
                                 <span className="text-[10px] text-stone-300 italic">ไม่มีรูปถ่าย</span>
