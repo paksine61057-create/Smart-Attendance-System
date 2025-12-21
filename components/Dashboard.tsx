@@ -104,6 +104,7 @@ const Dashboard: React.FC = () => {
         const fileIdMatch = cleanUrl.match(/\/d\/(.+?)\//) || cleanUrl.match(/id=(.+?)(&|$)/);
         if (fileIdMatch && fileIdMatch[1]) {
            fileId = fileIdMatch[1];
+           // ใช้ Proxy ลิงก์ของ Google เพื่อดึงภาพจาก Drive มาแสดงใน <img> ตรงๆ
            return `https://lh3.googleusercontent.com/d/${fileId}`;
         }
       }
@@ -164,7 +165,7 @@ const Dashboard: React.FC = () => {
           if (departure.status === 'Early Leave') {
             const leaveMsg = 'กลับก่อน' + (departure.reason ? ` (${departure.reason})` : '');
             remark = remark ? `${remark}, ${leaveMsg}` : leaveMsg;
-          } else if (departure.status === 'Admin Assist' && !remark.includes('แอดมิน')) remark = remark ? `${remark}, แอดมินลงเวลาให้` : 'แอดมิตลงเวลาให้';
+          } else if (departure.status === 'Admin Assist' && !remark.includes('แอดมิน')) remark = remark ? `${remark}, แอดมินลงเวลาให้` : 'แอดมินลงเวลาให้';
         }
       }
 

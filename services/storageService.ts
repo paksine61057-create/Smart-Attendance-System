@@ -11,7 +11,7 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
   try {
     const dateObj = new Date(record.timestamp);
     
-    // ตัด prefix "data:image/jpeg;base64," ออกก่อนส่ง เพื่อให้ Apps Script Decode ได้ทันที
+    // ตัด prefix "data:image/jpeg;base64," ออกก่อนส่ง เพื่อให้ Apps Script นำไปสร้างไฟล์ได้ทันที
     const cleanImageBase64 = (record.imageUrl || "").replace(/^data:image\/\w+;base64,/, "");
 
     const payload = {
@@ -36,7 +36,7 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Location": `https://www.google.com/maps?q=${record.location.lat},${record.location.lng}`,
       "Distance (m)": Math.round(record.distanceFromBase),
       "AI Verification": record.aiVerification || '-',
-      "imageBase64": cleanImageBase64 // ส่ง Base64 เปล่าๆ ไปให้ Script สร้างไฟล์ใน Drive
+      "imageBase64": cleanImageBase64 
     };
 
     await fetch(url, {
@@ -205,7 +205,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (rawType.includes('อื่น') || rawType === 'other_leave' || rawType === 'other leave') type = 'other_leave';
                 else if (rawType.includes('อนุญาต') || rawType === 'authorized_late' || rawType === 'authorized late') type = 'authorized_late';
 
-                // ดึงข้อมูลรูปภาพ
+                // ดึงข้อมูลรูปภาพ (ซึ่งจะเป็น URL ของ Google Drive แล้ว)
                 let cloudImage = String(getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64', 'หลักฐาน', 'รูปภาพ']) || "").trim();
                 
                 if (cloudImage === "-" || cloudImage.length < 5) {
