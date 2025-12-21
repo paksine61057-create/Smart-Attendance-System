@@ -251,31 +251,31 @@ const Dashboard: React.FC = () => {
         body: body,
         theme: 'grid',
         styles: { 
-            fontSize: 10, // Increased for readability
-            cellPadding: 2.8, // Increased for vertical "height" proportion
+            fontSize: 10, 
+            cellPadding: 1.5, // Reduced padding to keep everything on one page vertically
             halign: 'center', 
             valign: 'middle', 
             lineWidth: 0.1, 
-            overflow: 'visible' // Prevent cutting text
+            overflow: 'visible' 
         },
         headStyles: { fillColor: [190, 18, 60], textColor: [255, 255, 255], fontStyle: 'bold' },
         columnStyles: { 
-            0: { cellWidth: 10 }, 
-            1: { halign: 'left', cellWidth: 48, fontStyle: 'bold' }, 
-            2: { halign: 'center', cellWidth: 38 }, 
-            3: { cellWidth: 15 }, 
-            4: { cellWidth: 15 } 
+            0: { cellWidth: 8 }, 
+            1: { halign: 'left', cellWidth: 46, fontStyle: 'bold' }, 
+            2: { halign: 'center', cellWidth: 36 }, 
+            3: { cellWidth: 12 }, 
+            4: { cellWidth: 12 } 
         },
-        margin: { left: 24, right: 24, top: 15, bottom: 25 }, // Increased margins to "squeeze" table width
+        margin: { left: 32, right: 32, top: 15, bottom: 25 }, // Increased margins to "Squeeze" table width as requested
         pageBreak: 'avoid',
     });
 
     const finalY = (doc as any).lastAutoTable.finalY + 12;
     doc.setFontSize(10);
-    doc.text('(ลงชื่อ)...........................................................', 60, finalY + 12, { align: 'center' });
-    doc.text('กลุ่มบริหารงานบุคคล', 60, finalY + 18, { align: 'center' });
-    doc.text('(ลงชื่อ)...........................................................', 150, finalY + 12, { align: 'center' });
-    doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 150, finalY + 18, { align: 'center' });
+    doc.text('(ลงชื่อ)...........................................................', 65, finalY + 10, { align: 'center' });
+    doc.text('กลุ่มบริหารงานบุคคล', 65, finalY + 16, { align: 'center' });
+    doc.text('(ลงชื่อ)...........................................................', 145, finalY + 10, { align: 'center' });
+    doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 145, finalY + 16, { align: 'center' });
 
     doc.save(`report_${type}_${selectedDate}.pdf`);
   };
@@ -319,7 +319,7 @@ const Dashboard: React.FC = () => {
     await saveRecord(record); setManualReason(''); setSelectedDate(manualDate); await syncData(); setActiveTab('today');
   };
 
-  const webFontSize = '11px'; // Slightly increased for web view
+  const webFontSize = '11px'; 
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-20">
@@ -473,7 +473,7 @@ const Dashboard: React.FC = () => {
                 </button>
                 <button onClick={() => window.print()} className="bg-white hover:bg-stone-50 text-stone-700 px-5 py-2.5 rounded-xl font-black text-xs shadow-xl border border-stone-200 transition-all active:scale-95">พิมพ์เอกสาร</button>
              </div>
-             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[24mm] py-[15mm] min-h-[297mm] border border-stone-200">
+             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[32mm] py-[15mm] min-h-[297mm] border border-stone-200">
                 <div className="flex flex-col items-center text-center mb-10">
                    <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-16 h-16 object-contain mb-4" />
                    <h1 className="text-sm font-black text-stone-900 leading-tight uppercase">รายงานการมาปฏิบัติงานของครูและบุคลากรทางการศึกษา</h1>
@@ -484,29 +484,29 @@ const Dashboard: React.FC = () => {
                    <table className="w-full border-collapse border border-stone-400">
                       <thead>
                          <tr className="bg-stone-50">
-                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-12">ลำดับ</th>
-                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-48">รายชื่อ</th>
-                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-40">ตำแหน่ง</th>
-                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-24">เวลามา</th>
-                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-24">เวลากลับ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-10">ลำดับ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-44">รายชื่อ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-36">ตำแหน่ง</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-20">เวลามา</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-20">เวลากลับ</th>
                             <th className="border border-stone-400 p-2 text-[11px] font-black text-center">หมายเหตุ</th>
                          </tr>
                       </thead>
                       <tbody style={{ fontSize: webFontSize }}>
                          {officialData.map(d => (
                             <tr key={d.no} className="hover:bg-stone-50/50">
-                               <td className="border border-stone-400 py-2 px-2 text-center font-mono">{d.no}</td>
-                               <td className="border border-stone-400 py-2 px-4 text-left font-bold text-stone-800 whitespace-nowrap">{d.name}</td>
-                               <td className="border border-stone-400 py-2 px-2 text-center text-stone-500 whitespace-nowrap">{d.role}</td>
-                               <td className="border border-stone-400 py-2 px-1 text-center whitespace-nowrap">{d.arrival}</td>
-                               <td className="border border-stone-400 py-2 px-1 text-center whitespace-nowrap">{d.departure}</td>
-                               <td className="border border-stone-400 py-2 px-3 text-center text-stone-500 italic leading-tight">{d.remark}</td>
+                               <td className="border border-stone-400 py-1.5 px-1 text-center font-mono">{d.no}</td>
+                               <td className="border border-stone-400 py-1.5 px-3 text-left font-bold text-stone-800 whitespace-nowrap">{d.name}</td>
+                               <td className="border border-stone-400 py-1.5 px-2 text-center text-stone-500 whitespace-nowrap">{d.role}</td>
+                               <td className="border border-stone-400 py-1.5 px-1 text-center whitespace-nowrap">{d.arrival}</td>
+                               <td className="border border-stone-400 py-1.5 px-1 text-center whitespace-nowrap">{d.departure}</td>
+                               <td className="border border-stone-400 py-1.5 px-2 text-center text-stone-500 italic leading-tight text-[10px]">{d.remark}</td>
                             </tr>
                          ))}
                       </tbody>
                    </table>
                 </div>
-                <div className="mt-16 flex justify-around px-10 py-2">
+                <div className="mt-16 flex justify-around px-8 py-2">
                    <div className="text-center">
                       <p className="text-[11px] text-stone-800 mb-3 font-bold">(ลงชื่อ)...........................................................</p>
                       <p className="text-[11px] font-black text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
@@ -526,7 +526,7 @@ const Dashboard: React.FC = () => {
                 <button onClick={() => handleExportPDF('monthly')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs shadow-xl transition-all active:scale-95">บันทึก PDF</button>
                 <button onClick={() => window.print()} className="bg-white hover:bg-stone-50 text-stone-700 px-5 py-2.5 rounded-xl font-black text-xs shadow-xl border border-stone-200 transition-all active:scale-95">พิมพ์เอกสาร</button>
              </div>
-             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[24mm] py-[15mm] min-h-[297mm] border border-stone-200">
+             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[32mm] py-[15mm] min-h-[297mm] border border-stone-200">
                 <div className="flex flex-col items-center text-center mb-10">
                    <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-16 h-16 object-contain mb-4" />
                    <h1 className="text-sm font-black text-stone-900 leading-tight uppercase">รายงานสถิติการมาปฏิบัติงานรายเดือน</h1>
@@ -537,30 +537,29 @@ const Dashboard: React.FC = () => {
                    <table className="w-full border-collapse border border-stone-400">
                       <thead>
                          <tr className="bg-stone-50">
-                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-12">ลำดับ</th>
-                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-48">รายชื่อ</th>
-                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-40">ตำแหน่ง</th>
-                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-22">ไม่ลงเวลา</th>
-                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-22">มาสาย</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-10">ลำดับ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-44">รายชื่อ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-36">ตำแหน่ง</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-20">ไม่ลงเวลา</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-20">มาสาย</th>
                             <th className="border border-stone-400 p-2 text-[11px] font-black text-center">วันที่ที่มาสาย</th>
                          </tr>
                       </thead>
                       <tbody style={{ fontSize: webFontSize }}>
                          {monthlyLatenessData.map(d => (
                             <tr key={d.no} className="hover:bg-stone-50/50">
-                               <td className="border border-stone-400 py-2 px-2 text-center font-mono">{d.no}</td>
-                               <td className="border border-stone-400 py-2 px-4 text-left font-bold text-stone-800 whitespace-nowrap">{d.name}</td>
-                               <td className="border border-stone-400 py-2 px-2 text-center text-stone-500 whitespace-nowrap">{d.role}</td>
-                               <td className={`border border-stone-400 py-2 px-2 text-center whitespace-nowrap ${d.absentCount > 0 ? 'text-orange-600 font-black' : 'text-stone-300'}`}>{d.absentCount || '-'}</td>
-                               <td className={`border border-stone-400 py-2 px-2 text-center whitespace-nowrap ${d.lateCount > 0 ? 'text-rose-600 font-black' : 'text-stone-300'}`}>{d.lateCount || '-'}</td>
-                               <td className="border border-stone-400 py-2 px-3 text-center text-stone-500 italic text-[10px] leading-tight break-all">{d.lateDates}</td>
+                               <td className="border border-stone-400 py-1.5 px-1 text-center font-mono">{d.no}</td>
+                               <td className="border border-stone-400 py-1.5 px-3 text-left font-bold text-stone-800 whitespace-nowrap">{d.name}</td>
+                               <td className="border border-stone-400 py-1.5 px-2 text-center text-stone-500 whitespace-nowrap">{d.role}</td>
+                               <td className={`border border-stone-400 py-1.5 px-2 text-center whitespace-nowrap ${d.absentCount > 0 ? 'text-orange-600 font-black' : 'text-stone-300'}`}>{d.absentCount || '-'}</td>
+                               <td className={`border border-stone-400 py-1.5 px-2 text-center whitespace-nowrap ${d.lateCount > 0 ? 'text-rose-600 font-black' : 'text-stone-300'}`}>{d.lateCount || '-'}</td>
+                               <td className="border border-stone-400 py-1.5 px-2 text-center text-stone-500 italic text-[10px] leading-tight break-all">{d.lateDates}</td>
                             </tr>
                          ))}
                       </tbody>
                    </table>
                 </div>
-                {/* Monthly Signature Added */}
-                <div className="mt-16 flex justify-around px-10 py-2">
+                <div className="mt-16 flex justify-around px-8 py-2">
                    <div className="text-center">
                       <p className="text-[11px] text-stone-800 mb-3 font-bold">(ลงชื่อ)...........................................................</p>
                       <p className="text-[11px] font-black text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
