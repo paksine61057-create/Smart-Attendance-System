@@ -246,13 +246,13 @@ const Dashboard: React.FC = () => {
     doc.text(title, 105, 18, { align: 'center' });
 
     (doc as any).autoTable({
-        startY: 22,
+        startY: 20, // Move table up closer to the title (was 22)
         head: headers,
         body: body,
         theme: 'grid',
         styles: { 
-            fontSize: 9, // Reduced font size slightly to fit more content
-            cellPadding: 1.0, // Reduced padding for high vertical density
+            fontSize: 9, 
+            cellPadding: 1.0, 
             halign: 'center', 
             valign: 'middle', 
             lineWidth: 0.1, 
@@ -260,22 +260,23 @@ const Dashboard: React.FC = () => {
         },
         headStyles: { fillColor: [190, 18, 60], textColor: [255, 255, 255], fontStyle: 'bold' },
         columnStyles: { 
-            0: { cellWidth: 8 }, // Very narrow No.
-            1: { halign: 'left', cellWidth: 55, fontStyle: 'bold' }, // Maximized Name space
-            2: { halign: 'center', cellWidth: 42 }, // Maximized Role space
-            3: { cellWidth: 14 }, // Narrower Time Arrival
-            4: { cellWidth: 14 }  // Narrower Time Departure
+            0: { cellWidth: 8 }, 
+            1: { halign: 'left', cellWidth: 55, fontStyle: 'bold' }, 
+            2: { halign: 'center', cellWidth: 42 }, 
+            3: { cellWidth: 14 }, 
+            4: { cellWidth: 14 } 
         },
-        margin: { left: 15, right: 15, top: 15, bottom: 20 }, // Reduced horizontal margins to expand table width
-        pageBreak: 'avoid', // Crucial to try and keep it on one page
+        margin: { left: 15, right: 15, top: 15, bottom: 20 },
+        pageBreak: 'avoid',
     });
 
-    const finalY = (doc as any).lastAutoTable.finalY + 10;
+    const finalY = (doc as any).lastAutoTable.finalY;
     doc.setFontSize(9.5);
-    doc.text('(ลงชื่อ)...........................................................', 65, finalY + 10, { align: 'center' });
-    doc.text('กลุ่มบริหารงานบุคคล', 65, finalY + 15, { align: 'center' });
-    doc.text('(ลงชื่อ)...........................................................', 145, finalY + 10, { align: 'center' });
-    doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 145, finalY + 15, { align: 'center' });
+    // Signature block moved closer to table bottom (using smaller offset)
+    doc.text('(ลงชื่อ)...........................................................', 65, finalY + 8, { align: 'center' });
+    doc.text('กลุ่มบริหารงานบุคคล', 65, finalY + 13, { align: 'center' });
+    doc.text('(ลงชื่อ)...........................................................', 145, finalY + 8, { align: 'center' });
+    doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 145, finalY + 13, { align: 'center' });
 
     doc.save(`report_${type}_${selectedDate}.pdf`);
   };
