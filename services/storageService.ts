@@ -4,11 +4,14 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
+// URL เว็บแอปจาก Apps Script ของคุณ
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
+    
+    // ตัดหัวข้อ data:image/jpeg;base64 ออกเพื่อให้ฝั่ง Server นำไปแปลงเป็นไฟล์ได้เลย
     const cleanImageBase64 = (record.imageUrl || "").replace(/^data:image\/\w+;base64,/, "");
 
     const payload = {
@@ -33,7 +36,7 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Location": `https://www.google.com/maps?q=${record.location.lat},${record.location.lng}`,
       "Distance (m)": Math.round(record.distanceFromBase),
       "AI Verification": record.aiVerification || '-',
-      "imageBase64": cleanImageBase64 
+      "imageBase64": cleanImageBase64 // ส่งรหัสภาพไปให้ Server สร้างไฟล์
     };
 
     await fetch(url, {
@@ -117,22 +120,6 @@ export const clearRecords = () => localStorage.removeItem(RECORDS_KEY);
 
 export const saveSettings = async (settings: AppSettings) => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-  if (targetUrl && settings.officeLocation) {
-     try {
-         await fetch(targetUrl, {
-             method: 'POST',
-             mode: 'no-cors',
-             headers: { 'Content-Type': 'text/plain' },
-             body: JSON.stringify({
-                 action: 'saveSettings',
-                 lat: settings.officeLocation.lat,
-                 lng: settings.officeLocation.lng,
-                 maxDistance: settings.maxDistanceMeters
-             })
-         });
-     } catch (e) { console.error("Settings sync failed", e); }
-  }
 };
 
 export const getSettings = (): AppSettings => {
@@ -202,9 +189,10 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (rawType.includes('อื่น') || rawType === 'other_leave' || rawType === 'other leave') type = 'other_leave';
                 else if (rawType.includes('อนุญาต') || rawType === 'authorized_late' || rawType === 'authorized late') type = 'authorized_late';
 
-                // ดึงข้อมูลรูปภาพ (Drive URL)
+                // ดึงค่า URL รูปภาพจาก Cloud
                 let cloudImage = String(getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64', 'หลักฐาน', 'รูปภาพ']) || "").trim();
                 
+                // หากค่าในชีตเป็น "-" หรือสั้นเกินไป ให้ถือว่าไม่มีรูป
                 if (cloudImage === "-" || cloudImage.length < 5) {
                   cloudImage = "";
                 }

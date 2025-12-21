@@ -52,7 +52,7 @@ const Dashboard: React.FC = () => {
       
       const mergedMap = new Map<string, CheckInRecord>();
       
-      // 1. นำข้อมูลจาก Cloud ตั้งต้น (ข้อมูลที่นี่จะสะอาด มี URL รูปภาพเรียบร้อย)
+      // 1. นำข้อมูลจาก Cloud ตั้งต้น (ข้อมูลที่นี่จะสะอาด มี URL รูปภาพจาก Drive)
       cloud.forEach(r => {
         mergedMap.set(getSig(r), { ...r, syncedToSheets: true });
       });
@@ -65,11 +65,11 @@ const Dashboard: React.FC = () => {
           mergedMap.set(sig, l);
         } else {
           // รายการที่มีอยู่ทั้งสองที่: ให้ใช้ของ Cloud เป็นหลัก (เพราะภาพเป็น URL แล้ว)
-          // แต่ถ้าใน Cloud ไม่มีภาพ แต่ Local มีภาพ (กรณี Sync พลาด) ให้เก็บภาพ Local ไว้
           const cloudRecord = mergedMap.get(sig)!;
           const isCloudImgValid = cloudRecord.imageUrl && cloudRecord.imageUrl.startsWith('http');
           
           if (!isCloudImgValid && l.imageUrl && l.imageUrl.length > 100) {
+            // กรณีพิเศษ: ถ้าใน Cloud ดึงมาแล้วรูปเสีย แต่ในเครื่องมีรูป Base64 อยู่ ให้ใช้ Base64 ไปก่อน
             mergedMap.set(sig, { ...cloudRecord, imageUrl: l.imageUrl });
           }
         }
@@ -88,24 +88,29 @@ const Dashboard: React.FC = () => {
     syncData(); 
   }, [selectedDate, syncData]);
 
+  // ฟังก์ชันช่วยแสดงรูปภาพ (แปลง Google Drive URL เป็น Direct Link)
   const formatImageUrl = (url: string | undefined): string => {
     if (!url || url === "-" || url === "null" || url === "undefined" || url.length < 5) return "";
     const cleanUrl = url.trim();
 
+    // กรณีเป็นรหัส Base64 (จะแสดงผลเฉพาะตอนที่ยังไม่ได้ Sync)
     if (cleanUrl.startsWith('data:')) return cleanUrl;
 
+    // กรณีเป็นลิงก์ Google Drive
     if (cleanUrl.startsWith('http')) {
       if (cleanUrl.includes('drive.google.com')) {
         let fileId = "";
         const fileIdMatch = cleanUrl.match(/\/d\/(.+?)\//) || cleanUrl.match(/id=(.+?)(&|$)/);
         if (fileIdMatch && fileIdMatch[1]) {
            fileId = fileIdMatch[1];
+           // แปลงลิงก์ Drive เป็น Direct Image Link เพื่อให้แสดงผลในแท็ก img ได้
            return `https://lh3.googleusercontent.com/d/${fileId}`;
         }
       }
       return cleanUrl;
     }
 
+    // กรณีเป็นรหัส Base64 ดิบที่ไม่มี prefix (เผื่อมีค้างในชีต)
     if (cleanUrl.length > 100 && !cleanUrl.includes(':')) {
        return `data:image/jpeg;base64,${cleanUrl}`;
     }
