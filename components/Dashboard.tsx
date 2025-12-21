@@ -94,9 +94,18 @@ const Dashboard: React.FC = () => {
   }, [selectedDate, syncData]);
 
   const formatImageUrl = (url: string | undefined): string => {
-    if (!url || url === "-" || url.length < 20) return "";
+    if (!url || url === "-" || url.length < 5) return "";
     if (url.startsWith('data:')) return url;
-    // Assume it's a raw base64 string from cloud
+    if (url.startsWith('http')) {
+      if (url.includes('drive.google.com') && url.includes('/view')) {
+        const fileIdMatch = url.match(/\/d\/(.+?)\//);
+        if (fileIdMatch && fileIdMatch[1]) return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}`;
+      } else if (url.includes('drive.google.com') && url.includes('id=')) {
+         const fileIdMatch = url.match(/id=(.+?)(&|$)/);
+         if (fileIdMatch && fileIdMatch[1]) return `https://lh3.googleusercontent.com/d/${fileIdMatch[1]}`;
+      }
+      return url;
+    }
     return `data:image/jpeg;base64,${url}`;
   };
 
@@ -118,19 +127,13 @@ const Dashboard: React.FC = () => {
       let arrivalValue = '-';
       let departureValue = '-';
       let remark = '';
-      
       let arrivalImg = arrival?.imageUrl || null;
       let departureImg = departure?.imageUrl || null;
       let arrivalAi = arrival?.aiVerification || '';
       let departureAi = departure?.aiVerification || '';
 
       const statusMap: Record<string, string> = {
-        'Duty': 'ไปราชการ',
-        'Sick Leave': 'ลาป่วย',
-        'Personal Leave': 'ลากิจ',
-        'Other Leave': 'ลาอื่นๆ',
-        'Authorized Late': 'อนุญาตสาย',
-        'Admin Assist': 'แอดมินลงเวลาให้'
+        'Duty': 'ไปราชการ', 'Sick Leave': 'ลาป่วย', 'Personal Leave': 'ลากิจ', 'Other Leave': 'ลาอื่นๆ', 'Authorized Late': 'อนุญาตสาย', 'Admin Assist': 'แอดมินลงเวลาให้'
       };
 
       if (special) {
@@ -144,13 +147,9 @@ const Dashboard: React.FC = () => {
         if (arrival) {
           const time = new Date(arrival.timestamp);
           arrivalValue = time.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-          if (arrival.type === 'authorized_late' || arrival.status === 'Authorized Late') {
-             remark = 'อนุญาตสาย' + (arrival.reason ? ` (${arrival.reason})` : '');
-          } else if (arrival.status === 'Late') {
-            remark = 'สาย' + (arrival.reason ? ` (${arrival.reason})` : '');
-          } else if (arrival.status === 'Admin Assist') {
-            remark = 'แอดมินลงเวลาให้';
-          }
+          if (arrival.type === 'authorized_late' || arrival.status === 'Authorized Late') remark = 'อนุญาตสาย' + (arrival.reason ? ` (${arrival.reason})` : '');
+          else if (arrival.status === 'Late') remark = 'สาย' + (arrival.reason ? ` (${arrival.reason})` : '');
+          else if (arrival.status === 'Admin Assist') remark = 'แอดมินลงเวลาให้';
         }
         if (departure) {
           const time = new Date(departure.timestamp);
@@ -158,24 +157,11 @@ const Dashboard: React.FC = () => {
           if (departure.status === 'Early Leave') {
             const leaveMsg = 'กลับก่อน' + (departure.reason ? ` (${departure.reason})` : '');
             remark = remark ? `${remark}, ${leaveMsg}` : leaveMsg;
-          } else if (departure.status === 'Admin Assist' && !remark.includes('แอดมิน')) {
-             remark = remark ? `${remark}, แอดมินลงเวลาให้` : 'แอดมินลงเวลาให้';
-          }
+          } else if (departure.status === 'Admin Assist' && !remark.includes('แอดมิน')) remark = remark ? `${remark}, แอดมินลงเวลาให้` : 'แอดมินลงเวลาให้';
         }
       }
 
-      return {
-        no: index + 1,
-        name: staff.name,
-        role: staff.role,
-        arrival: arrivalValue,
-        departure: departureValue,
-        remark: remark,
-        arrivalImg,
-        departureImg,
-        arrivalAi,
-        departureAi
-      };
+      return { no: index + 1, name: staff.name, role: staff.role, arrival: arrivalValue, departure: departureValue, remark, arrivalImg, departureImg, arrivalAi, departureAi };
     });
   }, [staffList, filteredToday]);
 
@@ -207,14 +193,12 @@ const Dashboard: React.FC = () => {
       const dateObj = new Date(year, month - 1, d);
       if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
       const dayOfWeek = dateObj.getDay();
-      const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-      const holiday = getHoliday(dateObj);
-      const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      if (!isWeekend && !holiday) {
+      if (dayOfWeek !== 0 && dayOfWeek !== 6 && !getHoliday(dateObj)) {
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         if (monthlyRecords.some(r => {
            const rd = new Date(r.timestamp);
            return `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}` === dateStr;
-        })) { workingDays.push(dateStr); }
+        })) workingDays.push(dateStr);
       }
     }
     return staffList.map((staff, index) => {
@@ -235,12 +219,17 @@ const Dashboard: React.FC = () => {
   const handleExportPDF = (type: 'daily' | 'monthly') => {
     const doc = new jsPDF('p', 'mm', 'a4');
     const data = type === 'daily' ? officialData : monthlyLatenessData;
+    const dateFormatted = new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' });
+    const monthFormatted = new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' });
+    
     const title = type === 'daily' 
-        ? `รายงานการปฏิบัติงานประจำวัน วันที่ ${new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}`
-        : `รายงานสถิติประจำเดือน ${new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}`;
+        ? `รายงานการปฏิบัติงานประจำวัน วันที่ ${dateFormatted}`
+        : `รายงานสถิติประจำเดือน ${monthFormatted}`;
+    
     const headers = type === 'daily' 
         ? [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'เวลามา', 'เวลากลับ', 'หมายเหตุ']]
         : [['ลำดับ', 'ชื่อ-นามสกุล', 'ตำแหน่ง', 'ไม่ลงเวลา', 'มาสาย', 'วันที่มาสาย']];
+    
     const body = data.map(d => {
         if (type === 'daily') {
             const row = d as any;
@@ -250,21 +239,44 @@ const Dashboard: React.FC = () => {
             return [row.no, row.name, row.role, row.absentCount, row.lateCount, row.lateDates];
         }
     });
-    doc.setFontSize(12);
+
+    doc.setFontSize(14);
     doc.text('โรงเรียนประจักษ์ศิลปาคม', 105, 12, { align: 'center' });
-    doc.setFontSize(9);
+    doc.setFontSize(11);
     doc.text(title, 105, 18, { align: 'center' });
+
     (doc as any).autoTable({
         startY: 22,
         head: headers,
         body: body,
         theme: 'grid',
-        styles: { fontSize: 8.5, cellPadding: 1.0, halign: 'center', valign: 'middle', lineWidth: 0.1, overflow: 'linebreak' },
+        styles: { 
+            fontSize: 10, // Increased for readability
+            cellPadding: 2.8, // Increased for vertical "height" proportion
+            halign: 'center', 
+            valign: 'middle', 
+            lineWidth: 0.1, 
+            overflow: 'visible' // Prevent cutting text
+        },
         headStyles: { fillColor: [190, 18, 60], textColor: [255, 255, 255], fontStyle: 'bold' },
-        columnStyles: { 0: { cellWidth: 10 }, 1: { halign: 'left', cellWidth: 32, overflow: 'hidden' }, 2: { halign: 'center', cellWidth: 30, overflow: 'hidden' }, 3: { cellWidth: 14 }, 4: { cellWidth: 14 } },
-        margin: { left: 15, right: 15, top: 15, bottom: 25 }, 
+        columnStyles: { 
+            0: { cellWidth: 10 }, 
+            1: { halign: 'left', cellWidth: 48, fontStyle: 'bold' }, 
+            2: { halign: 'center', cellWidth: 38 }, 
+            3: { cellWidth: 15 }, 
+            4: { cellWidth: 15 } 
+        },
+        margin: { left: 24, right: 24, top: 15, bottom: 25 }, // Increased margins to "squeeze" table width
         pageBreak: 'avoid',
     });
+
+    const finalY = (doc as any).lastAutoTable.finalY + 12;
+    doc.setFontSize(10);
+    doc.text('(ลงชื่อ)...........................................................', 60, finalY + 12, { align: 'center' });
+    doc.text('กลุ่มบริหารงานบุคคล', 60, finalY + 18, { align: 'center' });
+    doc.text('(ลงชื่อ)...........................................................', 150, finalY + 12, { align: 'center' });
+    doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 150, finalY + 18, { align: 'center' });
+
     doc.save(`report_${type}_${selectedDate}.pdf`);
   };
 
@@ -273,20 +285,11 @@ const Dashboard: React.FC = () => {
     const now = new Date();
     const timestamp = new Date(year, month - 1, day, now.getHours(), now.getMinutes()).getTime();
     const record: CheckInRecord = {
-      id: crypto.randomUUID(),
-      staffId: staff.id,
-      name: staff.name,
-      role: staff.role,
-      timestamp,
-      type,
+      id: crypto.randomUUID(), staffId: staff.id, name: staff.name, role: staff.role, timestamp, type,
       status: type === 'duty' ? 'Duty' : (type === 'sick_leave' ? 'Sick Leave' : (type === 'personal_leave' ? 'Personal Leave' : 'Other Leave')),
-      reason: `Admin recorded: ${type.replace('_', ' ')}`,
-      location: { lat: 0, lng: 0 },
-      distanceFromBase: 0,
-      aiVerification: 'Admin Direct Authorized'
+      reason: `Admin recorded: ${type.replace('_', ' ')}`, location: { lat: 0, lng: 0 }, distanceFromBase: 0, aiVerification: 'Admin Direct Authorized'
     };
-    await saveRecord(record);
-    await syncData();
+    await saveRecord(record); await syncData();
   };
 
   const handleAiSummary = async () => {
@@ -310,30 +313,16 @@ const Dashboard: React.FC = () => {
         status = manualTimestamp >= limit ? 'Late' : 'On Time';
     }
     const record: CheckInRecord = {
-      id: crypto.randomUUID(),
-      staffId: staff.id,
-      name: staff.name,
-      role: staff.role,
-      timestamp: manualTimestamp,
-      type: manualType,
-      status,
-      reason: manualReason || 'Manual override by admin',
-      location: { lat: 0, lng: 0 },
-      distanceFromBase: 0,
-      aiVerification: 'Admin Authorized'
+      id: crypto.randomUUID(), staffId: staff.id, name: staff.name, role: staff.role, timestamp: manualTimestamp, type: manualType,
+      status, reason: manualReason || 'Manual override by admin', location: { lat: 0, lng: 0 }, distanceFromBase: 0, aiVerification: 'Admin Authorized'
     };
-    await saveRecord(record);
-    setManualReason('');
-    setSelectedDate(manualDate);
-    await syncData();
-    setActiveTab('today');
+    await saveRecord(record); setManualReason(''); setSelectedDate(manualDate); await syncData(); setActiveTab('today');
   };
 
-  const webFontSize = '8.5px';
+  const webFontSize = '11px'; // Slightly increased for web view
 
   return (
     <div className="w-full max-w-6xl mx-auto pb-20">
-      {/* Improved Image Preview Modal */}
       {previewData && (
         <div className="fixed inset-0 bg-slate-900/95 backdrop-blur-2xl z-[100] flex items-center justify-center p-4 no-print animate-in fade-in duration-300" onClick={() => setPreviewData(null)}>
           <div className="bg-white rounded-[3rem] p-8 max-w-md w-full shadow-2xl border border-white/20 relative" onClick={e => e.stopPropagation()}>
@@ -362,9 +351,7 @@ const Dashboard: React.FC = () => {
 
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6 no-print bg-white/10 backdrop-blur-md p-8 rounded-[3rem] border border-white/20">
         <div className="text-center md:text-left">
-          <h2 className="text-4xl font-black text-white flex items-center gap-3">
-            Admin Dashboard <span className="animate-sway">❄️</span>
-          </h2>
+          <h2 className="text-4xl font-black text-white flex items-center gap-3">Admin Dashboard ❄️</h2>
           <p className="text-rose-200 text-xs font-bold tracking-widest uppercase mt-2 opacity-80">Attendance Monitoring (Started 11 Dec 2025)</p>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
@@ -379,19 +366,8 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="flex gap-2 mb-6 overflow-x-auto pb-2 no-print">
-        {[
-          { id: 'today', label: 'รายการประจำวัน', emoji: '📅' },
-          { id: 'official', label: 'รายงานสรุปวัน', emoji: '📜' },
-          { id: 'monthly', label: 'สถิติรายเดือน', emoji: '📊' },
-          { id: 'manual', label: 'ลงเวลาแทน', emoji: '✍️' }
-        ].map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id as TabType)}
-            className={`px-6 py-4 rounded-2xl font-black text-sm whitespace-nowrap transition-all shadow-lg flex items-center gap-2 ${
-              activeTab === tab.id ? 'bg-rose-600 text-white scale-105' : 'bg-white/80 text-stone-500 hover:bg-white'
-            }`}
-          >
+        {[{ id: 'today', label: 'รายการประจำวัน', emoji: '📅' }, { id: 'official', label: 'รายงานสรุปวัน', emoji: '📜' }, { id: 'monthly', label: 'สถิติรายเดือน', emoji: '📊' }, { id: 'manual', label: 'ลงเวลาแทน', emoji: '✍️' }].map(tab => (
+          <button key={tab.id} onClick={() => setActiveTab(tab.id as TabType)} className={`px-6 py-4 rounded-2xl font-black text-sm whitespace-nowrap transition-all shadow-lg flex items-center gap-2 ${activeTab === tab.id ? 'bg-rose-600 text-white scale-105' : 'bg-white/80 text-stone-500 hover:bg-white'}`}>
             <span>{tab.emoji}</span> {tab.label}
           </button>
         ))}
@@ -436,97 +412,39 @@ const Dashboard: React.FC = () => {
               <div className="flex-1">
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                   <div>
-                    <h3 className="text-2xl font-black text-stone-800">
-                      รายละเอียดวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })} ⛄
-                    </h3>
+                    <h3 className="text-2xl font-black text-stone-800">รายละเอียดวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })} ⛄</h3>
                     <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">Attendance Records List (Retrieved from Cloud)</p>
                   </div>
                   <button onClick={handleAiSummary} disabled={isGeneratingAi || filteredToday.length === 0} className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50">
                     {isGeneratingAi ? '...' : '✨ AI วิเคราะห์'}
                   </button>
                 </div>
-
-                {aiSummary && (
-                    <div className="mb-8 p-6 bg-emerald-50 rounded-3xl border border-emerald-100 text-emerald-800 animate-in zoom-in text-sm font-medium leading-relaxed shadow-inner">
-                        <p className="font-black text-[10px] uppercase tracking-widest mb-2 text-emerald-400">สรุปภาพรวมโดย AI</p>
-                        {aiSummary}
-                    </div>
-                )}
-
+                {aiSummary && <div className="mb-8 p-6 bg-emerald-50 rounded-3xl border border-emerald-100 text-emerald-800 animate-in zoom-in text-sm font-medium leading-relaxed shadow-inner"><p className="font-black text-[10px] uppercase tracking-widest mb-2 text-emerald-400">สรุปภาพรวมโดย AI</p>{aiSummary}</div>}
                 <div className="overflow-x-auto rounded-3xl border border-stone-100">
                   <table className="w-full text-left">
                     <thead>
                       <tr className="bg-stone-50 text-[10px] font-black uppercase text-stone-400 border-b border-stone-100">
-                        <th className="p-5">เวลา</th>
-                        <th className="p-5">รหัส</th>
-                        <th className="p-5">ชื่อ-นามสกุล</th>
-                        <th className="p-5 text-center">สถานะ</th>
-                        <th className="p-5 text-center">หลักฐาน (รูปถ่าย)</th>
-                        <th className="p-5 text-right">ลบ</th>
+                        <th className="p-5">เวลา</th><th className="p-5">รหัส</th><th className="p-5">ชื่อ-นามสกุล</th><th className="p-5 text-center">สถานะ</th><th className="p-5 text-center">หลักฐาน (รูปถ่าย)</th><th className="p-5 text-right">ลบ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-50">
-                      {filteredToday.length === 0 ? (
-                        <tr>
-                          <td colSpan={6} className="p-20 text-center text-stone-400 font-bold italic">ไม่พบข้อมูลการลงเวลาในวันที่เลือก ❄️</td>
+                      {filteredToday.length === 0 ? (<tr><td colSpan={6} className="p-20 text-center text-stone-400 font-bold italic">ไม่พบข้อมูลการลงเวลาในวันที่เลือก ❄️</td></tr>) : filteredToday.map(r => (
+                        <tr key={r.id} className="hover:bg-rose-50/20 transition-colors group">
+                          <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</td>
+                          <td className="p-5 font-bold text-stone-400">{r.staffId || '-'}</td>
+                          <td className="p-5"><div className="font-bold text-stone-800 whitespace-nowrap">{r.name}</div><div className="text-[10px] text-stone-400 font-bold uppercase whitespace-nowrap">{r.role}</div></td>
+                          <td className="p-5 text-center"><span className={`px-4 py-1.5 rounded-full text-[10px] font-black whitespace-nowrap ${r.status.includes('Time') ? 'bg-emerald-100 text-emerald-700' : r.status.includes('Late') ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}`}>{r.status === 'On Time' ? 'มาตรงเวลา' : r.status === 'Late' ? 'มาสาย' : r.status === 'Duty' ? 'ไปราชการ' : r.status.includes('Leave') ? 'ลา' : r.status}</span></td>
+                          <td className="p-5 text-center">{r.imageUrl && r.imageUrl.length > 5 ? (<button onClick={() => setPreviewData({url: r.imageUrl!, title: r.name, time: new Date(r.timestamp).toLocaleTimeString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), ai: r.aiVerification || ''})} className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-90 transition-all hover:ring-4 hover:ring-rose-100" title="กดเพื่อดูรูปขยายใหญ่"><img src={formatImageUrl(r.imageUrl)} className="w-full h-full object-cover opacity-90" alt="Thumbnail" onError={(e) => { (e.target as any).src = "https://via.placeholder.com/50?text=Error"; }} /></button>) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูปถ่าย</span>}</td>
+                          <td className="p-5 text-right"><button onClick={() => { if(confirm('ต้องการลบข้อมูลหรือไม่?')) deleteRecord(r).then(syncData) }} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>
                         </tr>
-                      ) : filteredToday.map(r => {
-                        const formattedUrl = formatImageUrl(r.imageUrl);
-                        const hasImage = formattedUrl !== "";
-                        return (
-                          <tr key={r.id} className="hover:bg-rose-50/20 transition-colors group">
-                            <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</td>
-                            <td className="p-5 font-bold text-stone-400">{r.staffId || '-'}</td>
-                            <td className="p-5">
-                              <div className="font-bold text-stone-800 whitespace-nowrap">{r.name}</div>
-                              <div className="text-[10px] text-stone-400 font-bold uppercase whitespace-nowrap">{r.role}</div>
-                            </td>
-                            <td className="p-5 text-center">
-                              <span className={`px-4 py-1.5 rounded-full text-[10px] font-black whitespace-nowrap ${
-                                r.status.includes('Time') ? 'bg-emerald-100 text-emerald-700' : 
-                                r.status.includes('Late') ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'
-                              }`}>{r.status === 'On Time' ? 'มาตรงเวลา' : r.status === 'Late' ? 'มาสาย' : r.status === 'Duty' ? 'ไปราชการ' : r.status.includes('Leave') ? 'ลา' : r.status}</span>
-                            </td>
-                            <td className="p-5 text-center">
-                              {hasImage ? (
-                                <button 
-                                  onClick={() => setPreviewData({
-                                      url: r.imageUrl!, 
-                                      title: r.name, 
-                                      time: new Date(r.timestamp).toLocaleTimeString('th-TH', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), 
-                                      ai: r.aiVerification || ''
-                                  })} 
-                                  className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-90 transition-all hover:ring-4 hover:ring-rose-100"
-                                  title="กดเพื่อดูรูปขยายใหญ่"
-                                >
-                                  <img 
-                                    src={formattedUrl} 
-                                    className="w-full h-full object-cover opacity-90" 
-                                    alt="Thumbnail" 
-                                    onError={(e) => { (e.target as any).src = "https://via.placeholder.com/50?text=Error"; }}
-                                  />
-                                </button>
-                              ) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูปถ่าย</span>}
-                            </td>
-                            <td className="p-5 text-right">
-                              <button onClick={() => { if(confirm('ต้องการลบข้อมูลหรือไม่?')) deleteRecord(r).then(syncData) }} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      ))}
                     </tbody>
                   </table>
                 </div>
               </div>
-
               <div className="w-full lg:w-80">
                 <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 no-print flex flex-col max-h-[700px]">
-                    <h4 className="font-black text-stone-800 mb-6 flex items-center justify-between shrink-0">
-                      ยังไม่ลงชื่อเช้า ⛄
-                      <span className="bg-rose-500 text-white text-[10px] px-3 py-1 rounded-full">{dailyAnalysis.absentCount}</span>
-                    </h4>
+                    <h4 className="font-black text-stone-800 mb-6 flex items-center justify-between shrink-0">ยังไม่ลงชื่อเช้า ⛄<span className="bg-rose-500 text-white text-[10px] px-3 py-1 rounded-full">{dailyAnalysis.absentCount}</span></h4>
                     <div className="space-y-4 overflow-y-auto pr-2 custom-scrollbar flex-1">
                       {dailyAnalysis.absentList.map(s => (
                           <div key={s.id} className="p-5 bg-white rounded-3xl border border-stone-100 shadow-sm transition-all hover:shadow-md">
@@ -547,78 +465,55 @@ const Dashboard: React.FC = () => {
         )}
 
         {activeTab === 'official' && (
-          <div className="p-0 md:p-3 bg-stone-100 min-h-screen relative overflow-auto">
-             <div className="no-print absolute top-2 right-4 z-50 flex items-center gap-2">
-                <button onClick={() => handleExportPDF('daily')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg font-black text-[9px] shadow-lg">PDF</button>
-                <button onClick={() => window.print()} className="bg-white hover:bg-stone-50 text-stone-700 px-3 py-1.5 rounded-lg font-black text-[9px] shadow-lg border border-stone-200">Print</button>
+          <div className="p-0 md:p-3 bg-stone-200 min-h-screen relative overflow-auto">
+             <div className="no-print absolute top-4 right-8 z-50 flex items-center gap-3">
+                <button onClick={() => handleExportPDF('daily')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs shadow-xl flex items-center gap-2 transition-all active:scale-95">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                  บันทึก PDF
+                </button>
+                <button onClick={() => window.print()} className="bg-white hover:bg-stone-50 text-stone-700 px-5 py-2.5 rounded-xl font-black text-xs shadow-xl border border-stone-200 transition-all active:scale-95">พิมพ์เอกสาร</button>
              </div>
-             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[6mm] md:px-[15mm] py-[5mm] md:py-[8mm] min-h-[297mm] border border-stone-200">
-                <div className="flex flex-col items-center text-center mb-5">
-                   <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-10 h-10 md:w-14 md:h-14 object-contain mb-1.5" />
-                   <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">รายงานการมาปฏิบัติงานของครูและบุคลากรทางการศึกษา</h1>
-                   <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
-                   <h2 className="text-[9px] font-bold text-stone-700">ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</h2>
+             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[24mm] py-[15mm] min-h-[297mm] border border-stone-200">
+                <div className="flex flex-col items-center text-center mb-10">
+                   <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-16 h-16 object-contain mb-4" />
+                   <h1 className="text-sm font-black text-stone-900 leading-tight uppercase">รายงานการมาปฏิบัติงานของครูและบุคลากรทางการศึกษา</h1>
+                   <h1 className="text-sm font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
+                   <h2 className="text-xs font-bold text-stone-700 mt-2">ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</h2>
                 </div>
-                <div className="mt-1 overflow-x-auto">
+                <div className="mt-1">
                    <table className="w-full border-collapse border border-stone-400">
                       <thead>
                          <tr className="bg-stone-50">
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-8">ลำดับ</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-32">รายชื่อ</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-28">ตำแหน่ง</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-14">เวลามา</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-14">เวลากลับ</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center">หมายเหตุ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-12">ลำดับ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-48">รายชื่อ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-40">ตำแหน่ง</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-24">เวลามา</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-24">เวลากลับ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center">หมายเหตุ</th>
                          </tr>
                       </thead>
                       <tbody style={{ fontSize: webFontSize }}>
                          {officialData.map(d => (
-                            <tr key={d.no} className="hover:bg-stone-50/20">
-                               <td className="border border-stone-400 py-0.5 px-1 text-center font-mono">{d.no}</td>
-                               <td className="border border-stone-400 py-0.5 px-3 text-left font-bold text-stone-800 whitespace-nowrap overflow-hidden">{d.name}</td>
-                               <td className="border border-stone-400 py-0.5 px-2 text-center text-stone-500 whitespace-nowrap overflow-hidden">{d.role}</td>
-                               <td className="border border-stone-400 py-0.5 px-1 text-center whitespace-nowrap">
-                                  <div className="flex items-center justify-center gap-1 group">
-                                     {d.arrival}
-                                     {d.arrivalImg && d.arrivalImg.length > 50 && (
-                                       <button 
-                                          onClick={() => setPreviewData({url: d.arrivalImg!, title: d.name, time: `มาทำงาน: ${d.arrival}`, ai: d.arrivalAi})}
-                                          className="no-print opacity-20 group-hover:opacity-100 transition-opacity text-rose-500 hover:scale-110 active:scale-95 cursor-pointer"
-                                          title="ดูรูปหลักฐาน"
-                                       >
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                                       </button>
-                                     )}
-                                  </div>
-                               </td>
-                               <td className="border border-stone-400 py-0.5 px-1 text-center whitespace-nowrap">
-                                  <div className="flex items-center justify-center gap-1 group">
-                                     {d.departure}
-                                     {d.departureImg && d.departureImg.length > 50 && (
-                                       <button 
-                                          onClick={() => setPreviewData({url: d.departureImg!, title: d.name, time: `กลับบ้าน: ${d.departure}`, ai: d.departureAi})}
-                                          className="no-print opacity-20 group-hover:opacity-100 transition-opacity text-rose-500 hover:scale-110 active:scale-95 cursor-pointer"
-                                          title="ดูรูปหลักฐาน"
-                                       >
-                                          <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path><circle cx="12" cy="13" r="4"></circle></svg>
-                                       </button>
-                                     )}
-                                  </div>
-                               </td>
-                               <td className="border border-stone-400 py-0.5 px-2 text-center text-stone-500 italic leading-tight">{d.remark}</td>
+                            <tr key={d.no} className="hover:bg-stone-50/50">
+                               <td className="border border-stone-400 py-2 px-2 text-center font-mono">{d.no}</td>
+                               <td className="border border-stone-400 py-2 px-4 text-left font-bold text-stone-800 whitespace-nowrap">{d.name}</td>
+                               <td className="border border-stone-400 py-2 px-2 text-center text-stone-500 whitespace-nowrap">{d.role}</td>
+                               <td className="border border-stone-400 py-2 px-1 text-center whitespace-nowrap">{d.arrival}</td>
+                               <td className="border border-stone-400 py-2 px-1 text-center whitespace-nowrap">{d.departure}</td>
+                               <td className="border border-stone-400 py-2 px-3 text-center text-stone-500 italic leading-tight">{d.remark}</td>
                             </tr>
                          ))}
                       </tbody>
                    </table>
                 </div>
-                <div className="mt-8 flex justify-between px-10 py-2">
+                <div className="mt-16 flex justify-around px-10 py-2">
                    <div className="text-center">
-                      <p className="text-[9px] text-stone-800 mb-1.5 font-bold">(ลงชื่อ)...........................................................</p>
-                      <p className="text-[9px] font-black text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
+                      <p className="text-[11px] text-stone-800 mb-3 font-bold">(ลงชื่อ)...........................................................</p>
+                      <p className="text-[11px] font-black text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
                    </div>
                    <div className="text-center">
-                      <p className="text-[9px] text-stone-800 mb-1.5 font-bold">(ลงชื่อ)...........................................................</p>
-                      <p className="text-[9px] font-black text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
+                      <p className="text-[11px] text-stone-800 mb-3 font-bold">(ลงชื่อ)...........................................................</p>
+                      <p className="text-[11px] font-black text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
                    </div>
                 </div>
              </div>
@@ -626,42 +521,54 @@ const Dashboard: React.FC = () => {
         )}
 
         {activeTab === 'monthly' && (
-          <div className="p-0 md:p-3 bg-stone-100 min-h-screen relative overflow-auto">
-             <div className="no-print absolute top-2 right-4 z-50 flex items-center gap-2 bg-white/80 p-1.5 rounded-lg shadow-sm border border-stone-100 backdrop-blur-sm">
-                <button onClick={() => handleExportPDF('monthly')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-md font-black text-[9px] shadow-sm">PDF</button>
+          <div className="p-0 md:p-3 bg-stone-200 min-h-screen relative overflow-auto">
+             <div className="no-print absolute top-4 right-8 z-50 flex items-center gap-3">
+                <button onClick={() => handleExportPDF('monthly')} className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-xl font-black text-xs shadow-xl transition-all active:scale-95">บันทึก PDF</button>
+                <button onClick={() => window.print()} className="bg-white hover:bg-stone-50 text-stone-700 px-5 py-2.5 rounded-xl font-black text-xs shadow-xl border border-stone-200 transition-all active:scale-95">พิมพ์เอกสาร</button>
              </div>
-             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[6mm] md:px-[15mm] py-[5mm] md:py-[8mm] min-h-[297mm] border border-stone-200">
-                <div className="flex flex-col items-center text-center mb-5">
-                   <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-10 h-10 md:w-14 md:h-14 object-contain mb-1.5" />
-                   <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">รายงานสถิติการมาปฏิบัติงานรายเดือน</h1>
-                   <h1 className="text-[11px] md:text-sm font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
-                   <h2 className="text-[9px] font-bold text-stone-700">ประจำเดือน {new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</h2>
+             <div className="max-w-[210mm] mx-auto bg-white shadow-2xl px-[24mm] py-[15mm] min-h-[297mm] border border-stone-200">
+                <div className="flex flex-col items-center text-center mb-10">
+                   <img src={SCHOOL_LOGO_URL} alt="School Logo" className="w-16 h-16 object-contain mb-4" />
+                   <h1 className="text-sm font-black text-stone-900 leading-tight uppercase">รายงานสถิติการมาปฏิบัติงานรายเดือน</h1>
+                   <h1 className="text-sm font-black text-stone-900 leading-tight uppercase">โรงเรียนประจักษ์ศิลปาคม</h1>
+                   <h2 className="text-xs font-bold text-stone-700 mt-2">ประจำเดือน {new Date(selectedDate).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</h2>
                 </div>
-                <div className="mt-1 overflow-x-auto">
+                <div className="mt-1">
                    <table className="w-full border-collapse border border-stone-400">
                       <thead>
                          <tr className="bg-stone-50">
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-8">ลำดับ</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-32">รายชื่อ</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-28">ตำแหน่ง</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-12">ไม่ลงเวลา</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center w-12">มาสาย</th>
-                            <th className="border border-stone-400 p-1 text-[8px] font-black text-center">วันที่ที่มาสาย (ตั้งแต่ 11 ธ.ค. เป็นต้นไป)</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-12">ลำดับ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-48">รายชื่อ</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-40">ตำแหน่ง</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-22">ไม่ลงเวลา</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center w-22">มาสาย</th>
+                            <th className="border border-stone-400 p-2 text-[11px] font-black text-center">วันที่ที่มาสาย</th>
                          </tr>
                       </thead>
                       <tbody style={{ fontSize: webFontSize }}>
                          {monthlyLatenessData.map(d => (
-                            <tr key={d.no} className="hover:bg-stone-50/20">
-                               <td className="border border-stone-400 py-0.5 px-1 text-center font-mono">{d.no}</td>
-                               <td className="border border-stone-400 py-0.5 px-3 text-left font-bold text-stone-800 whitespace-nowrap overflow-hidden">{d.name}</td>
-                               <td className="border border-stone-400 py-0.5 px-2 text-center text-stone-500 whitespace-nowrap overflow-hidden">{d.role}</td>
-                               <td className={`border border-stone-400 py-0.5 px-1 text-center whitespace-nowrap ${d.absentCount > 0 ? 'text-orange-600 font-black' : 'text-stone-300'}`}>{d.absentCount || '-'}</td>
-                               <td className={`border border-stone-400 py-0.5 px-1 text-center whitespace-nowrap ${d.lateCount > 0 ? 'text-rose-600 font-black' : 'text-stone-300'}`}>{d.lateCount || '-'}</td>
-                               <td className="border border-stone-400 py-0.5 px-2 text-center text-stone-500 italic text-[7.5px] leading-tight break-all">{d.lateDates}</td>
+                            <tr key={d.no} className="hover:bg-stone-50/50">
+                               <td className="border border-stone-400 py-2 px-2 text-center font-mono">{d.no}</td>
+                               <td className="border border-stone-400 py-2 px-4 text-left font-bold text-stone-800 whitespace-nowrap">{d.name}</td>
+                               <td className="border border-stone-400 py-2 px-2 text-center text-stone-500 whitespace-nowrap">{d.role}</td>
+                               <td className={`border border-stone-400 py-2 px-2 text-center whitespace-nowrap ${d.absentCount > 0 ? 'text-orange-600 font-black' : 'text-stone-300'}`}>{d.absentCount || '-'}</td>
+                               <td className={`border border-stone-400 py-2 px-2 text-center whitespace-nowrap ${d.lateCount > 0 ? 'text-rose-600 font-black' : 'text-stone-300'}`}>{d.lateCount || '-'}</td>
+                               <td className="border border-stone-400 py-2 px-3 text-center text-stone-500 italic text-[10px] leading-tight break-all">{d.lateDates}</td>
                             </tr>
                          ))}
                       </tbody>
                    </table>
+                </div>
+                {/* Monthly Signature Added */}
+                <div className="mt-16 flex justify-around px-10 py-2">
+                   <div className="text-center">
+                      <p className="text-[11px] text-stone-800 mb-3 font-bold">(ลงชื่อ)...........................................................</p>
+                      <p className="text-[11px] font-black text-stone-400 uppercase">กลุ่มบริหารงานบุคคล</p>
+                   </div>
+                   <div className="text-center">
+                      <p className="text-[11px] text-stone-800 mb-3 font-bold">(ลงชื่อ)...........................................................</p>
+                      <p className="text-[11px] font-black text-stone-400 uppercase">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
+                   </div>
                 </div>
              </div>
           </div>
@@ -669,15 +576,15 @@ const Dashboard: React.FC = () => {
 
         {activeTab === 'manual' && (
           <div className="p-10 max-w-2xl mx-auto no-print">
-             <div className="text-center mb-10"><span className="text-6xl mb-4 inline-block">✍️</span><h3 className="text-2xl font-black text-stone-800">ลงเวลาทดแทน / แก้ไขย้อนหลัง</h3><p className="text-stone-400 text-xs font-bold mt-2 italic">แอดมินสามารถลงเวลาแทนบุคลากรได้ กรณีติดราชการภายนอกหรือมีปัญหาเรื่องอุปกรณ์</p></div>
+             <div className="text-center mb-10"><span className="text-6xl mb-4 inline-block">✍️</span><h3 className="text-2xl font-black text-stone-800">ลงเวลาทดแทน / แก้ไขย้อนหลัง</h3></div>
              <form onSubmit={handleManualCheckIn} className="space-y-6 bg-stone-50 p-10 rounded-[3rem] border-2 border-stone-100 shadow-xl">
-                <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เลือกบุคลากรที่ต้องการบันทึก</label><select value={manualStaffId} onChange={e => setManualStaffId(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm" required><option value="">-- ค้นหารายชื่อบุคลากร --</option>{staffList.map(s => <option key={s.id} value={s.id}>{s.id} : {s.name}</option>)}</select></div>
+                <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">เลือกบุคลากร</label><select value={manualStaffId} onChange={e => setManualStaffId(e.target.value)} className="w-full p-5 bg-white border-2 border-stone-200 rounded-[1.5rem] font-bold text-stone-800 outline-none" required><option value="">-- ค้นหารายชื่อ --</option>{staffList.map(s => <option key={s.id} value={s.id}>{s.id} : {s.name}</option>)}</select></div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                   <div className="md:col-span-2"><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ประเภทการลงเวลา</label><div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => setManualType('arrival')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'arrival' ? 'bg-emerald-500 text-white border-emerald-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}>มาทำงาน</button><button type="button" onClick={() => setManualType('departure')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'departure' ? 'bg-amber-500 text-white border-amber-400 shadow-md scale-105' : 'bg-white text-stone-400 border-stone-100 opacity-60'}`}>กลับบ้าน</button></div></div>
-                   <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ระบุวันที่ (Date)</label><input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm h-[52px]" required /></div>
-                   <div><label className="block text-[10px] font-black text-stone-400 uppercase tracking-widest mb-3 ml-2">ระบุเวลา (Time)</label><input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold text-stone-800 outline-none focus:ring-4 focus:ring-rose-100 transition-all shadow-sm h-[52px]" required /></div>
+                   <div className="md:col-span-2"><div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => setManualType('arrival')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'arrival' ? 'bg-emerald-500 text-white border-emerald-400' : 'bg-white text-stone-400'}`}>มาทำงาน</button><button type="button" onClick={() => setManualType('departure')} className={`py-4 rounded-2xl font-black text-xs transition-all border-2 ${manualType === 'departure' ? 'bg-amber-500 text-white border-amber-400' : 'bg-white text-stone-400'}`}>กลับบ้าน</button></div></div>
+                   <div><input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold" required /></div>
+                   <div><input type="time" value={manualTime} onChange={e => setManualTime(e.target.value)} className="w-full p-4 bg-white border-2 border-stone-200 rounded-2xl font-bold" required /></div>
                 </div>
-                <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl active:scale-95 transition-all text-lg">บันทึกข้อมูลย้อนหลัง ❄️</button>
+                <button type="submit" className="w-full py-6 bg-rose-600 hover:bg-rose-700 text-white rounded-[1.5rem] font-black shadow-2xl transition-all">บันทึกข้อมูลย้อนหลัง ❄️</button>
              </form>
           </div>
         )}

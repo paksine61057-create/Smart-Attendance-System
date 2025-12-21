@@ -206,15 +206,15 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (rawType.includes('อนุญาต') || rawType === 'authorized_late' || rawType === 'authorized late') type = 'authorized_late';
 
                 // Image handling from Cloud - try multiple column name variants
-                let cloudImage = getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64', 'หลักฐาน', 'รูปภาพ']);
+                let cloudImage = String(getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64', 'หลักฐาน', 'รูปภาพ']) || "").trim();
                 
                 // If it's just a placeholder "-", treat as empty
-                if (cloudImage === "-" || (typeof cloudImage === 'string' && cloudImage.length < 20)) {
+                if (cloudImage === "-" || cloudImage.length < 5) {
                   cloudImage = "";
                 }
 
                 return {
-                    id: getVal(['id']) || String(ts),
+                    id: String(getVal(['id']) || ts),
                     staffId: getVal(['staffId', 'staffid', 'Staff ID']) || "",
                     name: getVal(['name', 'Name']) || "Unknown",
                     role: getVal(['role', 'Role']) || "",
@@ -225,7 +225,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     location: { lat: 0, lng: 0 },
                     distanceFromBase: Number(getVal(['distance', 'Distance (m)']) || 0),
                     aiVerification: getVal(['aiVerification', 'AI Verification']) || "",
-                    imageUrl: cloudImage || ""
+                    imageUrl: cloudImage
                 };
             });
         }
