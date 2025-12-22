@@ -183,12 +183,13 @@ const Dashboard: React.FC = () => {
       for (let d = 1; d <= daysInMonth; d++) {
         const checkDate = new Date(year, month - 1, d);
         
-        // เงื่อนไข: นับสถิติตั้งแต่วันที่ 11 ธ.ค. 2568 (2025) เป็นต้นมา
+        // เงื่อนไข 1: นับสถิติตั้งแต่วันที่ 11 ธ.ค. 2568 เป็นต้นมา
         if (checkDate < STATS_START_DATE) continue;
-        // ไม่นับวันที่ยังมาไม่ถึง
+        // เงื่อนไข 2: ไม่นับวันที่ยังมาไม่ถึง
         if (checkDate > todayDate) continue;
 
         const holiday = getHoliday(checkDate);
+        // เงื่อนไข 3: นับสถิติเฉพาะวันปกติ ไม่นับวันหยุด
         if (!holiday) {
           const dayRecords = staffRecords.filter(r => new Date(r.timestamp).getDate() === d);
           const arrivalRecord = dayRecords.find(r => ['arrival', 'duty', 'sick_leave', 'personal_leave', 'authorized_late'].includes(r.type));
@@ -502,11 +503,11 @@ const Dashboard: React.FC = () => {
                   <table className="w-full border-collapse border border-stone-500">
                      <thead>
                         <tr className="bg-stone-50 text-[9px] font-black uppercase text-stone-500 border-b border-stone-500">
-                           <th className="border border-stone-500 px-1 py-2 w-7">ที่</th>
-                           <th className="border border-stone-500 px-2 py-2 text-left">ชื่อ - นามสกุล</th>
-                           <th className="border border-stone-500 px-2 py-2 text-left">ตำแหน่ง</th>
+                           <th className="border border-stone-500 px-1 py-2 w-7 text-center">ที่</th>
+                           <th className="border border-stone-500 px-2 py-2 text-center">ชื่อ - นามสกุล</th>
+                           <th className="border border-stone-500 px-2 py-2 text-center">ตำแหน่ง</th>
                            <th className="border border-stone-500 px-1 py-2 w-12 text-center">มาสาย<br/>(ครั้ง)</th>
-                           <th className="border border-stone-500 px-2 py-2 text-left">วันที่มาสาย</th>
+                           <th className="border border-stone-500 px-2 py-2 text-center">วันที่มาสาย</th>
                            <th className="border border-stone-500 px-1 py-2 w-14 text-center">ไม่ลงเวลา<br/>(วัน)</th>
                         </tr>
                      </thead>
