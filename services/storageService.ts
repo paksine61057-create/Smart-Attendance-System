@@ -36,7 +36,7 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "imageBase64": cleanImageBase64
     };
 
-    const response = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -135,52 +135,54 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
         if (Array.isArray(data)) {
             return data.map((r: any) => {
                 const getVal = (keys: string[]) => {
-                    const normalizedKeys = keys.map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+                    const normalizedKeys = keys.map(k => k.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, ''));
                     for (const objKey in r) {
-                        const normalizedObjKey = objKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        const normalizedObjKey = objKey.toLowerCase().replace(/[^a-z0-9\u0E00-\u0E7F]/g, '');
                         if (normalizedKeys.includes(normalizedObjKey)) return r[objKey];
                     }
                     return null;
                 };
 
                 let ts = Date.now();
-                const rawTs = getVal(['timestamp', 'id']);
-                if (rawTs && !isNaN(Number(rawTs))) ts = Number(rawTs);
+                const rawTs = getVal(['timestamp', 'id', 'Timestamp']);
+                if (rawTs && !isNaN(Number(rawTs)) && Number(rawTs) > 0) ts = Number(rawTs);
                 
-                // แปลง Status กลับเป็น English Key สำหรับระบบภายใน
-                const rawStatus = getVal(['status']) || "Normal";
+                // ค้นหาสถานะ (รองรับคอลัมน์ Status หรือ สถานะ)
+                const rawStatus = String(getVal(['status', 'สถานะ']) || "Normal").trim();
                 let status: any = rawStatus;
-                if (rawStatus === 'มาตรงเวลา') status = 'On Time';
-                if (rawStatus === 'มาสาย') status = 'Late';
-                if (rawStatus === 'ไปราชการ') status = 'Duty';
-                if (rawStatus === 'ลาป่วย') status = 'Sick Leave';
-                if (rawStatus === 'ลากิจ') status = 'Personal Leave';
-                if (rawStatus === 'ลาอื่นๆ') status = 'Other Leave';
-                if (rawStatus === 'อนุญาตสาย') status = 'Authorized Late';
+                // Mapping ภาษาไทยกลับเป็นระบบ
+                if (rawStatus === 'มาตรงเวลา' || rawStatus === 'On Time') status = 'On Time';
+                else if (rawStatus === 'มาสาย' || rawStatus === 'Late') status = 'Late';
+                else if (rawStatus === 'ไปราชการ' || rawStatus === 'Duty') status = 'Duty';
+                else if (rawStatus === 'ลาป่วย' || rawStatus === 'Sick Leave') status = 'Sick Leave';
+                else if (rawStatus === 'ลากิจ' || rawStatus === 'Personal Leave') status = 'Personal Leave';
+                else if (rawStatus === 'ลาอื่นๆ' || rawStatus === 'Other Leave') status = 'Other Leave';
+                else if (rawStatus === 'อนุญาตสาย' || rawStatus === 'Authorized Late') status = 'Authorized Late';
+                else if (rawStatus === 'กลับก่อน' || rawStatus === 'Early Leave') status = 'Early Leave';
 
-                // ตรวจสอบ Type
-                const rawType = getVal(['type']) || 'arrival';
+                // ค้นหาประเภท
+                const rawType = String(getVal(['type', 'ประเภท']) || 'arrival').trim();
                 let type: AttendanceType = 'arrival';
-                if (rawType === 'กลับบ้าน') type = 'departure';
-                else if (rawType === 'ไปราชการ') type = 'duty';
-                else if (rawType === 'ลาป่วย') type = 'sick_leave';
-                else if (rawType === 'ลากิจ') type = 'personal_leave';
-                else if (rawType === 'ลาอื่นๆ') type = 'other_leave';
-                else if (rawType === 'อนุญาตสาย') type = 'authorized_late';
+                if (rawType === 'กลับบ้าน' || rawType === 'departure' || rawType === 'Departure') type = 'departure';
+                else if (rawType === 'ไปราชการ' || rawType === 'duty' || rawType === 'Duty') type = 'duty';
+                else if (rawType === 'ลาป่วย' || rawType === 'sick_leave' || rawType === 'Sick Leave') type = 'sick_leave';
+                else if (rawType === 'ลากิจ' || rawType === 'personal_leave' || rawType === 'Personal Leave') type = 'personal_leave';
+                else if (rawType === 'ลาอื่นๆ' || rawType === 'other_leave' || rawType === 'Other Leave') type = 'other_leave';
+                else if (rawType === 'อนุญาตสาย' || rawType === 'authorized_late' || rawType === 'Authorized Late') type = 'authorized_late';
 
                 return {
-                    id: String(getVal(['id']) || ts),
-                    staffId: String(getVal(['staffId', 'staffid', 'idพนักงาน']) || ""),
-                    name: String(getVal(['name', 'ชื่อ']) || "ไม่ระบุชื่อ"),
-                    role: String(getVal(['role', 'ตำแหน่ง']) || ""),
+                    id: String(getVal(['id', 'idพนักงาน', 'StaffID', 'Staff ID']) || ts),
+                    staffId: String(getVal(['staffId', 'staffid', 'idพนักงาน', 'StaffID', 'Staff ID']) || ""),
+                    name: String(getVal(['name', 'ชื่อ', 'ชื่อนามสกุล', 'Name']) || "ไม่ระบุชื่อ"),
+                    role: String(getVal(['role', 'ตำแหน่ง', 'Role']) || ""),
                     timestamp: ts,
                     type: type,
                     status: status,
-                    reason: String(getVal(['reason', 'เหตุผล']) || ""),
+                    reason: String(getVal(['reason', 'เหตุผล', 'Reason']) || ""),
                     location: { lat: 0, lng: 0 },
                     distanceFromBase: 0,
-                    aiVerification: String(getVal(['aiVerification', 'ai', 'การตรวจสอบ']) || ""),
-                    imageUrl: String(getVal(['imageUrl', 'image', 'รูปภาพ', 'url']) || "")
+                    aiVerification: String(getVal(['aiVerification', 'ai', 'การตรวจสอบ', 'AIVerification']) || ""),
+                    imageUrl: String(getVal(['imageUrl', 'image', 'รูปภาพ', 'url', 'Image']) || "")
                 };
             });
         }
