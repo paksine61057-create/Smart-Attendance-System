@@ -4,7 +4,8 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
+// อัปเดต URL เป็นตัวใหม่ตามที่ระบุ
+const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzUoPM2lDmpMbCwfryM1EuiZDQnFPuF4paqayK5XWL0nNF_MYGmPcOS7AEjDTNEaM1q/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
@@ -149,8 +150,9 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     return null;
                 };
 
+                // พยายามหา Timestamp ที่ดีที่สุดมาใช้เป็น ID
                 let ts = Date.now();
-                const rawTs = getVal(['timestamp', 'Timestamp', 'id']);
+                const rawTs = getVal(['timestamp', 'Timestamp', 'id', 'idพนักงาน', 'เวลาที่ทำรายการ']);
                 if (rawTs) {
                     const parsed = Number(rawTs);
                     if (!isNaN(parsed) && parsed > 1000000000) ts = parsed;
@@ -161,34 +163,36 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 const combined = (rawType + " " + rawStatus);
                 
                 let type: AttendanceType = 'arrival';
-                if (['กลับบ้าน', 'departure', 'เลิกงาน', 'ออก'].some(k => combined.includes(k))) type = 'departure';
+                if (['กลับบ้าน', 'departure', 'เลิกงาน', 'ออก', 'exit'].some(k => combined.includes(k))) type = 'departure';
                 else if (['ไปราชการ', 'duty', 'ราชการ'].some(k => combined.includes(k))) type = 'duty';
                 else if (['ลาป่วย', 'sick'].some(k => combined.includes(k))) type = 'sick_leave';
                 else if (['ลากิจ', 'personal'].some(k => combined.includes(k))) type = 'personal_leave';
                 else if (['ลาอื่นๆ', 'other'].some(k => combined.includes(k))) type = 'other_leave';
-                else if (['อนุญาตสาย', 'authorized'].some(k => combined.includes(k))) type = 'authorized_late';
+                else if (['อนุญาตสาย', 'authorized', 'ขอเข้าสาย'].some(k => combined.includes(k))) type = 'authorized_late';
 
                 let status: any = 'Normal';
                 if (['ตรงเวลา', 'on time'].some(k => combined.includes(k))) status = 'On Time';
                 else if (['สาย', 'late'].some(k => combined.includes(k))) status = 'Late';
                 else if (['กลับก่อน', 'early'].some(k => combined.includes(k))) status = 'Early Leave';
                 else if (type === 'departure') status = 'Normal';
-                else if (['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(type)) status = type.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                else if (['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(type)) {
+                   status = type.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                }
                 else status = 'On Time';
 
                 return {
-                    id: String(getVal(['id', 'Staff ID', 'idพนักงาน']) || ts),
+                    id: String(getVal(['id', 'Staff ID', 'idพนักงาน', 'StaffID']) || ts),
                     staffId: String(getVal(['staffId', 'StaffID', 'Staff ID', 'idพนักงาน']) || ""),
-                    name: String(getVal(['name', 'ชื่อ', 'ชื่อนามสกุล', 'Name']) || "ไม่ระบุชื่อ"),
+                    name: String(getVal(['name', 'ชื่อ', 'ชื่อนามสกุล', 'Name', 'ชื่อ-นามสกุล']) || "ไม่ระบุชื่อ"),
                     role: String(getVal(['role', 'ตำแหน่ง', 'Role']) || ""),
                     timestamp: ts,
                     type: type,
                     status: status,
-                    reason: String(getVal(['reason', 'เหตุผล', 'Reason']) || ""),
+                    reason: String(getVal(['reason', 'เหตุผล', 'Reason', 'หมายเหตุ']) || ""),
                     location: { lat: 0, lng: 0 },
                     distanceFromBase: 0,
-                    aiVerification: String(getVal(['aiVerification', 'ai', 'การตรวจสอบ']) || ""),
-                    imageUrl: String(getVal(['imageUrl', 'image', 'รูปภาพ', 'Photo', 'File Upload', 'ภาพถ่าย']) || ""),
+                    aiVerification: String(getVal(['aiVerification', 'ai', 'การตรวจสอบ', 'AIVerification']) || ""),
+                    imageUrl: String(getVal(['imageUrl', 'image', 'รูปภาพ', 'Photo', 'File Upload', 'ภาพถ่าย', 'url']) || ""),
                     syncedToSheets: true
                 };
             });

@@ -48,6 +48,7 @@ const Dashboard: React.FC = () => {
       const mergedMap = new Map<string, CheckInRecord>();
       const getSig = (r: CheckInRecord) => {
         const d = new Date(r.timestamp);
+        // Signature แยกตาม StaffID + Type + Date เพื่อให้แสดงได้ทั้งมาและกลับในวันเดียวกัน
         return `${String(r.staffId || '').toUpperCase()}_${r.type}_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
       };
       
@@ -61,6 +62,7 @@ const Dashboard: React.FC = () => {
       
       setAllRecords(Array.from(mergedMap.values()));
     } catch (e) {
+      console.error("Sync failed, using local", e);
       setAllRecords(getRecords());
     } finally { setIsSyncing(false); }
   }, []);
@@ -211,10 +213,10 @@ const Dashboard: React.FC = () => {
       {previewData && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setPreviewData(null)}>
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full animate-in zoom-in" onClick={e => e.stopPropagation()}>
-             <img src={previewData.url} className="w-full aspect-square object-cover rounded-2xl mb-4" alt="preview" />
+             <img src={previewData.url} className="w-full aspect-square object-cover rounded-2xl mb-4" alt="preview" onError={(e) => (e.target as any).src="https://via.placeholder.com/300?text=Image+Not+Found"} />
              <h3 className="font-bold text-center text-stone-800">{previewData.title}</h3>
              <p className="text-center text-xs text-stone-400 mt-1">{previewData.time}</p>
-             <button onClick={() => setPreviewData(null)} className="w-full mt-4 py-3 bg-stone-100 rounded-xl font-bold">ปิด</button>
+             <button onClick={() => setPreviewData(null)} className="w-full mt-4 py-3 bg-stone-100 rounded-xl font-bold">ปิดหน้าต่าง</button>
           </div>
         </div>
       )}
@@ -226,10 +228,10 @@ const Dashboard: React.FC = () => {
           <p className="text-rose-200 text-xs font-bold uppercase tracking-widest mt-2">จัดการข้อมูลระบบโรงเรียนประจักษ์ศิลปาคม</p>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
-          <button onClick={syncData} disabled={isSyncing} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-bold text-sm transition-all">
-            {isSyncing ? '🔄 กำลังซิงค์...' : '🔄 ซิงค์ข้อมูลล่าสุด'}
+          <button onClick={syncData} disabled={isSyncing} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-bold text-sm transition-all shadow-lg active:scale-95">
+            {isSyncing ? '🔄 กำลังซิงค์ข้อมูล...' : '🔄 ซิงค์ข้อมูลล่าสุด'}
           </button>
-          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="px-5 py-3 rounded-2xl bg-white font-bold text-rose-700 shadow-lg text-sm outline-none" />
+          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} className="px-5 py-3 rounded-2xl bg-white font-bold text-rose-700 shadow-xl text-sm outline-none border-2 border-white focus:border-rose-400" />
         </div>
       </div>
 
@@ -254,24 +256,24 @@ const Dashboard: React.FC = () => {
           <div className="p-10">
             {/* Summary Cards */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10 text-center">
-              <div className="bg-emerald-50 p-6 rounded-[2.5rem] border-2 border-emerald-100">
-                <p className="text-[10px] font-black text-emerald-400 uppercase mb-1">มาทำงาน</p>
+              <div className="bg-emerald-50 p-6 rounded-[2.5rem] border-2 border-emerald-100 shadow-sm">
+                <p className="text-[10px] font-black text-emerald-400 uppercase mb-1 tracking-widest">มาทำงาน</p>
                 <p className="text-3xl font-black text-emerald-600">{dailyAnalysis.arrived}</p>
               </div>
-              <div className="bg-rose-50 p-6 rounded-[2.5rem] border-2 border-rose-100">
-                <p className="text-[10px] font-black text-rose-400 uppercase mb-1">มาสาย</p>
+              <div className="bg-rose-50 p-6 rounded-[2.5rem] border-2 border-rose-100 shadow-sm">
+                <p className="text-[10px] font-black text-rose-400 uppercase mb-1 tracking-widest">มาสาย</p>
                 <p className="text-3xl font-black text-rose-600">{dailyAnalysis.late}</p>
               </div>
-              <div className="bg-amber-50 p-6 rounded-[2.5rem] border-2 border-amber-100">
-                <p className="text-[10px] font-black text-amber-400 uppercase mb-1">ลา</p>
+              <div className="bg-amber-50 p-6 rounded-[2.5rem] border-2 border-amber-100 shadow-sm">
+                <p className="text-[10px] font-black text-amber-400 uppercase mb-1 tracking-widest">ลา</p>
                 <p className="text-3xl font-black text-amber-600">{dailyAnalysis.leave}</p>
               </div>
-              <div className="bg-blue-50 p-6 rounded-[2.5rem] border-2 border-blue-100">
-                <p className="text-[10px] font-black text-blue-400 uppercase mb-1">ไปราชการ</p>
+              <div className="bg-blue-50 p-6 rounded-[2.5rem] border-2 border-blue-100 shadow-sm">
+                <p className="text-[10px] font-black text-blue-400 uppercase mb-1 tracking-widest">ไปราชการ</p>
                 <p className="text-3xl font-black text-blue-600">{dailyAnalysis.duty}</p>
               </div>
-              <div className="bg-slate-50 p-6 rounded-[2.5rem] border-2 border-slate-100">
-                <p className="text-[10px] font-black text-slate-400 uppercase mb-1">ไม่ลงเวลา</p>
+              <div className="bg-slate-50 p-6 rounded-[2.5rem] border-2 border-slate-100 shadow-sm">
+                <p className="text-[10px] font-black text-slate-400 uppercase mb-1 tracking-widest">ไม่ลงเวลา</p>
                 <p className="text-3xl font-black text-slate-600">{dailyAnalysis.absentCount}</p>
               </div>
             </div>
@@ -279,7 +281,10 @@ const Dashboard: React.FC = () => {
             <div className="flex flex-col lg:flex-row gap-8">
               {/* Recent Transactions Table */}
               <div className="flex-1 overflow-x-auto">
-                <h3 className="text-2xl font-black text-stone-800 mb-6">รายการล่าสุด ⛄</h3>
+                <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-2xl font-black text-stone-800">รายการล่าสุด ⛄</h3>
+                    <p className="text-[10px] font-bold text-stone-400 italic">*แสดงข้อมูลที่ซิงค์จาก Cloud ล่าสุด</p>
+                </div>
                 <table className="w-full text-left">
                   <thead>
                     <tr className="bg-stone-50 text-[10px] font-black uppercase text-stone-400 border-b">
@@ -306,14 +311,14 @@ const Dashboard: React.FC = () => {
                           </span>
                         </td>
                         <td className="p-5 text-center">
-                          {r.imageUrl ? (
-                            <button onClick={() => openPreview(r.imageUrl!, r.name, r.timestamp, r.aiVerification || '')} className="w-10 h-10 rounded-xl bg-stone-100 border-2 border-white shadow-sm overflow-hidden">
-                               <img src={r.imageUrl} className="w-full h-full object-cover" alt="thumb" />
+                          {r.imageUrl && r.imageUrl.length > 20 ? (
+                            <button onClick={() => openPreview(r.imageUrl!, r.name, r.timestamp, r.aiVerification || '')} className="w-10 h-10 rounded-xl bg-stone-100 border-2 border-white shadow-sm overflow-hidden hover:scale-110 transition-transform">
+                               <img src={r.imageUrl} className="w-full h-full object-cover" alt="thumb" onError={(e) => (e.target as any).src="https://via.placeholder.com/100?text=Err"} />
                             </button>
                           ) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูป</span>}
                         </td>
                         <td className="p-5 text-right">
-                          <button onClick={() => confirm('ต้องการลบข้อมูลนี้หรือไม่?') && deleteRecord(r).then(syncData)} className="text-stone-300 hover:text-rose-500 transition-colors p-2">
+                          <button onClick={() => confirm('ต้องการลบข้อมูลนี้หรือไม่?') && deleteRecord(r).then(syncData)} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-lg">
                              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
                           </button>
                         </td>
@@ -325,24 +330,27 @@ const Dashboard: React.FC = () => {
 
               {/* Absent Staff List */}
               <div className="w-full lg:w-80">
-                <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 flex flex-col max-h-[600px] no-print">
+                <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 flex flex-col max-h-[600px] no-print shadow-inner">
                   <h4 className="font-black text-stone-800 mb-6 flex items-center justify-between">
-                    ยังไม่ลงเวลา ⛄
+                    ยังไม่ลงเช้าวันนี้ ⛄
                     <span className="bg-rose-500 text-white text-[10px] px-3 py-1 rounded-full">{dailyAnalysis.absentCount}</span>
                   </h4>
                   <div className="space-y-4 overflow-y-auto pr-2 flex-1 scrollbar-hide">
                     {dailyAnalysis.absentList.map(s => (
-                      <div key={s.id} className="p-5 bg-white rounded-3xl border border-stone-100 shadow-sm">
+                      <div key={s.id} className="p-5 bg-white rounded-3xl border border-stone-100 shadow-sm hover:shadow-md transition-shadow">
                         <div className="font-bold text-stone-700 text-xs">{s.name}</div>
                         <div className="text-[10px] text-stone-400 font-bold mb-3 uppercase tracking-tighter">{s.role}</div>
                         <div className="grid grid-cols-2 gap-2">
-                          <button onClick={() => { setManualStaffId(s.id); setManualType('personal_leave'); setActiveTab('manual'); }} className="py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[9px] font-black">ลากิจ</button>
-                          <button onClick={() => { setManualStaffId(s.id); setManualType('sick_leave'); setActiveTab('manual'); }} className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[9px] font-black">ลาป่วย</button>
-                          <button onClick={() => { setManualStaffId(s.id); setManualType('duty'); setActiveTab('manual'); }} className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black">ราชการ</button>
-                          <button onClick={() => { setManualStaffId(s.id); setManualType('authorized_late'); setActiveTab('manual'); }} className="py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[9px] font-black">ขอเข้าสาย</button>
+                          <button onClick={() => { setManualStaffId(s.id); setManualType('personal_leave'); setActiveTab('manual'); }} className="py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[9px] font-black transition-colors">ลากิจ</button>
+                          <button onClick={() => { setManualStaffId(s.id); setManualType('sick_leave'); setActiveTab('manual'); }} className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[9px] font-black transition-colors">ลาป่วย</button>
+                          <button onClick={() => { setManualStaffId(s.id); setManualType('duty'); setActiveTab('manual'); }} className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black transition-colors">ราชการ</button>
+                          <button onClick={() => { setManualStaffId(s.id); setManualType('authorized_late'); setActiveTab('manual'); }} className="py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[9px] font-black transition-colors">ขอเข้าสาย</button>
                         </div>
                       </div>
                     ))}
+                    {dailyAnalysis.absentList.length === 0 && (
+                        <div className="p-10 text-center text-stone-300 italic text-[10px] font-bold uppercase tracking-widest">บุคลากรลงเวลาครบแล้ว 🎉</div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -354,47 +362,47 @@ const Dashboard: React.FC = () => {
         {activeTab === 'manual' && (
           <div className="p-10 max-w-2xl mx-auto">
             <h3 className="text-3xl font-black text-stone-800 mb-2">ลงเวลาแทนบุคลากร ✍️</h3>
-            <p className="text-stone-400 text-sm font-bold mb-8 uppercase tracking-widest italic">แอดมินสามารถลงเวลาแทนหรือลงย้อนหลังได้</p>
+            <p className="text-stone-400 text-sm font-bold mb-8 uppercase tracking-widest italic">แอดมินสามารถบันทึกข้อมูลย้อนหลังหรือลงเวลาแทนบุคลากรได้</p>
             
             <form onSubmit={handleManualSubmit} className="space-y-6">
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">เลือกบุคลากร</label>
-                    <select value={manualStaffId} onChange={e => setManualStaffId(e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 transition-all font-bold">
+                    <select value={manualStaffId} onChange={e => setManualStaffId(e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 transition-all font-bold shadow-sm">
                        <option value="">-- เลือกรายชื่อ --</option>
                        {staffList.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">วันที่ทำรายการ</label>
-                    <input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold" />
+                    <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">วันที่ต้องการลงเวลา</label>
+                    <input type="date" value={manualDate} onChange={e => setManualDate(e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold shadow-sm" />
                   </div>
                </div>
 
                <div className="grid grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">เวลา (เช่น 08.00)</label>
-                    <input type="text" value={manualTime} onChange={e => setManualTime(e.target.value)} placeholder="08.00" className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold" />
+                    <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">เวลา (รูปแบบ 24 ชม. เช่น 08.00)</label>
+                    <input type="text" value={manualTime} onChange={e => setManualTime(e.target.value)} placeholder="08.00" className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold shadow-sm" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">ประเภทรายการ</label>
-                    <select value={manualType} onChange={e => setManualType(e.target.value as AttendanceType)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold">
+                    <select value={manualType} onChange={e => setManualType(e.target.value as AttendanceType)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold shadow-sm">
                        <option value="arrival">มาทำงาน (ปกติ)</option>
                        <option value="departure">กลับบ้าน</option>
                        <option value="duty">ไปราชการ</option>
                        <option value="sick_leave">ลาป่วย</option>
                        <option value="personal_leave">ลากิจ</option>
-                       <option value="authorized_late">อนุญาตเข้าสาย</option>
+                       <option value="authorized_late">อนุญาตเข้าสาย (Authorized)</option>
                     </select>
                   </div>
                </div>
 
                <div>
-                 <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">หมายเหตุ / เหตุผล (ถ้ามี)</label>
-                 <textarea value={manualReason} onChange={e => setManualReason(e.target.value)} rows={3} placeholder="ระบุเหตุผลที่นี่..." className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold" />
+                 <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">หมายเหตุ / เหตุผล</label>
+                 <textarea value={manualReason} onChange={e => setManualReason(e.target.value)} rows={3} placeholder="ระบุเหตุผลที่แอดมินลงเวลาแทน..." className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold shadow-sm" />
                </div>
 
-               <button type="submit" className="w-full py-5 bg-rose-600 hover:bg-rose-700 text-white rounded-3xl font-black text-xl shadow-xl shadow-rose-200 transition-all active:scale-[0.98]">บันทึกข้อมูลแทนบุคลากร 🦌</button>
+               <button type="submit" className="w-full py-5 bg-stone-900 hover:bg-rose-700 text-white rounded-3xl font-black text-xl shadow-xl transition-all active:scale-[0.98] mt-4">บันทึกข้อมูล 🦌</button>
             </form>
           </div>
         )}
@@ -434,60 +442,71 @@ const Dashboard: React.FC = () => {
                       ))}
                    </tbody>
                 </table>
+                <div className="mt-20 text-center ml-auto w-64 no-print-placeholder">
+                    <p className="text-[11px] font-bold">(ลงชื่อ)........................................................</p>
+                    <p className="text-[11px] font-bold mt-2">เจ้าหน้าที่ผู้ตรวจสอบ</p>
+                </div>
              </div>
           </div>
         )}
 
-        {/* TAB: MONTHLY SUMMARY (Official Table Style) */}
+        {/* TAB: MONTHLY SUMMARY (Official A4 Style) */}
         {activeTab === 'monthly' && (
            <div className="p-5 bg-stone-100 min-h-screen overflow-auto">
               <div className="max-w-4xl mx-auto mb-6 flex justify-end no-print">
                  <div className="bg-white p-4 rounded-3xl shadow-lg border border-stone-100 flex items-center gap-4">
-                    <label className="text-xs font-black text-stone-400 uppercase tracking-widest">เลือกเดือนรายงาน:</label>
-                    <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="p-3 bg-stone-50 border-2 border-stone-100 rounded-xl font-black text-rose-600 outline-none" />
+                    <label className="text-xs font-black text-stone-400 uppercase tracking-widest">เดือนที่ออกรายงาน:</label>
+                    <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="p-3 bg-stone-50 border-2 border-stone-100 rounded-xl font-black text-rose-600 outline-none focus:border-rose-300" />
                  </div>
               </div>
 
               <div className="mx-auto bg-white shadow-2xl p-[10mm] border border-stone-300 print-page-a4" style={{ width: '210mm', minHeight: '297mm', boxSizing: 'border-box' }}>
-                  <div className="text-center mb-8">
+                  <div className="text-center mb-10">
                      <img src={SCHOOL_LOGO_URL} alt="logo" className="w-16 h-16 mx-auto mb-2 object-contain" />
-                     <h1 className="text-lg font-black uppercase tracking-tight">รายงานสรุปการมาสายและการไม่ลงเวลาปฏิบัติราชการ</h1>
+                     <h1 className="text-lg font-black uppercase tracking-tight">รายงานสรุปสถิติการมาสายและไม่ลงเวลาปฏิบัติราชการ</h1>
                      <p className="text-sm font-bold text-stone-600">โรงเรียนประจักษ์ศิลปาคม สำนักงานเขตพื้นที่การศึกษามัธยมศึกษาอุดรธานี</p>
                      <p className="text-xs font-black mt-1">ประจำเดือน {printMonthLabel}</p>
                   </div>
 
-                  <table className="w-full border-collapse border border-stone-400 text-[11px]">
+                  <table className="w-full border-collapse border border-stone-500 text-[11px]">
                      <thead>
-                        <tr className="bg-stone-50">
-                           <th className="border border-stone-400 p-2 w-10">ที่</th>
-                           <th className="border border-stone-400 p-2 text-left">ชื่อ - นามสกุล</th>
-                           <th className="border border-stone-400 p-2 w-24">มาสาย (ครั้ง)</th>
-                           <th className="border border-stone-400 p-2">วันที่มาสาย</th>
-                           <th className="border border-stone-400 p-2 w-24">ไม่ลงเวลามา (วัน)</th>
+                        <tr className="bg-stone-100">
+                           <th className="border border-stone-500 p-3 w-10">ที่</th>
+                           <th className="border border-stone-500 p-3 text-left">ชื่อ - นามสกุล</th>
+                           <th className="border border-stone-500 p-3 w-28">มาสาย (ครั้ง)</th>
+                           <th className="border border-stone-500 p-3">วันที่มาสาย (วันที่)</th>
+                           <th className="border border-stone-500 p-3 w-28">ไม่ลงเวลามา (วัน)</th>
                         </tr>
                      </thead>
                      <tbody>
                         {monthlySummary.map(s => (
                            <tr key={s.id} className="hover:bg-stone-50/50">
-                              <td className="border border-stone-400 p-2 text-center">{s.no}</td>
-                              <td className="border border-stone-400 p-2 font-bold">{s.name}</td>
-                              <td className="border border-stone-400 p-2 text-center">
-                                 {s.lateCount > 0 ? <span className="font-black text-rose-600">{s.lateCount}</span> : '0'}
+                              <td className="border border-stone-500 p-3 text-center font-bold">{s.no}</td>
+                              <td className="border border-stone-500 p-3 font-bold">{s.name}</td>
+                              <td className="border border-stone-500 p-3 text-center">
+                                 {s.lateCount > 0 ? <span className="font-black text-rose-600 text-sm">{s.lateCount}</span> : '0'}
                               </td>
-                              <td className="border border-stone-400 p-2 text-[10px] italic text-stone-500 font-mono">
+                              <td className="border border-stone-500 p-3 text-[10px] italic text-stone-500 font-mono leading-relaxed">
                                  {s.lateDates || '-'}
                               </td>
-                              <td className="border border-stone-400 p-2 text-center">
-                                 {s.missingCount > 0 ? <span className="font-black text-rose-800">{s.missingCount}</span> : '0'}
+                              <td className="border border-stone-500 p-3 text-center">
+                                 {s.missingCount > 0 ? <span className="font-black text-rose-800 text-sm">{s.missingCount}</span> : '0'}
                               </td>
                            </tr>
                         ))}
                      </tbody>
                   </table>
                   
-                  <div className="mt-10 text-[10px] text-stone-400 italic">
-                      <p>* วันเสาร์-อาทิตย์ และวันหยุดพิเศษที่ตั้งค่าในระบบจะไม่ถูกนำมาคำนวณในช่องไม่ลงเวลามา</p>
-                      <p>* ข้อมูลอ้างอิงจากการลงเวลาผ่านระบบออนไลน์และแอดมินลงเวลาแทน</p>
+                  <div className="mt-12 text-[10px] text-stone-500 italic space-y-1">
+                      <p>* หมายเหตุ: ระบบจะไม่นับรวมวันหยุดเสาร์-อาทิตย์ และวันหยุดนักขัตฤกษ์ที่ตั้งค่าไว้ในระบบ</p>
+                      <p>* สรุปข้อมูลโดย: ระบบ School Attendance AI (Prachaksinlapakhom School)</p>
+                  </div>
+
+                  <div className="mt-20 flex justify-end text-center no-print-placeholder">
+                      <div className="w-64">
+                        <p className="text-[11px] font-bold">ลงชื่อ........................................................</p>
+                        <p className="text-[11px] font-bold mt-2">ผู้สรุปรายงาน</p>
+                      </div>
                   </div>
               </div>
            </div>
