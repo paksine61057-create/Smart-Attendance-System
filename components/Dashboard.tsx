@@ -184,39 +184,63 @@ const Dashboard: React.FC = () => {
 
   const monthlyLatenessData = useMemo(() => {
     const [year, month] = selectedDate.split('-').map(Number);
+    const now = new Date();
+    
+    // กำหนดวันสุดท้ายที่จะนับ (ถ้าเป็นเดือนปัจจุบันให้นับถึงแค่วันนี้)
+    const lastDayToCount = (year === now.getFullYear() && (month - 1) === now.getMonth()) 
+        ? now.getDate() 
+        : new Date(year, month, 0).getDate();
+        
+    const workingDays: string[] = [];
+    for (let d = 1; d <= lastDayToCount; d++) {
+      const dateObj = new Date(year, month - 1, d);
+      
+      // กรองเฉพาะวันที่ >= 11 ธันวาคม 2025 เป็นต้นไปตามโจทย์
+      if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
+      
+      const dayOfWeek = dateObj.getDay();
+      // ไม่นับวันเสาร์-อาทิตย์ และวันหยุดพิเศษ
+      if (dayOfWeek !== 0 && dayOfWeek !== 6 && !getHoliday(dateObj)) {
+        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+        workingDays.push(dateStr);
+      }
+    }
+
     const currentMonthPrefix = `${year}-${String(month).padStart(2, '0')}`;
     const monthlyRecords = allRecords.filter(r => {
         const d = new Date(r.timestamp);
         return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}` === currentMonthPrefix;
     });
-    const now = new Date();
-    const isCurrentMonth = (year === now.getFullYear() && (month - 1) === now.getMonth());
-    const lastDayToCount = isCurrentMonth ? now.getDate() : new Date(year, month, 0).getDate();
-    const workingDays: string[] = [];
-    for (let d = 1; d <= lastDayToCount; d++) {
-      const dateObj = new Date(year, month - 1, d);
-      if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
-      const dayOfWeek = dateObj.getDay();
-      if (dayOfWeek !== 0 && dayOfWeek !== 6 && !getHoliday(dateObj)) {
-        const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-        if (monthlyRecords.some(r => {
-           const rd = new Date(r.timestamp);
-           return `${rd.getFullYear()}-${String(rd.getMonth() + 1).padStart(2, '0')}-${String(rd.getDate()).padStart(2, '0')}` === dateStr;
-        })) workingDays.push(dateStr);
-      }
-    }
+
     return staffList.map((staff, index) => {
       const staffRecords = monthlyRecords.filter(r => r.staffId === staff.id);
+      
+      // สถิติมาสาย
       const lateRecords = staffRecords.filter(r => r.status === 'Late');
       const lateDates = lateRecords.map(r => new Date(r.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })).join(', ');
+      
+      // สถิติไม่ลงเวลา
+      // เงื่อนไข: ในวันทำงานปกตินั้น คนนี้ "ไม่มี" เรคคอร์ดที่ระบุว่า มาทำงาน, ไปราชการ หรือ ลา ทุกประเภท
+      // (Admin Assist จะถูกรวมอยู่ในประเภทเหล่านี้อยู่แล้ว จึงจะไม่ถูกนับเป็นขาดหากแอดมินลงเวลาให้)
       let absentCount = 0;
       workingDays.forEach(wDate => {
-        if (!staffRecords.some(r => {
+        const hasArrivalOrLeaveRecord = staffRecords.some(r => {
             const d = new Date(r.timestamp);
-            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` === wDate && ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type);
-        })) absentCount++;
+            const rDateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+            return rDateStr === wDate && ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type);
+        });
+        
+        if (!hasArrivalOrLeaveRecord) absentCount++;
       });
-      return { no: index + 1, name: staff.name, role: staff.role, lateCount: lateRecords.length, lateDates: lateDates || '-', absentCount };
+
+      return { 
+        no: index + 1, 
+        name: staff.name, 
+        role: staff.role, 
+        lateCount: lateRecords.length, 
+        lateDates: lateDates || '-', 
+        absentCount 
+      };
     });
   }, [allRecords, selectedDate, staffList]);
 
@@ -244,10 +268,10 @@ const Dashboard: React.FC = () => {
         }
     });
 
-    // Highly compact layout for PDF
-    doc.setFontSize(9.5);
+    // ตั้งค่าฟอนต์และระยะห่างแบบบีบอัดมากเพื่อให้พอใน 1 หน้า
+    doc.setFontSize(9.0);
     doc.text('โรงเรียนประจักษ์ศิลปาคม', 105, 6, { align: 'center' });
-    doc.setFontSize(8.0);
+    doc.setFontSize(7.5);
     doc.text(title, 105, 10, { align: 'center' });
 
     (doc as any).autoTable({
@@ -256,8 +280,8 @@ const Dashboard: React.FC = () => {
         body: body,
         theme: 'grid',
         styles: { 
-            fontSize: 7.0, 
-            cellPadding: 0.3, 
+            fontSize: 6.8, 
+            cellPadding: 0.25, 
             halign: 'center', 
             valign: 'middle', 
             lineWidth: 0.05, 
@@ -266,15 +290,15 @@ const Dashboard: React.FC = () => {
         headStyles: { fillColor: [190, 18, 60], textColor: [255, 255, 255], fontStyle: 'bold' },
         columnStyles: type === 'daily' ? { 
             0: { cellWidth: 7 }, 
-            1: { halign: 'left', cellWidth: 44, fontStyle: 'bold' }, 
-            2: { halign: 'center', cellWidth: 34 }, 
+            1: { halign: 'left', cellWidth: 42, fontStyle: 'bold' }, 
+            2: { halign: 'center', cellWidth: 32 }, 
             3: { cellWidth: 12 }, 
             4: { cellWidth: 12 },
             5: { halign: 'left' }
         } : {
             0: { cellWidth: 7 }, 
-            1: { halign: 'left', cellWidth: 44, fontStyle: 'bold' }, 
-            2: { halign: 'center', cellWidth: 34 }, 
+            1: { halign: 'left', cellWidth: 42, fontStyle: 'bold' }, 
+            2: { halign: 'center', cellWidth: 32 }, 
             3: { cellWidth: 14 }, 
             4: { cellWidth: 14 },
             5: { halign: 'left' }
@@ -284,11 +308,11 @@ const Dashboard: React.FC = () => {
     });
 
     const finalY = (doc as any).lastAutoTable.finalY;
-    doc.setFontSize(7.5);
-    doc.text('(ลงชื่อ)...........................................................', 65, finalY + 4, { align: 'center' });
-    doc.text('กลุ่มบริหารงานบุคคล', 65, finalY + 7, { align: 'center' });
-    doc.text('(ลงชื่อ)...........................................................', 145, finalY + 4, { align: 'center' });
-    doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 145, finalY + 7, { align: 'center' });
+    doc.setFontSize(7.2);
+    doc.text('(ลงชื่อ)...........................................................', 65, finalY + 5, { align: 'center' });
+    doc.text('กลุ่มบริหารงานบุคคล', 65, finalY + 8, { align: 'center' });
+    doc.text('(ลงชื่อ)...........................................................', 145, finalY + 5, { align: 'center' });
+    doc.text('ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม', 145, finalY + 8, { align: 'center' });
 
     doc.save(`report_${type}_${selectedDate}.pdf`);
   };

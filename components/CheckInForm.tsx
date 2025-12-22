@@ -86,7 +86,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       setCurrentDistance(dist);
       return { lat: pos.coords.latitude, lng: pos.coords.longitude };
     } catch {
-      // If GPS fails, return 0,0 and proceed anyway
+      // หากดึงพิกัดไม่ได้ ให้คืนค่า 0,0 เพื่อไม่ให้บล็อกการทำงานตามโจทย์
       setCurrentDistance(0);
       return { lat: 0, lng: 0 };
     }
@@ -109,7 +109,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.3); 
         setStep('verifying');
         
-        // Parallel tasks: Analyze image and get location (doesn't block if location fails)
+        // รัน AI วิเคราะห์ภาพและตรวจสอบพิกัด (ไม่บล็อกหากพิกัดล้มเหลว)
         const [aiResult, loc] = await Promise.all([analyzeCheckInImage(imageBase64), validateLocation()]);
         
         const now = new Date();
