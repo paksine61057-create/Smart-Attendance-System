@@ -48,7 +48,6 @@ const Dashboard: React.FC = () => {
       const mergedMap = new Map<string, CheckInRecord>();
       const getSig = (r: CheckInRecord) => {
         const d = new Date(r.timestamp);
-        // Signature แยกตาม StaffID + Type + Date เพื่อให้แสดงได้ทั้งมาและกลับในวันเดียวกัน
         return `${String(r.staffId || '').toUpperCase()}_${r.type}_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
       };
       
@@ -302,8 +301,9 @@ const Dashboard: React.FC = () => {
                       <tr key={r.id} className="hover:bg-rose-50/20 transition-colors">
                         <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</td>
                         <td className="p-5">
-                          <div className="font-bold text-stone-800">{r.name}</div>
-                          <div className="text-[10px] text-stone-400 font-bold uppercase">{r.role}</div>
+                          {/* ปรับให้ชื่อเด่นกว่าตำแหน่ง */}
+                          <div className="font-black text-stone-900 text-base leading-tight mb-0.5">{r.name}</div>
+                          <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">{r.role}</div>
                         </td>
                         <td className="p-5">
                           <span className={`px-4 py-1.5 rounded-full text-[10px] font-black whitespace-nowrap shadow-sm ${getStatusColor(r.status)}`}>
