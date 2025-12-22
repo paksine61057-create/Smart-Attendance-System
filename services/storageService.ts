@@ -4,19 +4,19 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-// URL พื้นฐานสำหรับการซิงค์ข้อมูล (เปลี่ยนได้ในหน้าตั้งค่า)
+/** 
+ * URL ที่เชื่อมกับ Google Sheets ของคุณ: 
+ * https://docs.google.com/spreadsheets/d/1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI/edit
+ */
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzUoPM2lDmpMbCwfryM1EuiZDQnFPuF4paqayK5XWL0nNF_MYGmPcOS7AEjDTNEaM1q/exec'; 
 
-/**
- * ส่งข้อมูลไปยัง Google Sheets ตามโครงสร้าง doPost ของ Apps Script
- */
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
-    // ลบ Header Base64 ออกเพื่อให้ Apps Script แปลงไฟล์ได้ง่ายขึ้น
     const cleanImageBase64 = (record.imageUrl || "").replace(/^data:image\/\w+;base64,/, "");
 
     const payload = {
+      "action": "insertRecord",
       "Timestamp": record.timestamp,
       "Date": dateObj.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       "Time": dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
@@ -31,8 +31,8 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
               record.type === 'authorized_late' ? 'อนุญาตสาย' : 'อื่นๆ',
       "Status": record.status,
       "Reason": record.reason || '-',
-      "Location": "ลงเวลาออนไลน์ (Online Mode)",
-      "Distance (m)": 0,
+      "Location": "บันทึกผ่านระบบ AI Web App",
+      "Distance (m)": record.distanceFromBase || 0,
       "AI Verification": record.aiVerification || '-',
       "imageBase64": cleanImageBase64
     };
@@ -97,13 +97,11 @@ export const getSettings = (): AppSettings => {
 };
 
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
-    // ดึงพิกัดและการตั้งค่าจาก doGet
     const s = getSettings();
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     try {
         const response = await fetch(`${targetUrl}?t=${Date.now()}`);
-        const cloudSettings = await response.json();
-        // ในโหมดนี้เราเน้นแค่การรับส่งข้อมูล แต่อาจขยายผลเพื่อดึง MaxDistance มาใช้ได้
+        await response.json();
         return true;
     } catch (e) {
         return false;
@@ -135,7 +133,6 @@ export const deleteRecord = async (record: CheckInRecord) => {
             method: 'POST',
             mode: 'no-cors',
             headers: { 'Content-Type': 'text/plain' },
-            // ส่ง timestamp เป็น ID ตามที่ Apps Script คาดหวังในคอลัมน์แรก
             body: JSON.stringify({ action: 'deleteRecord', id: record.timestamp })
         });
       } catch (e) { console.error("Cloud delete failed", e); }
@@ -143,9 +140,6 @@ export const deleteRecord = async (record: CheckInRecord) => {
   return true;
 };
 
-/**
- * ดึงข้อมูลจาก Google Sheets ผ่าน doGet(action=getRecords)
- */
 export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     const s = getSettings();
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
@@ -165,9 +159,9 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (rawType.includes('อนุญาตสาย')) type = 'authorized_late';
 
                 return {
-                    id: String(r.timestamp), // ใช้ timestamp เป็น ID เพื่อความแม่นยำในการซิงค์
+                    id: String(r.timestamp), 
                     staffId: String(r.staffId || ""),
-                    name: String(r.name || ""),
+                    name: String(r.name || "ไม่ทราบชื่อ"),
                     role: String(r.role || ""),
                     timestamp: Number(r.timestamp) || Date.now(),
                     type: type,

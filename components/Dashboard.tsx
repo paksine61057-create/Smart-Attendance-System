@@ -4,7 +4,7 @@ import { getRecords, fetchGlobalRecords, syncUnsyncedRecords, deleteRecord, save
 import { getAllStaff, getStaffById } from '../services/staffService';
 import { getHoliday } from '../services/holidayService';
 import { CheckInRecord, Staff, AttendanceType } from '../types';
-import { jsPDF } from 'jspdf';
+import { jsPDF } from 'jsPDF';
 import 'jspdf-autotable';
 
 type TabType = 'today' | 'official' | 'monthly' | 'manual';
@@ -28,10 +28,7 @@ const Dashboard: React.FC = () => {
 
   const staffList = useMemo(() => getAllStaff(), []);
 
-  /**
-   * Smart Name Lookup: ตรวจสอบและดึงชื่อที่สมบูรณ์ที่สุด
-   * หากในระบบ Cloud ไม่มีชื่อติดมา จะนำ Staff ID ไปค้นหาใน Staff Database ทันที
-   */
+  // ฟังก์ชันดึงชื่อที่ถูกต้อง (Smart Name Lookup)
   const getDisplayName = (record: CheckInRecord) => {
     if (record.name && record.name !== "ไม่ระบุชื่อ" && record.name !== "undefined" && record.name.trim() !== "") {
       return record.name;
@@ -43,9 +40,7 @@ const Dashboard: React.FC = () => {
     return record.name || "ไม่ทราบชื่อ";
   };
 
-  /**
-   * ดึงตำแหน่งบุคลากร
-   */
+  // ดึงตำแหน่งบุคลากร
   const getDisplayRole = (record: CheckInRecord) => {
     if (record.role && record.role !== "undefined" && record.role.trim() !== "") {
       return record.role;
@@ -74,8 +69,6 @@ const Dashboard: React.FC = () => {
       const local = getRecords();
       
       const mergedMap = new Map<string, CheckInRecord>();
-      
-      // ฟังก์ชันสร้าง Signature เพื่อป้องกันข้อมูลซ้ำซ้อน
       const getSig = (r: CheckInRecord) => {
         const d = new Date(r.timestamp);
         return `${String(r.staffId || '').toUpperCase()}_${r.type}_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
@@ -84,7 +77,6 @@ const Dashboard: React.FC = () => {
       cloud.forEach(r => mergedMap.set(getSig(r), r));
       local.forEach(l => {
         const sig = getSig(l);
-        // เลือกข้อมูลที่มีรูปภาพ (ถ้ามี) หรือข้อมูลล่าสุด
         if (!mergedMap.has(sig) || (l.imageUrl && l.imageUrl.length > (mergedMap.get(sig)?.imageUrl?.length || 0))) {
           mergedMap.set(sig, l);
         }
@@ -92,7 +84,7 @@ const Dashboard: React.FC = () => {
       
       setAllRecords(Array.from(mergedMap.values()));
     } catch (e) {
-      console.error("Sync failed, using local", e);
+      console.error("Sync failed", e);
       setAllRecords(getRecords());
     } finally { setIsSyncing(false); }
   }, []);
@@ -313,7 +305,7 @@ const Dashboard: React.FC = () => {
               <div className="flex-1 overflow-x-auto">
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="text-2xl font-black text-stone-800">รายการล่าสุด ⛄</h3>
-                    <p className="text-[10px] font-bold text-stone-400 italic">*แสดงข้อมูลที่ซิงค์จาก Cloud ล่าสุด</p>
+                    <p className="text-[10px] font-bold text-stone-400 italic font-mono">*Sync Cloud สำเร็จ</p>
                 </div>
                 <table className="w-full text-left">
                   <thead>
@@ -332,7 +324,7 @@ const Dashboard: React.FC = () => {
                       <tr key={r.id} className="hover:bg-rose-50/20 transition-colors">
                         <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</td>
                         <td className="p-5">
-                          {/* ชื่อแสดงผลขนาดใหญ่และหนาเด่นชัด */}
+                          {/* ชื่อแสดงผลขนาดใหญ่และหนาเด่นชัดกว่าตำแหน่ง */}
                           <div className="font-black text-stone-900 text-lg leading-tight mb-0.5">{getDisplayName(r)}</div>
                           <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">{getDisplayRole(r)}</div>
                         </td>
@@ -399,7 +391,7 @@ const Dashboard: React.FC = () => {
                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
                     <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">เลือกบุคลากร</label>
-                    <select value={manualStaffId} onChange={e => setManualStaffId(e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 transition-all font-bold shadow-sm">
+                    <select value={manualStaffId} onChange={e => setManualStaffId(e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 transition-all font-bold shadow-sm text-sm">
                        <option value="">-- เลือกรายชื่อ --</option>
                        {staffList.map(s => <option key={s.id} value={s.id}>{s.name} ({s.role})</option>)}
                     </select>
@@ -413,11 +405,11 @@ const Dashboard: React.FC = () => {
                <div className="grid grid-cols-2 gap-6">
                   <div>
                     <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">เวลา (รูปแบบ 24 ชม. เช่น 08.00)</label>
-                    <input type="text" value={manualTime} onChange={e => setManualTime(e.target.value)} placeholder="08.00" className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold shadow-sm" />
+                    <input type="text" value={manualTime} onChange={e => setManualTime(e.target.value)} placeholder="08.00" className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold shadow-sm text-lg text-center" />
                   </div>
                   <div>
                     <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">ประเภทรายการ</label>
-                    <select value={manualType} onChange={e => setManualType(e.target.value as AttendanceType)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold shadow-sm">
+                    <select value={manualType} onChange={e => setManualType(e.target.value as AttendanceType)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold shadow-sm text-sm">
                        <option value="arrival">มาทำงาน (ปกติ)</option>
                        <option value="departure">กลับบ้าน</option>
                        <option value="duty">ไปราชการ</option>
@@ -430,7 +422,7 @@ const Dashboard: React.FC = () => {
 
                <div>
                  <label className="block text-[10px] font-black text-stone-400 uppercase mb-2 ml-2">หมายเหตุ / เหตุผล</label>
-                 <textarea value={manualReason} onChange={e => setManualReason(e.target.value)} rows={3} placeholder="ระบุเหตุผลที่แอดมินลงเวลาแทน..." className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold shadow-sm" />
+                 <textarea value={manualReason} onChange={e => setManualReason(e.target.value)} rows={3} placeholder="ระบุรายละเอียด..." className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none focus:border-rose-400 font-bold shadow-sm" />
                </div>
 
                <button type="submit" className="w-full py-5 bg-stone-900 hover:bg-rose-700 text-white rounded-3xl font-black text-xl shadow-xl transition-all active:scale-[0.98] mt-4">บันทึกข้อมูล 🦌</button>
@@ -482,7 +474,7 @@ const Dashboard: React.FC = () => {
            <div className="p-5 bg-stone-100 min-h-screen overflow-auto">
               <div className="max-w-4xl mx-auto mb-6 flex justify-end no-print">
                  <div className="bg-white p-4 rounded-3xl shadow-lg border border-stone-100 flex items-center gap-4">
-                    <label className="text-xs font-black text-stone-400 uppercase tracking-widest">เดือน:</label>
+                    <label className="text-xs font-black text-stone-400 uppercase tracking-widest">เลือกเดือนที่ต้องการดู:</label>
                     <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="p-3 bg-stone-50 border-2 border-stone-100 rounded-xl font-black text-rose-600 outline-none" />
                  </div>
               </div>
@@ -490,9 +482,9 @@ const Dashboard: React.FC = () => {
               <div className="mx-auto bg-white shadow-2xl p-[10mm] border border-stone-300 print-page-a4" style={{ width: '210mm', minHeight: '297mm', boxSizing: 'border-box' }}>
                   <div className="text-center mb-10">
                      <img src={SCHOOL_LOGO_URL} alt="logo" className="w-16 h-16 mx-auto mb-2 object-contain" />
-                     <h1 className="text-lg font-black uppercase tracking-tight">รายงานสรุปสถิติการมาสายและลา</h1>
+                     <h1 className="text-lg font-black uppercase tracking-tight">รายงานสรุปสถิติการปฏิบัติราชการ</h1>
                      <p className="text-sm font-bold text-stone-600">โรงเรียนประจักษ์ศิลปาคม</p>
-                     <p className="text-xs font-black mt-1">ประจำเดือน {printMonthLabel}</p>
+                     <p className="text-xs font-black mt-1 uppercase tracking-widest">ประจำเดือน {printMonthLabel}</p>
                   </div>
 
                   <table className="w-full border-collapse border border-stone-500 text-[11px]">
@@ -506,11 +498,11 @@ const Dashboard: React.FC = () => {
                      </thead>
                      <tbody>
                         {monthlySummary.map(s => (
-                           <tr key={s.id}>
+                           <tr key={s.id} className="hover:bg-stone-50/50">
                               <td className="border border-stone-500 p-3 text-center">{s.no}</td>
-                              <td className="border border-stone-500 p-3 font-bold">{s.name}</td>
-                              <td className="border border-stone-500 p-3 text-center font-black text-rose-600">{s.lateCount}</td>
-                              <td className="border border-stone-500 p-3 text-[10px] italic text-stone-500">{s.lateDates || '-'}</td>
+                              <td className="border border-stone-500 p-3 font-bold text-stone-900">{s.name}</td>
+                              <td className="border border-stone-500 p-3 text-center font-black text-rose-600 text-lg">{s.lateCount}</td>
+                              <td className="border border-stone-500 p-3 text-[10px] italic text-stone-500 leading-relaxed">{s.lateDates || '-'}</td>
                            </tr>
                         ))}
                      </tbody>
