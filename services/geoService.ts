@@ -1,3 +1,4 @@
+
 import { GeoLocation } from '../types';
 
 export const getDistanceFromLatLonInMeters = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
@@ -20,11 +21,11 @@ const deg2rad = (deg: number): number => {
 export const getCurrentPosition = (): Promise<GeolocationPosition> => {
   return new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
-      reject(new Error('Geolocation is not supported by your browser'));
+      reject(new Error('เบราว์เซอร์ของคุณไม่รองรับการระบุตำแหน่ง GPS'));
     } else {
       navigator.geolocation.getCurrentPosition(resolve, reject, {
-        enableHighAccuracy: true,
-        timeout: 10000,
+        enableHighAccuracy: true, // บังคับใช้ความแม่นยำสูง (GPS)
+        timeout: 15000,           // เพิ่มเวลาเป็น 15 วินาที
         maximumAge: 0
       });
     }

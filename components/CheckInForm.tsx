@@ -29,7 +29,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [staffIdInput, setStaffIdInput] = useState('');
   const [currentUser, setCurrentUser] = useState<Staff | null>(null);
   const [reason, setReason] = useState(''); 
+  const [locationStatus, setLocationStatus] = useState<'idle' | 'checking' | 'found' | 'error'>('idle');
   const [locationError, setLocationError] = useState('');
+  const [lastLocation, setLastLocation] = useState<GeoLocation | null>(null);
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState('normal');
@@ -37,6 +39,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const isRestrictedType = ['arrival', 'departure', 'authorized_late'].includes(attendanceType);
 
   useEffect(() => {
     const init = async () => {
@@ -55,6 +59,56 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         setCurrentUser(staff || null);
     } else setCurrentUser(null);
   }, [staffIdInput]);
+
+  const validateLocation = async () => {
+    setLocationStatus('checking');
+    setLocationError('');
+    const s = getSettings();
+    
+    if (!s.officeLocation) {
+        setLocationStatus('found');
+        return { lat: 0, lng: 0 };
+    }
+
+    try {
+      const pos = await getCurrentPosition();
+      const dist = getDistanceFromLatLonInMeters(
+        pos.coords.latitude, pos.coords.longitude, 
+        s.officeLocation.lat, s.officeLocation.lng
+      );
+      
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setLastLocation(loc);
+      setCurrentDistance(dist);
+
+      if (isRestrictedType && dist > s.maxDistanceMeters) {
+          setLocationStatus('error');
+          setLocationError(`คุณอยู่นอกพื้นที่โรงเรียน (${Math.round(dist)} เมตร) โปรดเข้ามาใกล้จุดลงเวลามากกว่านี้ (ระยะที่กำหนด: ${s.maxDistanceMeters} เมตร)`);
+          return null;
+      }
+
+      setLocationStatus('found');
+      return loc;
+    } catch (err: any) {
+      if (isRestrictedType) {
+          setLocationStatus('error');
+          setLocationError(err.message || "ไม่สามารถดึงตำแหน่ง GPS ได้ โปรดเปิดสิทธิ์การเข้าถึงตำแหน่งและลองใหม่อีกครั้ง");
+          return null;
+      } else {
+          // ถ้าไม่ใช่ประเภทที่ถูกจำกัด ให้ยอมให้ผ่านได้ด้วยพิกัด 0,0
+          setLocationStatus('found');
+          setCurrentDistance(0);
+          return { lat: 0, lng: 0 };
+      }
+    }
+  };
+
+  const startCameraStep = async () => {
+    const loc = await validateLocation();
+    if (loc) {
+        setStep('camera');
+    }
+  };
 
   useEffect(() => {
     let stream: MediaStream | null = null;
@@ -78,20 +132,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     return () => stream?.getTracks().forEach(t => t.stop());
   }, [step]);
 
-  const validateLocation = async () => {
-    const s = getSettings();
-    try {
-      const pos = await getCurrentPosition();
-      const dist = s?.officeLocation ? getDistanceFromLatLonInMeters(pos.coords.latitude, pos.coords.longitude, s.officeLocation.lat, s.officeLocation.lng) : 0;
-      setCurrentDistance(dist);
-      return { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    } catch {
-      // หากดึงพิกัดไม่ได้ ให้คืนค่า 0,0 เพื่อไม่ให้บล็อกการทำงานตามโจทย์
-      setCurrentDistance(0);
-      return { lat: 0, lng: 0 };
-    }
-  };
-
   const capturePhoto = useCallback(async () => {
     if (videoRef.current && canvasRef.current && currentUser) {
       const context = canvasRef.current.getContext('2d');
@@ -109,8 +149,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.3); 
         setStep('verifying');
         
-        // รัน AI วิเคราะห์ภาพและตรวจสอบพิกัด (ไม่บล็อกหากพิกัดล้มเหลว)
-        const [aiResult, loc] = await Promise.all([analyzeCheckInImage(imageBase64), validateLocation()]);
+        const aiResult = await analyzeCheckInImage(imageBase64);
         
         const now = new Date();
         let status: any = 'Normal';
@@ -140,7 +179,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
           role: currentUser.role,
           type: attendanceType, 
           timestamp: now.getTime(), 
-          location: (loc || { lat: 0, lng: 0 }) as GeoLocation,
+          location: (lastLocation || { lat: 0, lng: 0 }),
           distanceFromBase: currentDistance || 0, 
           status, 
           imageUrl: imageBase64, 
@@ -154,7 +193,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         setTimeout(() => onSuccess(), 2500);
       }
     }
-  }, [currentUser, attendanceType, reason, currentDistance, activeFilterId, onSuccess]);
+  }, [currentUser, attendanceType, reason, lastLocation, currentDistance, activeFilterId, onSuccess]);
 
   if (step === 'info') {
     const isSpecialType = ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(attendanceType);
@@ -254,11 +293,44 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                             </div>
                         )}
 
-                        {locationError && <p className="text-rose-200 text-xs font-black animate-bounce bg-rose-900/40 p-3 rounded-xl border border-rose-400/30">📍 {locationError}</p>}
+                        <div className="mt-4 p-4 bg-black/30 rounded-2xl border border-white/10 backdrop-blur-md">
+                           {locationStatus === 'checking' && (
+                               <div className="flex items-center justify-center gap-3 text-white text-xs font-bold animate-pulse">
+                                   <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
+                                   กำลังตรวจสอบพิกัด GPS...
+                               </div>
+                           )}
+                           {locationStatus === 'found' && (
+                               <div className="flex items-center justify-between">
+                                   <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-black uppercase">
+                                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                                       พิกัดถูกต้อง
+                                   </div>
+                                   {currentDistance !== null && (
+                                       <span className="text-white/60 text-[10px] font-bold tracking-widest">ห่าง {Math.round(currentDistance)} ม.</span>
+                                   )}
+                               </div>
+                           )}
+                           {locationStatus === 'error' && (
+                               <div className="text-rose-200 text-xs font-black text-center space-y-2">
+                                   <p className="bg-rose-900/40 p-3 rounded-xl border border-rose-400/30">📍 {locationError}</p>
+                                   <button onClick={validateLocation} className="text-[10px] bg-white/10 hover:bg-white/20 px-4 py-1.5 rounded-full border border-white/20 transition-all uppercase tracking-widest">กดเพื่อลองตรวจสอบพิกัดอีกครั้ง 🔄</button>
+                               </div>
+                           )}
+                        </div>
                         
-                        <button onClick={() => { setLocationError(''); setStep('camera'); }} className="w-full py-5 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all animate-pulse-ring-festive mt-4">
-                            ถ่ายรูปหน้าสวยๆ เพื่อบันทึก 📸
+                        <button 
+                            onClick={startCameraStep}
+                            disabled={locationStatus === 'checking'}
+                            className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3
+                            ${locationStatus === 'error' && isRestrictedType ? 'bg-slate-500 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive'}`}
+                        >
+                            {locationStatus === 'checking' ? 'กรุณารอสักครู่...' : 'ถ่ายรูปบันทึกเวลา 📸'}
                         </button>
+                        
+                        {locationStatus === 'error' && isRestrictedType && (
+                            <p className="text-[9px] text-amber-200/70 mt-2 italic">* สำหรับการมาทำงาน/กลับบ้าน ต้องอยู่ในระยะที่โรงเรียนกำหนดเท่านั้น</p>
+                        )}
                     </div>
                 </div>
               )}
@@ -287,9 +359,10 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
              <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-inner"><div className="w-6 h-6 rounded-full bg-rose-600 animate-pulse" /></div>
           </button>
         </div>
-        <div className="absolute top-8 left-0 right-0 flex justify-center">
+        <div className="absolute top-8 left-0 right-0 flex justify-center gap-3">
+            <button onClick={() => setStep('info')} className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-black border border-white/20 hover:bg-black/60 transition-all">ยกเลิก</button>
             <div className="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
-                พร้อมบันทึกภาพ ❄️
+                พิกัด: {currentDistance !== null ? `${Math.round(currentDistance)} ม.` : 'ตรวจแล้ว'} ❄️
             </div>
         </div>
       </div>
