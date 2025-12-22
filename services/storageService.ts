@@ -4,7 +4,6 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-// URL ตัวอย่าง (คุณต้องแทนที่ด้วย Web App URL ใหม่ที่ได้จากการ Deploy GAS)
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
@@ -86,7 +85,7 @@ export const saveSettings = async (settings: AppSettings) => {
   if (targetUrl) {
     try {
       const payload = {
-        action: 'updateSettings', // ใช้ชื่อ action ให้ตรงกับ GAS
+        action: 'updateSettings',
         officeLocation: settings.officeLocation,
         maxDistanceMeters: settings.maxDistanceMeters,
         bypassLocation: !!settings.bypassLocation
@@ -113,31 +112,42 @@ export const getSettings = (): AppSettings & { lockLocation?: boolean } => {
 
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
     const s = getSettings();
-    if (s.lockLocation) return false;
-
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     if (!targetUrl) return false;
     
     try {
-        // เพิ่ม t=${Date.now()} เพื่อป้องกัน Cache
         const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`, {
           cache: 'no-store',
           headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
         });
         const cloud = await response.json();
+        
         if (cloud) {
-            const updatedSettings = { 
-              ...s, 
-              officeLocation: (cloud.officeLocation && cloud.officeLocation.lat !== 0) ? cloud.officeLocation : s.officeLocation, 
-              maxDistanceMeters: cloud.maxDistanceMeters !== undefined ? cloud.maxDistanceMeters : s.maxDistanceMeters,
-              bypassLocation: cloud.bypassLocation !== undefined ? !!cloud.bypassLocation : s.bypassLocation
-            };
+            // สำคัญ: Bypass Location จะซิงค์เสมอ ไม่ว่าเครื่องจะล็อกพิกัดไว้หรือไม่
+            let updatedSettings = { ...s };
+            
+            // 1. อัปเดตสถานะ Bypass เสมอ
+            if (cloud.bypassLocation !== undefined) {
+                updatedSettings.bypassLocation = !!cloud.bypassLocation;
+            }
+
+            // 2. อัปเดตพิกัดและระยะทาง เฉพาะเมื่อเครื่องไม่ได้สั่ง "ล็อกพิกัด" ไว้
+            if (!s.lockLocation) {
+                if (cloud.officeLocation && cloud.officeLocation.lat !== 0) {
+                    updatedSettings.officeLocation = cloud.officeLocation;
+                }
+                if (cloud.maxDistanceMeters !== undefined) {
+                    updatedSettings.maxDistanceMeters = cloud.maxDistanceMeters;
+                }
+            }
+            
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
-            // ส่งสัญญาณแจ้งหน้าจอว่ามีการอัปเดต (Bypass จะเปลี่ยนทันที)
             window.dispatchEvent(new Event('settings_updated'));
             return true;
         }
-    } catch (e) { }
+    } catch (e) {
+        console.error("Sync settings error", e);
+    }
     return false;
 }
 

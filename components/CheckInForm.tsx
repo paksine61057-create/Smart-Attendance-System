@@ -54,21 +54,17 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   // โหลดข้อมูลครั้งแรกและฟัง Event การอัปเดต
   useEffect(() => {
     const init = async () => {
-        setIsSyncingSettings(true);
-        try {
-            await syncSettingsFromCloud();
-        } catch (e) {}
         refreshBypassState();
-        setIsSyncingSettings(false);
-        
         const holiday = getHoliday(new Date());
         setTodayHoliday(holiday);
         const savedId = localStorage.getItem('school_checkin_saved_staff_id');
         if (savedId) setStaffIdInput(savedId);
+        
+        // บังคับซิงค์ตอนเปิดหน้าแรก
+        await syncSettingsFromCloud();
     };
     init();
 
-    // ฟัง Event เมื่อ Background Sync ทำงานสำเร็จใน App.tsx
     window.addEventListener('settings_updated', refreshBypassState);
     return () => window.removeEventListener('settings_updated', refreshBypassState);
   }, [refreshBypassState]);
@@ -77,6 +73,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     if (staffIdInput.length >= 5) {
         const staff = getStaffById(staffIdInput);
         setCurrentUser(staff || null);
+        // เมื่อเจอพนักงาน ให้แอบซิงค์ Cloud ทันทีเพื่อความแม่นยำของ Bypass
+        if (staff) syncSettingsFromCloud();
     } else setCurrentUser(null);
   }, [staffIdInput]);
 
@@ -140,7 +138,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     setIsSyncingSettings(true);
     setLocationStatus('checking');
     
-    // ดึงค่าล่าสุดอีกครั้งก่อนเข้ากล้อง
+    // สำคัญ: ดึงค่าจาก Cloud ใหม่ "เดี๋ยวนี้" ก่อนตัดสินใจใช้ GPS หรือไม่
     try {
         await syncSettingsFromCloud();
     } catch (e) { }
@@ -353,7 +351,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                            {isSyncingSettings ? (
                                <div className="flex items-center justify-center gap-3 text-amber-200 text-xs font-bold animate-pulse">
                                    <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
-                                   กำลังซิงค์การตั้งค่าล่าสุด...
+                                   กำลังซิงค์สถานะ Cloud...
                                </div>
                            ) : isBypassMode ? (
                                <div className="flex items-center justify-center gap-2 text-blue-300 text-[10px] font-black uppercase bg-blue-900/40 p-3 rounded-xl border border-blue-500/30 animate-in zoom-in">
@@ -365,18 +363,18 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                                 {locationStatus === 'checking' && (
                                     <div className="flex items-center justify-center gap-3 text-white text-xs font-bold animate-pulse">
                                         <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
-                                        กำลังรอสัญญาณ GPS ที่แม่นยำ...
+                                        กำลังรอสัญญาณ GPS...
                                     </div>
                                 )}
                                 {locationStatus === 'found' && (
                                     <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-black uppercase">
                                             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                                            พิกัดถูกต้อง
+                                            พิกัดพร้อม
                                         </div>
                                         {currentDistance !== null && (
                                             <span className="text-white/60 text-[10px] font-bold tracking-widest">
-                                                ห่าง {Math.round(currentDistance)} ม. (+/- {currentAccuracy ? Math.round(currentAccuracy) : 0})
+                                                ห่าง {Math.round(currentDistance)} ม.
                                             </span>
                                         )}
                                     </div>
@@ -386,7 +384,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                                         <div className="bg-rose-900/40 p-5 rounded-2xl border border-rose-400/30 text-left leading-relaxed">
                                             {locationError}
                                         </div>
-                                        <button onClick={() => validateLocation(false)} className="text-[10px] bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-full border border-white/20 transition-all uppercase tracking-widest font-black">ลองตรวจสอบพิกัดใหม่อีกครั้ง 🔄</button>
+                                        <button onClick={() => validateLocation(false)} className="text-[10px] bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-full border border-white/20 transition-all uppercase tracking-widest font-black">ลองใหม่ 🔄</button>
                                     </div>
                                 )}
                                </>
@@ -399,7 +397,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                             className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3
                             ${isSyncingSettings ? 'bg-slate-500 opacity-50 cursor-wait' : (!isBypassMode && locationStatus === 'error' && isRestrictedType) ? 'bg-slate-500 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive'}`}
                         >
-                            {isSyncingSettings ? 'กำลังเตรียมระบบ...' : (!isBypassMode && locationStatus === 'checking') ? 'กำลังค้นหาตำแหน่ง...' : 'ถ่ายรูปบันทึกเวลา 📸'}
+                            {isSyncingSettings ? 'กำลังซิงค์...' : (!isBypassMode && locationStatus === 'checking') ? 'รอ GPS...' : 'ถ่ายรูปบันทึกเวลา 📸'}
                         </button>
                     </div>
                 </div>
