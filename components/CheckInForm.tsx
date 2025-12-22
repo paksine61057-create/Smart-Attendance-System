@@ -66,9 +66,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   }, [staffIdInput]);
 
   const validateLocation = async () => {
-    // หากเปิดโหมด Bypass ให้ถือว่าพิกัดถูกต้องทันทีโดยไม่ต้องเรียก GPS
-    const s = getSettings();
-    if (s.bypassLocation) {
+    // หากเปิดโหมด Bypass ให้ถือว่าพิกัดข้ามไปเลย ไม่ต้องเรียกขอสิทธิ์ GPS
+    if (isBypassMode) {
         setLocationStatus('found');
         return { lat: 0, lng: 0 };
     }
@@ -76,6 +75,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     setLocationStatus('checking');
     setLocationError(null);
     
+    const s = getSettings();
     if (!s.officeLocation || !s.officeLocation.lat) {
         setLocationStatus('found');
         return { lat: 0, lng: 0 };
@@ -105,10 +105,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                     <p className="text-sm">ห่างจากจุดหมาย: <span className="text-rose-400 font-black">{Math.round(dist).toLocaleString()} เมตร</span></p>
                     <p className="text-xs">ค่าความแม่นยำ GPS: +/- {Math.round(pos.coords.accuracy)} ม.</p>
                 </div>
-                <div className="bg-amber-900/40 p-3 rounded-2xl text-[10px] text-left border border-amber-500/30">
-                    <p className="text-amber-200/50 uppercase mb-1">พิกัดโรงเรียนที่ระบบกำลังใช้:</p>
-                    <p className="font-mono">{s.officeLocation.lat.toFixed(6)}, {s.officeLocation.lng.toFixed(6)}</p>
-                </div>
             </div>
           );
           return null;
@@ -125,13 +121,13 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   const startCameraStep = async () => {
     if (isBypassMode) {
-        // หากเป็น Bypass เข้าหน้ากล้องทันที
+        // หากเป็นโหมด Bypass ให้ไปหน้ากล้องทันที
         setStep('camera');
-        return;
-    }
-    const loc = await validateLocation();
-    if (loc) {
-        setStep('camera');
+    } else {
+        const loc = await validateLocation();
+        if (loc) {
+            setStep('camera');
+        }
     }
   };
 
@@ -322,7 +318,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                            {isBypassMode && (
                                <div className="flex items-center justify-center gap-2 text-blue-300 text-[10px] font-black uppercase bg-blue-900/40 p-3 rounded-xl border border-blue-500/30">
                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                                   Bypass Mode: ปิดการตรวจสอบพิกัดแล้ว
+                                   โหมดลงเวลาพิเศษ: ถ่ายภาพเพื่อยืนยันตัวตน 📸
                                </div>
                            )}
                            
@@ -396,6 +392,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
             {!isBypassMode && (
                 <div className="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
                     พิกัด: {currentDistance !== null ? `${Math.round(currentDistance)} ม.` : 'ตรวจแล้ว'} ❄️
+                </div>
+            )}
+            {isBypassMode && (
+                <div className="bg-blue-600/60 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
+                    โหมดบันทึกภาพ 📸
                 </div>
             )}
         </div>
