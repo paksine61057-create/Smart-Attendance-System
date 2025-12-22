@@ -172,11 +172,34 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     return null;
                 };
 
-                let rawTs = getVal(['timestamp', 'Timestamp']);
                 let ts = Date.now();
-                if (rawTs) {
-                    const parsed = new Date(rawTs).getTime();
-                    ts = isNaN(parsed) ? Number(rawTs) : parsed;
+                const rawTs = getVal(['timestamp', 'Timestamp']);
+                const rawDate = getVal(['date', 'Date']);
+                const rawTime = getVal(['time', 'Time']);
+
+                if (rawTs && !isNaN(Number(rawTs))) {
+                    ts = Number(rawTs);
+                } else if (rawDate) {
+                    // แยกระบบวันที่แบบ DD/MM/YYYY
+                    const dateParts = String(rawDate).split(/[\/\-]/);
+                    if (dateParts.length === 3) {
+                        let day = parseInt(dateParts[0]);
+                        let month = parseInt(dateParts[1]) - 1;
+                        let year = parseInt(dateParts[2]);
+                        
+                        // รองรับปี พ.ศ. (ถ้า > 2500 ให้ลบ 543)
+                        if (year > 2500) year -= 543;
+                        
+                        let hours = 0, mins = 0, secs = 0;
+                        if (rawTime) {
+                            const timeParts = String(rawTime).split(':');
+                            hours = parseInt(timeParts[0]) || 0;
+                            mins = parseInt(timeParts[1]) || 0;
+                            secs = parseInt(timeParts[2]) || 0;
+                        }
+                        const d = new Date(year, month, day, hours, mins, secs);
+                        ts = d.getTime();
+                    }
                 }
 
                 const rawType = String(getVal(['type', 'Type']) || "").toLowerCase();
@@ -189,13 +212,8 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (rawType.includes('อื่น') || rawType === 'other_leave' || rawType === 'other leave') type = 'other_leave';
                 else if (rawType.includes('อนุญาต') || rawType === 'authorized_late' || rawType === 'authorized late') type = 'authorized_late';
 
-                // ดึงค่า URL รูปภาพจาก Cloud
                 let cloudImage = String(getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64', 'หลักฐาน', 'รูปภาพ']) || "").trim();
-                
-                // หากค่าในชีตเป็น "-" หรือสั้นเกินไป ให้ถือว่าไม่มีรูป
-                if (cloudImage === "-" || cloudImage.length < 5) {
-                  cloudImage = "";
-                }
+                if (cloudImage === "-" || cloudImage.length < 5) cloudImage = "";
 
                 return {
                     id: String(getVal(['id', 'Timestamp']) || ts),
