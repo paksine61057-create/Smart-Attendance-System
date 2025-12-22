@@ -28,9 +28,14 @@ const Dashboard: React.FC = () => {
 
   const staffList = useMemo(() => getAllStaff(), []);
 
-  // ฟังก์ชันช่วยเหลือในการดึงชื่อที่ถูกต้องมาแสดง (Smart Name Lookup)
+  /**
+   * Smart Name Lookup: ตรวจสอบและดึงชื่อที่สมบูรณ์ที่สุด
+   * หากในระบบ Cloud ไม่มีชื่อติดมา จะนำ Staff ID ไปค้นหาใน Staff Database ทันที
+   */
   const getDisplayName = (record: CheckInRecord) => {
-    if (record.name && record.name !== "ไม่ระบุชื่อ" && record.name !== "undefined" && record.name.trim() !== "") return record.name;
+    if (record.name && record.name !== "ไม่ระบุชื่อ" && record.name !== "undefined" && record.name.trim() !== "") {
+      return record.name;
+    }
     if (record.staffId) {
       const staff = getStaffById(record.staffId);
       if (staff) return staff.name;
@@ -38,9 +43,13 @@ const Dashboard: React.FC = () => {
     return record.name || "ไม่ทราบชื่อ";
   };
 
-  // ฟังก์ชันช่วยเหลือในการดึงตำแหน่งที่ถูกต้องมาแสดง
+  /**
+   * ดึงตำแหน่งบุคลากร
+   */
   const getDisplayRole = (record: CheckInRecord) => {
-    if (record.role && record.role !== "undefined" && record.role.trim() !== "") return record.role;
+    if (record.role && record.role !== "undefined" && record.role.trim() !== "") {
+      return record.role;
+    }
     if (record.staffId) {
       const staff = getStaffById(record.staffId);
       if (staff) return staff.role;
@@ -65,6 +74,8 @@ const Dashboard: React.FC = () => {
       const local = getRecords();
       
       const mergedMap = new Map<string, CheckInRecord>();
+      
+      // ฟังก์ชันสร้าง Signature เพื่อป้องกันข้อมูลซ้ำซ้อน
       const getSig = (r: CheckInRecord) => {
         const d = new Date(r.timestamp);
         return `${String(r.staffId || '').toUpperCase()}_${r.type}_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
@@ -73,6 +84,7 @@ const Dashboard: React.FC = () => {
       cloud.forEach(r => mergedMap.set(getSig(r), r));
       local.forEach(l => {
         const sig = getSig(l);
+        // เลือกข้อมูลที่มีรูปภาพ (ถ้ามี) หรือข้อมูลล่าสุด
         if (!mergedMap.has(sig) || (l.imageUrl && l.imageUrl.length > (mergedMap.get(sig)?.imageUrl?.length || 0))) {
           mergedMap.set(sig, l);
         }
@@ -320,7 +332,7 @@ const Dashboard: React.FC = () => {
                       <tr key={r.id} className="hover:bg-rose-50/20 transition-colors">
                         <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</td>
                         <td className="p-5">
-                          {/* ชื่อโดดเด่นกว่าตำแหน่ง */}
+                          {/* ชื่อแสดงผลขนาดใหญ่และหนาเด่นชัด */}
                           <div className="font-black text-stone-900 text-lg leading-tight mb-0.5">{getDisplayName(r)}</div>
                           <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">{getDisplayRole(r)}</div>
                         </td>
