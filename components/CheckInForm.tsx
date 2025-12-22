@@ -1,8 +1,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AppSettings, GeoLocation, CheckInRecord, AttendanceType, Staff } from '../types';
-import { getCurrentPosition, getDistanceFromLatLonInMeters, getAccuratePosition } from '../services/geoService';
-import { saveRecord, getSettings, syncSettingsFromCloud } from '../services/storageService';
+import { saveRecord, getSettings } from '../services/storageService';
 import { analyzeCheckInImage } from '../services/geminiService';
 import { getStaffById } from '../services/staffService';
 import { getHoliday } from '../services/holidayService';
@@ -29,136 +28,29 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [staffIdInput, setStaffIdInput] = useState('');
   const [currentUser, setCurrentUser] = useState<Staff | null>(null);
   const [reason, setReason] = useState(''); 
-  const [locationStatus, setLocationStatus] = useState<'idle' | 'checking' | 'found' | 'error'>('idle');
-  const [locationError, setLocationError] = useState<React.ReactNode>(null);
-  const [lastLocation, setLastLocation] = useState<GeoLocation | null>(null);
-  const [currentDistance, setCurrentDistance] = useState<number | null>(null);
-  const [currentAccuracy, setCurrentAccuracy] = useState<number | null>(null);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState('normal');
   const [todayHoliday, setTodayHoliday] = useState<string | null>(null);
-  const [isBypassMode, setIsBypassMode] = useState(false);
-  const [isSyncingSettings, setIsSyncingSettings] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  const isRestrictedType = ['arrival', 'departure', 'authorized_late'].includes(attendanceType);
-
-  // ฟังก์ชันอัปเดตสถานะ Bypass จาก Local Storage
-  const refreshBypassState = useCallback(() => {
-    const s = getSettings();
-    setIsBypassMode(!!s.bypassLocation);
-  }, []);
-
-  // โหลดข้อมูลครั้งแรกและฟัง Event การอัปเดต
   useEffect(() => {
-    const init = async () => {
-        refreshBypassState();
-        const holiday = getHoliday(new Date());
-        setTodayHoliday(holiday);
-        const savedId = localStorage.getItem('school_checkin_saved_staff_id');
-        if (savedId) setStaffIdInput(savedId);
-        
-        // บังคับซิงค์ตอนเปิดหน้าแรก
-        await syncSettingsFromCloud();
-    };
-    init();
-
-    window.addEventListener('settings_updated', refreshBypassState);
-    return () => window.removeEventListener('settings_updated', refreshBypassState);
-  }, [refreshBypassState]);
+    const holiday = getHoliday(new Date());
+    setTodayHoliday(holiday);
+    const savedId = localStorage.getItem('school_checkin_saved_staff_id');
+    if (savedId) setStaffIdInput(savedId);
+  }, []);
 
   useEffect(() => {
     if (staffIdInput.length >= 5) {
         const staff = getStaffById(staffIdInput);
         setCurrentUser(staff || null);
-        // เมื่อเจอพนักงาน ให้แอบซิงค์ Cloud ทันทีเพื่อความแม่นยำของ Bypass
-        if (staff) syncSettingsFromCloud();
     } else setCurrentUser(null);
   }, [staffIdInput]);
 
-  const validateLocation = async (forceBypass: boolean) => {
-    if (forceBypass) {
-        setLocationStatus('found');
-        setLastLocation({ lat: 0, lng: 0 });
-        setCurrentDistance(0);
-        return { lat: 0, lng: 0 };
-    }
-
-    setLocationStatus('checking');
-    setLocationError(null);
-    
-    const s = getSettings();
-    if (!s.officeLocation || !s.officeLocation.lat) {
-        setLocationStatus('found');
-        return { lat: 0, lng: 0 };
-    }
-
-    try {
-      const pos = await getAccuratePosition(3); 
-      const dist = getDistanceFromLatLonInMeters(
-        pos.coords.latitude, pos.coords.longitude, 
-        s.officeLocation.lat, s.officeLocation.lng
-      );
-      
-      const locData = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setLastLocation(locData);
-      setCurrentDistance(dist);
-      setCurrentAccuracy(pos.coords.accuracy);
-
-      const buffer = pos.coords.accuracy / 2;
-      const adjustedDist = Math.max(0, dist - buffer);
-
-      if (isRestrictedType && adjustedDist > s.maxDistanceMeters) {
-          setLocationStatus('error');
-          setLocationError(
-            <div className="space-y-3 text-left">
-                <p className="font-black text-rose-300">อยู่นอกเขตโรงเรียน!</p>
-                <div className="bg-black/20 p-3 rounded-2xl space-y-1 border border-white/10">
-                    <p className="text-[10px] text-white/40 uppercase">ข้อมูลการตรวจสอบ:</p>
-                    <p className="text-sm">ห่างจากจุดหมาย: <span className="text-rose-400 font-black">{Math.round(dist).toLocaleString()} เมตร</span></p>
-                    <p className="text-xs">ค่าความแม่นยำ GPS: +/- {Math.round(pos.coords.accuracy)} ม.</p>
-                </div>
-            </div>
-          );
-          return null;
-      }
-
-      setLocationStatus('found');
-      return locData;
-    } catch (err: any) {
-      setLocationStatus('error');
-      setLocationError(err.message || "ไม่สามารถดึงข้อมูลพิกัดได้");
-      return null;
-    }
-  };
-
-  const startCameraStep = async () => {
-    setIsSyncingSettings(true);
-    setLocationStatus('checking');
-    
-    // สำคัญ: ดึงค่าจาก Cloud ใหม่ "เดี๋ยวนี้" ก่อนตัดสินใจใช้ GPS หรือไม่
-    try {
-        await syncSettingsFromCloud();
-    } catch (e) { }
-    
-    const s = getSettings();
-    const currentBypass = !!s.bypassLocation;
-    setIsBypassMode(currentBypass);
-    setIsSyncingSettings(false);
-
-    if (currentBypass) {
-        setLocationStatus('found');
-        setLastLocation({ lat: 0, lng: 0 });
-        setCurrentDistance(0);
-        setStep('camera');
-    } else {
-        const loc = await validateLocation(false);
-        if (loc) {
-            setStep('camera');
-        }
-    }
+  const startCameraStep = () => {
+    setStep('camera');
   };
 
   useEffect(() => {
@@ -180,7 +72,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
           }
         } catch (err) {
           console.error("Camera error:", err);
-          setLocationError("ไม่สามารถเปิดกล้องได้ โปรดอนุญาตสิทธิ์กล้องในเบราว์เซอร์");
+          alert("ไม่สามารถเปิดกล้องได้ โปรดอนุญาตสิทธิ์กล้องในเบราว์เซอร์");
           setIsCameraLoading(false);
           setStep('info');
         }
@@ -233,8 +125,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
           role: currentUser.role,
           type: attendanceType, 
           timestamp: now.getTime(), 
-          location: (lastLocation || { lat: 0, lng: 0 }),
-          distanceFromBase: currentDistance || 0, 
+          location: { lat: 0, lng: 0 },
+          distanceFromBase: 0, 
           status, 
           imageUrl: imageBase64, 
           aiVerification: aiResult,
@@ -247,7 +139,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         setTimeout(() => onSuccess(), 2000);
       }
     }
-  }, [currentUser, attendanceType, reason, lastLocation, currentDistance, activeFilterId, onSuccess]);
+  }, [currentUser, attendanceType, reason, activeFilterId, onSuccess]);
 
   if (step === 'info') {
     const isSpecialType = ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(attendanceType);
@@ -347,57 +239,18 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                             </div>
                         )}
 
-                        <div className="mt-4 p-4 bg-black/30 rounded-2xl border border-white/10 backdrop-blur-md">
-                           {isSyncingSettings ? (
-                               <div className="flex items-center justify-center gap-3 text-amber-200 text-xs font-bold animate-pulse">
-                                   <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
-                                   กำลังซิงค์สถานะ Cloud...
-                               </div>
-                           ) : isBypassMode ? (
-                               <div className="flex items-center justify-center gap-2 text-blue-300 text-[10px] font-black uppercase bg-blue-900/40 p-3 rounded-xl border border-blue-500/30 animate-in zoom-in">
-                                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                                   แอดมินเปิดโหมดพิเศษ: ถ่ายภาพได้ทันที 📸
-                               </div>
-                           ) : (
-                               <>
-                                {locationStatus === 'checking' && (
-                                    <div className="flex items-center justify-center gap-3 text-white text-xs font-bold animate-pulse">
-                                        <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
-                                        กำลังรอสัญญาณ GPS...
-                                    </div>
-                                )}
-                                {locationStatus === 'found' && (
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-black uppercase">
-                                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                                            พิกัดพร้อม
-                                        </div>
-                                        {currentDistance !== null && (
-                                            <span className="text-white/60 text-[10px] font-bold tracking-widest">
-                                                ห่าง {Math.round(currentDistance)} ม.
-                                            </span>
-                                        )}
-                                    </div>
-                                )}
-                                {locationStatus === 'error' && (
-                                    <div className="text-rose-200 text-xs font-black text-center space-y-4">
-                                        <div className="bg-rose-900/40 p-5 rounded-2xl border border-rose-400/30 text-left leading-relaxed">
-                                            {locationError}
-                                        </div>
-                                        <button onClick={() => validateLocation(false)} className="text-[10px] bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-full border border-white/20 transition-all uppercase tracking-widest font-black">ลองใหม่ 🔄</button>
-                                    </div>
-                                )}
-                               </>
-                           )}
+                        <div className="mt-4 p-4 bg-blue-900/40 rounded-2xl border border-blue-500/30 backdrop-blur-md flex items-center justify-center gap-3">
+                            <span className="text-blue-300 text-[11px] font-black uppercase tracking-widest flex items-center gap-2">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                                โหมดลงเวลาออนไลน์: ถ่ายรูปได้ทันที 📸
+                            </span>
                         </div>
                         
                         <button 
                             onClick={startCameraStep}
-                            disabled={isSyncingSettings || (!isBypassMode && locationStatus === 'checking')}
-                            className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3
-                            ${isSyncingSettings ? 'bg-slate-500 opacity-50 cursor-wait' : (!isBypassMode && locationStatus === 'error' && isRestrictedType) ? 'bg-slate-500 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive'}`}
+                            className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive`}
                         >
-                            {isSyncingSettings ? 'กำลังซิงค์...' : (!isBypassMode && locationStatus === 'checking') ? 'รอ GPS...' : 'ถ่ายรูปบันทึกเวลา 📸'}
+                            ถ่ายรูปบันทึกเวลา 📸
                         </button>
                     </div>
                 </div>
@@ -450,15 +303,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         
         <div className="absolute top-8 left-0 right-0 flex justify-center gap-3 z-20">
             <button onClick={() => setStep('info')} className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-black border border-white/20 hover:bg-black/60 transition-all">ยกเลิก</button>
-            {isBypassMode ? (
-                <div className="bg-blue-600/60 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
-                    โหมดบันทึกภาพพิเศษ 📸
-                </div>
-            ) : (
-                <div className="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
-                    ห่าง {currentDistance !== null ? Math.round(currentDistance) : '-'} ม. ❄️
-                </div>
-            )}
+            <div className="bg-blue-600/60 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
+                โหมดลงเวลาออนไลน์ 🌐
+            </div>
         </div>
       </div>
     );

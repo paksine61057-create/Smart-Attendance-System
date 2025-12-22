@@ -1,8 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
-import { AppSettings, GeoLocation, Staff, SpecialHoliday } from '../types';
+import { AppSettings, Staff, SpecialHoliday } from '../types';
 import { getSettings, saveSettings, clearRecords } from '../services/storageService';
-import { getAccuratePosition, getDistanceFromLatLonInMeters, getCurrentPosition } from '../services/geoService';
 import { getAllStaff, addStaff, removeStaff } from '../services/staffService';
 import { getSpecialHolidays, addSpecialHolidayRange, removeSpecialHoliday } from '../services/holidayService';
 
@@ -12,11 +11,9 @@ interface SettingsProps {
 
 const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'staff' | 'holidays'>('general');
-  const [settings, setSettingsState] = useState<AppSettings & { lockLocation?: boolean }>(getSettings());
-  const [loading, setLoading] = useState(false);
+  const [settings, setSettingsState] = useState<AppSettings>(getSettings());
   const [msg, setMsg] = useState('');
   const [isError, setIsError] = useState(false);
-  const [testDist, setTestDist] = useState<number | null>(null);
 
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [newStaff, setNewStaff] = useState<Staff>({ id: '', name: '', role: '' });
@@ -32,63 +29,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     setHolidayList(getSpecialHolidays());
   }, []);
 
-  const handleSetCurrentLocation = async () => {
-    setLoading(true);
-    setIsError(false);
-    setMsg('กำลังล็อกสัญญาณพิกัดที่แม่นยำที่สุด (โปรดรอสักครู่)...');
-    try {
-      const pos = await getAccuratePosition();
-      const newLoc: GeoLocation = {
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude
-      };
-      setSettingsState(prev => ({ ...prev, officeLocation: newLoc, lockLocation: true }));
-      setMsg(`ดึงพิกัดสำเร็จ! (แม่นยำ +/- ${Math.round(pos.coords.accuracy)} ม.)`);
-      setTestDist(0);
-    } catch (err: any) {
-      setIsError(true);
-      setMsg(err.message || 'ไม่พบสัญญาณ - โปรดเปิด GPS');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleTestDistance = async () => {
-    if (!settings.officeLocation) return;
-    setLoading(true);
-    try {
-        const pos = await getCurrentPosition();
-        const dist = getDistanceFromLatLonInMeters(
-            pos.coords.latitude, pos.coords.longitude,
-            settings.officeLocation.lat, settings.officeLocation.lng
-        );
-        setTestDist(dist);
-        setMsg(`ขณะนี้คุณอยู่ห่างจากจุดที่ตั้งไว้ประมาณ ${Math.round(dist)} เมตร`);
-    } catch (err: any) {
-        setIsError(true);
-        setMsg(err.message);
-    } finally {
-        setLoading(false);
-    }
-  };
-
-  const handleCoordinateChange = (field: 'lat' | 'lng', value: string) => {
-    const numValue = parseFloat(value);
-    setSettingsState(prev => ({
-        ...prev,
-        officeLocation: {
-            lat: field === 'lat' ? (isNaN(numValue) ? 0 : numValue) : (prev.officeLocation?.lat || 0),
-            lng: field === 'lng' ? (isNaN(numValue) ? 0 : numValue) : (prev.officeLocation?.lng || 0)
-        },
-        lockLocation: true // ถ้ามีการพิมพ์มือ ให้ล็อกพิกัดไว้อัตโนมัติ
-    }));
-  };
-
-  const handleDistanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = parseInt(e.target.value);
-    setSettingsState(prev => ({ ...prev, maxDistanceMeters: isNaN(val) ? 0 : val }));
-  };
-  
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSettingsState(prev => ({ ...prev, googleSheetUrl: e.target.value }));
   };
@@ -187,83 +127,11 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                 <div className="absolute top-0 right-0 p-4 opacity-10"><svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg></div>
                 <h3 className="font-black text-stone-800 mb-4 text-sm uppercase tracking-widest flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    จุดลงเวลาโรงเรียน (Office Location)
+                    โหมดการลงเวลา
                 </h3>
-                
-                <div className="flex gap-3 mb-6">
-                    <div className="flex-1">
-                        <label className="text-[10px] font-black text-stone-400 mb-1.5 block uppercase">ละติจูด (Latitude)</label>
-                        <input type="number" step="any" value={settings.officeLocation?.lat || ''} onChange={(e) => handleCoordinateChange('lat', e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl text-stone-800 font-mono text-sm outline-none focus:border-rose-300 transition-all" placeholder="13.xxxxxx" />
-                    </div>
-                    <div className="flex-1">
-                        <label className="text-[10px] font-black text-stone-400 mb-1.5 block uppercase">ลองจิจูด (Longitude)</label>
-                        <input type="number" step="any" value={settings.officeLocation?.lng || ''} onChange={(e) => handleCoordinateChange('lng', e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl text-stone-800 font-mono text-sm outline-none focus:border-rose-300 transition-all" placeholder="100.xxxxxx" />
-                    </div>
-                </div>
-
-                <div className="space-y-3 mb-6">
-                    <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                        <input 
-                          type="checkbox" 
-                          id="lockLoc" 
-                          checked={settings.lockLocation} 
-                          onChange={(e) => setSettingsState(prev => ({ ...prev, lockLocation: e.target.checked }))}
-                          className="w-5 h-5 rounded accent-blue-600"
-                        />
-                        <label htmlFor="lockLoc" className="text-xs font-black text-blue-800 cursor-pointer">
-                            🔒 ล็อกพิกัด (ห้ามพิกัดจาก Cloud มาทับค่าที่ตั้งไว้นี้)
-                        </label>
-                    </div>
-
-                    <div className="flex items-center gap-3 p-4 bg-rose-50 rounded-2xl border border-rose-100">
-                        <input 
-                          type="checkbox" 
-                          id="bypassLoc" 
-                          checked={settings.bypassLocation} 
-                          onChange={(e) => setSettingsState(prev => ({ ...prev, bypassLocation: e.target.checked }))}
-                          className="w-5 h-5 rounded accent-rose-600"
-                        />
-                        <label htmlFor="bypassLoc" className="text-xs font-black text-rose-800 cursor-pointer">
-                            🚀 ปิดระบบตรวจสอบพิกัด (อนุญาตให้ลงชื่อได้ทุกที่ชั่วคราว)
-                        </label>
-                    </div>
-                </div>
-
-                <div className="space-y-3">
-                    <button 
-                        onClick={handleSetCurrentLocation} 
-                        disabled={loading} 
-                        className={`w-full py-4 rounded-2xl transition-all flex items-center justify-center gap-3 font-black text-sm shadow-lg active:scale-[0.98]
-                        ${loading ? 'bg-stone-200 text-stone-500' : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700'}`}
-                    >
-                        {loading ? (
-                            <div className="w-5 h-5 border-3 border-t-white border-white/30 rounded-full animate-spin"></div>
-                        ) : (
-                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
-                        )}
-                        {loading ? 'กำลังระบุพิกัด...' : 'ดึงพิกัดปัจจุบันใส่ในช่อง (GPS)'}
-                    </button>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <button 
-                            onClick={handleTestDistance}
-                            disabled={loading || !settings.officeLocation}
-                            className="py-3 border-2 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-2xl transition-all flex items-center justify-center gap-2 font-black text-xs disabled:opacity-50"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                            ทดสอบระยะห่าง
-                        </button>
-                        <a 
-                            href={`https://www.google.com/maps?q=${settings.officeLocation?.lat},${settings.officeLocation?.lng}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="py-3 border-2 border-stone-100 text-stone-500 hover:bg-stone-50 rounded-2xl transition-all flex items-center justify-center gap-2 font-bold text-xs"
-                        >
-                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                            ดูใน Maps
-                        </a>
-                    </div>
-                </div>
+                <p className="text-xs font-bold text-stone-500 bg-stone-100 p-4 rounded-2xl border border-stone-200 italic leading-relaxed">
+                    🚀 ระบบอยู่ในโหมด "ลงเวลาออนไลน์" บุคลากรสามารถลงเวลาได้จากทุกที่โดยไม่ต้องตรวจสอบพิกัด GPS
+                </p>
                 
                 {msg && (
                     <p className={`text-[11px] mt-4 text-center font-black p-3 rounded-xl border animate-in slide-in-from-top-2
@@ -276,16 +144,8 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
               <div className="p-6 bg-white rounded-3xl border border-stone-100 shadow-sm">
                  <h3 className="font-black text-stone-800 mb-6 text-sm uppercase tracking-widest flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-amber-500"></span>
-                    การตั้งค่ารัศมีและเซิร์ฟเวอร์
+                    การเชื่อมต่อเซิร์ฟเวอร์
                  </h3>
-                 <div className="mb-6">
-                    <label className="block text-[10px] font-black text-stone-400 mb-2 uppercase tracking-widest">รัศมีลงเวลาสูงสุด (เมตร)</label>
-                    <div className="relative">
-                        <input type="number" value={settings.maxDistanceMeters} onChange={handleDistanceChange} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none font-black text-rose-600 focus:border-rose-300" />
-                        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-stone-400 font-bold text-sm">m.</span>
-                    </div>
-                    <p className="text-[9px] text-stone-400 mt-2 italic font-bold">* แนะนำที่ 100 เมตร เพื่อรองรับความคลาดเคลื่อนของ GPS มือถือบางรุ่น</p>
-                 </div>
                  <div>
                     <label className="block text-[10px] font-black text-stone-400 mb-2 uppercase tracking-widest">Google Apps Script URL (Sync Cloud)</label>
                     <input type="text" value={settings.googleSheetUrl || ''} onChange={handleUrlChange} placeholder="https://script.google.com/macros/s/..." className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none text-[10px] font-mono focus:border-rose-300" />

@@ -30,8 +30,8 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
               (record.type as string).replace('_', ' '),
       "Status": record.status,
       "Reason": record.reason || '-',
-      "Location": `https://www.google.com/maps?q=${record.location.lat},${record.location.lng}`,
-      "Distance (m)": Math.round(record.distanceFromBase),
+      "Location": "ลงเวลาออนไลน์",
+      "Distance (m)": 0,
       "AI Verification": record.aiVerification || '-',
       "imageBase64": cleanImageBase64
     };
@@ -80,75 +80,18 @@ export const clearRecords = () => localStorage.removeItem(RECORDS_KEY);
 
 export const saveSettings = async (settings: AppSettings) => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  
-  const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-  if (targetUrl) {
-    try {
-      const payload = {
-        action: 'updateSettings',
-        officeLocation: settings.officeLocation,
-        maxDistanceMeters: settings.maxDistanceMeters,
-        bypassLocation: !!settings.bypassLocation
-      };
-      await fetch(targetUrl, {
-        method: 'POST',
-        mode: 'no-cors',
-        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify(payload)
-      });
-    } catch (e) {
-      console.error("Failed to push settings to cloud", e);
-    }
-  }
 };
 
-export const getSettings = (): AppSettings & { lockLocation?: boolean } => {
+export const getSettings = (): AppSettings => {
   const data = localStorage.getItem(SETTINGS_KEY);
-  let s = data ? JSON.parse(data) : { officeLocation: null, maxDistanceMeters: 100, googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL, lockLocation: false, bypassLocation: false };
+  let s = data ? JSON.parse(data) : { googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL };
   if (!s.googleSheetUrl || s.googleSheetUrl === "") s.googleSheetUrl = DEFAULT_GOOGLE_SHEET_URL;
-  if (s.bypassLocation === undefined) s.bypassLocation = false;
   return s;
 };
 
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
-    const s = getSettings();
-    const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-    if (!targetUrl) return false;
-    
-    try {
-        const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`, {
-          cache: 'no-store',
-          headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
-        });
-        const cloud = await response.json();
-        
-        if (cloud) {
-            // สำคัญ: Bypass Location จะซิงค์เสมอ ไม่ว่าเครื่องจะล็อกพิกัดไว้หรือไม่
-            let updatedSettings = { ...s };
-            
-            // 1. อัปเดตสถานะ Bypass เสมอ
-            if (cloud.bypassLocation !== undefined) {
-                updatedSettings.bypassLocation = !!cloud.bypassLocation;
-            }
-
-            // 2. อัปเดตพิกัดและระยะทาง เฉพาะเมื่อเครื่องไม่ได้สั่ง "ล็อกพิกัด" ไว้
-            if (!s.lockLocation) {
-                if (cloud.officeLocation && cloud.officeLocation.lat !== 0) {
-                    updatedSettings.officeLocation = cloud.officeLocation;
-                }
-                if (cloud.maxDistanceMeters !== undefined) {
-                    updatedSettings.maxDistanceMeters = cloud.maxDistanceMeters;
-                }
-            }
-            
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
-            window.dispatchEvent(new Event('settings_updated'));
-            return true;
-        }
-    } catch (e) {
-        console.error("Sync settings error", e);
-    }
-    return false;
+    // โหมดลงเวลาที่ไหนก็ได้ ไม่ต้องซิงค์พิกัดจาก Cloud อีกต่อไป
+    return true;
 }
 
 export const syncUnsyncedRecords = async () => {
@@ -214,7 +157,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     status: getVal(['status', 'Status']) || "Normal",
                     reason: getVal(['reason', 'Reason']) || "",
                     location: { lat: 0, lng: 0 },
-                    distanceFromBase: Number(getVal(['distance', 'Distance (m)']) || 0),
+                    distanceFromBase: 0,
                     aiVerification: getVal(['aiVerification', 'AI Verification']) || "",
                     imageUrl: String(getVal(['imageUrl', 'imageBase64', 'Image']) || "")
                 };

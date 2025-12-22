@@ -29,10 +29,7 @@ export interface CheckInRecord {
 }
 
 export interface AppSettings {
-  officeLocation: GeoLocation | null;
-  maxDistanceMeters: number;
   googleSheetUrl?: string; // Google Apps Script Web App URL
-  bypassLocation?: boolean; // New: Flag to skip distance verification
 }
 
 export interface DailySummary {
