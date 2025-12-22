@@ -12,7 +12,7 @@ interface SettingsProps {
 
 const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const [activeTab, setActiveTab] = useState<'general' | 'staff' | 'holidays'>('general');
-  const [settings, setSettingsState] = useState<AppSettings>(getSettings());
+  const [settings, setSettingsState] = useState<AppSettings & { lockLocation?: boolean }>(getSettings());
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [isError, setIsError] = useState(false);
@@ -42,7 +42,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
         lat: pos.coords.latitude,
         lng: pos.coords.longitude
       };
-      setSettingsState(prev => ({ ...prev, officeLocation: newLoc }));
+      setSettingsState(prev => ({ ...prev, officeLocation: newLoc, lockLocation: true }));
       setMsg(`ดึงพิกัดสำเร็จ! (แม่นยำ +/- ${Math.round(pos.coords.accuracy)} ม.)`);
       setTestDist(0);
     } catch (err: any) {
@@ -79,7 +79,8 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
         officeLocation: {
             lat: field === 'lat' ? (isNaN(numValue) ? 0 : numValue) : (prev.officeLocation?.lat || 0),
             lng: field === 'lng' ? (isNaN(numValue) ? 0 : numValue) : (prev.officeLocation?.lng || 0)
-        }
+        },
+        lockLocation: true // ถ้ามีการพิมพ์มือ ให้ล็อกพิกัดไว้อัตโนมัติ
     }));
   };
 
@@ -92,55 +93,62 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     setSettingsState(prev => ({ ...prev, googleSheetUrl: e.target.value }));
   };
 
+  // Fix: Added handleClearAllRecords to clear all local records with confirmation
+  const handleClearAllRecords = () => {
+    if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลทั้งหมดในเครื่อง? (ข้อมูลบน Cloud จะไม่หาย)')) {
+      clearRecords();
+      setMsg('ล้างข้อมูลในเครื่องทั้งหมดเรียบร้อยแล้ว');
+      setIsError(false);
+    }
+  };
+
+  // Fix: Added handleAddStaff to validate and save a new staff member
   const handleAddStaff = () => {
-    if (!newStaff.id || !newStaff.name || !newStaff.role) {
-      setStaffError('กรุณากรอกข้อมูลให้ครบถ้วน');
+    setStaffError('');
+    if (!newStaff.id.trim() || !newStaff.name.trim() || !newStaff.role.trim()) {
+      setStaffError('กรุณากรอกข้อมูลบุคลากรให้ครบถ้วนทุกช่อง');
       return;
     }
     const success = addStaff(newStaff);
     if (success) {
       setStaffList(getAllStaff());
       setNewStaff({ id: '', name: '', role: '' });
-      setStaffError('');
+      setMsg('บันทึกรายชื่อบุคลากรสำเร็จ');
+      setIsError(false);
     } else {
-      setStaffError('รหัสบุคลากรนี้มีอยู่ในระบบแล้ว');
+      setStaffError('รหัสบุคลากรนี้มีอยู่ในระบบแล้ว โปรดตรวจสอบอีกครั้ง');
     }
   };
 
+  // Fix: Added handleRemoveStaff to delete a staff member with confirmation
   const handleRemoveStaff = (id: string) => {
-    if (confirm('ยืนยันการลบบุคลากรนี้?')) {
+    if (window.confirm('คุณต้องการลบรายชื่อบุคลากรนี้ออกจากระบบใช่หรือไม่?')) {
       removeStaff(id);
       setStaffList(getAllStaff());
     }
   };
 
+  // Fix: Added handleAddHoliday to validate and save a new holiday period
   const handleAddHoliday = () => {
     if (!newHolidayStartDate || !newHolidayName) {
-        alert('กรุณากรอกวันที่เริ่มต้นและชื่อวันหยุด');
-        return;
+      alert('กรุณาระบุวันที่เริ่มต้นและชื่อรายการวันหยุด');
+      return;
     }
-    const endDate = newHolidayEndDate || newHolidayStartDate;
-    const success = addSpecialHolidayRange(newHolidayStartDate, endDate, newHolidayName);
-    if (success) {
-        setHolidayList(getSpecialHolidays());
-        setNewHolidayName('');
-        setNewHolidayStartDate('');
-        setNewHolidayEndDate('');
-    }
+    const end = newHolidayEndDate || newHolidayStartDate;
+    addSpecialHolidayRange(newHolidayStartDate, end, newHolidayName);
+    setHolidayList(getSpecialHolidays());
+    setNewHolidayStartDate('');
+    setNewHolidayEndDate('');
+    setNewHolidayName('');
+    setMsg('บันทึกวันหยุดพิเศษสำเร็จ');
+    setIsError(false);
   };
 
+  // Fix: Added handleRemoveHoliday to delete a holiday entry with confirmation
   const handleRemoveHoliday = (id: string) => {
-      if (confirm('ลบวันหยุดนี้?')) {
-          removeSpecialHoliday(id);
-          setHolidayList(getSpecialHolidays());
-      }
-  };
-
-  const handleClearAllRecords = () => {
-    if (confirm('⚠️ คำเตือน: คุณต้องการลบข้อมูลการลงเวลาทั้งหมดในเครื่องนี้ใช่หรือไม่?')) {
-        clearRecords();
-        alert('ล้างข้อมูลเรียบร้อยแล้ว');
-        window.location.reload();
+    if (window.confirm('ต้องการลบรายการวันหยุดนี้ใช่หรือไม่?')) {
+      removeSpecialHoliday(id);
+      setHolidayList(getSpecialHolidays());
     }
   };
 
@@ -196,6 +204,19 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                         <label className="text-[10px] font-black text-stone-400 mb-1.5 block uppercase">ลองจิจูด (Longitude)</label>
                         <input type="number" step="any" value={settings.officeLocation?.lng || ''} onChange={(e) => handleCoordinateChange('lng', e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl text-stone-800 font-mono text-sm outline-none focus:border-rose-300 transition-all" placeholder="100.xxxxxx" />
                     </div>
+                </div>
+
+                <div className="flex items-center gap-3 mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                    <input 
+                      type="checkbox" 
+                      id="lockLoc" 
+                      checked={settings.lockLocation} 
+                      onChange={(e) => setSettingsState(prev => ({ ...prev, lockLocation: e.target.checked }))}
+                      className="w-5 h-5 rounded accent-blue-600"
+                    />
+                    <label htmlFor="lockLoc" className="text-xs font-black text-blue-800 cursor-pointer">
+                        🔒 ล็อกพิกัด (ห้ามพิกัดจาก Cloud มาทับค่าที่ตั้งไว้นี้)
+                    </label>
                 </div>
 
                 <div className="space-y-3">

@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AppSettings, GeoLocation, CheckInRecord, AttendanceType, Staff } from '../types';
-import { getCurrentPosition, getDistanceFromLatLonInMeters } from '../services/geoService';
+import { getCurrentPosition, getDistanceFromLatLonInMeters, getAccuratePosition } from '../services/geoService';
 import { saveRecord, getSettings, syncSettingsFromCloud } from '../services/storageService';
 import { analyzeCheckInImage } from '../services/geminiService';
 import { getStaffById } from '../services/staffService';
@@ -30,7 +30,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [currentUser, setCurrentUser] = useState<Staff | null>(null);
   const [reason, setReason] = useState(''); 
   const [locationStatus, setLocationStatus] = useState<'idle' | 'checking' | 'found' | 'error'>('idle');
-  const [locationError, setLocationError] = useState('');
+  const [locationError, setLocationError] = useState<React.ReactNode>(null);
   const [lastLocation, setLastLocation] = useState<GeoLocation | null>(null);
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
   const [currentAccuracy, setCurrentAccuracy] = useState<number | null>(null);
@@ -63,44 +63,54 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   const validateLocation = async () => {
     setLocationStatus('checking');
-    setLocationError('');
+    setLocationError(null);
     
-    // ดึงค่าล่าสุดจาก Local Storage เสมอ
     const s = getSettings();
-    
     if (!s.officeLocation || !s.officeLocation.lat) {
         setLocationStatus('found');
         return { lat: 0, lng: 0 };
     }
 
     try {
-      const pos = await getCurrentPosition({ timeout: 15000 });
+      const pos = await getAccuratePosition(3); 
       const dist = getDistanceFromLatLonInMeters(
         pos.coords.latitude, pos.coords.longitude, 
         s.officeLocation.lat, s.officeLocation.lng
       );
       
-      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setLastLocation(loc);
+      setLastLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
       setCurrentDistance(dist);
       setCurrentAccuracy(pos.coords.accuracy);
 
-      // ใช้ระยะทางลบด้วยค่าความคลาดเคลื่อน (Accuracy Buffer)
-      // เช่น ห่าง 110 ม. แต่ GPS แกว่ง 20 ม. ระยะที่นำมาคิดจะเป็น 90 ม.
-      const adjustedDist = Math.max(0, dist - (pos.coords.accuracy / 2));
+      const buffer = pos.coords.accuracy / 2;
+      const adjustedDist = Math.max(0, dist - buffer);
 
       if (isRestrictedType && adjustedDist > s.maxDistanceMeters) {
           setLocationStatus('error');
-          setLocationError(`คุณอยู่นอกเขตโรงเรียน (ห่าง ${Math.round(dist)} ม.) โปรดเข้ามาให้ใกล้จุดลงเวลามากกว่านี้ (พิกัดปัจจุบัน +/- ${Math.round(pos.coords.accuracy)} ม.)`);
+          setLocationError(
+            <div className="space-y-3">
+                <p className="font-black text-rose-300">อยู่นอกเขตโรงเรียน!</p>
+                <div className="bg-black/20 p-3 rounded-2xl space-y-1 text-left border border-white/10">
+                    <p className="text-[10px] text-white/40 uppercase">ข้อมูลการตรวจสอบ:</p>
+                    <p className="text-sm">ห่างจากจุดหมาย: <span className="text-rose-400 font-black">{Math.round(dist).toLocaleString()} เมตร</span></p>
+                    <p className="text-xs">ค่าความแม่นยำ GPS: +/- {Math.round(pos.coords.accuracy)} ม.</p>
+                </div>
+                <div className="bg-amber-900/40 p-3 rounded-2xl text-[10px] text-left border border-amber-500/30">
+                    <p className="text-amber-200/50 uppercase mb-1">พิกัดโรงเรียนที่ระบบกำลังใช้:</p>
+                    <p className="font-mono">{s.officeLocation.lat.toFixed(6)}, {s.officeLocation.lng.toFixed(6)}</p>
+                    <p className="mt-2 text-rose-200 italic leading-relaxed">หากพิกัดนี้ไม่ถูกต้อง (ไม่ใช่ 17.9818, 102.8340) แสดงว่าถูกค่าจาก Cloud ทับ ให้แอดมินไปที่ "ตั้งค่า" แล้วเปิด "ล็อกพิกัด" ครับ</p>
+                </div>
+            </div>
+          );
           return null;
       }
 
       setLocationStatus('found');
-      return loc;
+      return { lat: pos.coords.latitude, lng: pos.coords.longitude };
     } catch (err: any) {
       if (isRestrictedType) {
           setLocationStatus('error');
-          setLocationError(err.message || "ไม่สามารถดึงตำแหน่ง GPS ได้");
+          setLocationError(err.message || "ไม่สามารถดึงข้อมูลพิกัดได้");
           return null;
       } else {
           setLocationStatus('found');
@@ -304,7 +314,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                            {locationStatus === 'checking' && (
                                <div className="flex items-center justify-center gap-3 text-white text-xs font-bold animate-pulse">
                                    <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
-                                   กำลังตรวจสอบพิกัด GPS...
+                                   กำลังรอสัญญาณ GPS ที่แม่นยำ...
                                </div>
                            )}
                            {locationStatus === 'found' && (
@@ -321,9 +331,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                                </div>
                            )}
                            {locationStatus === 'error' && (
-                               <div className="text-rose-200 text-xs font-black text-center space-y-2">
-                                   <p className="bg-rose-900/40 p-3 rounded-xl border border-rose-400/30">📍 {locationError}</p>
-                                   <button onClick={validateLocation} className="text-[10px] bg-white/10 hover:bg-white/20 px-4 py-1.5 rounded-full border border-white/20 transition-all uppercase tracking-widest">กดเพื่อลองตรวจสอบพิกัดอีกครั้ง 🔄</button>
+                               <div className="text-rose-200 text-xs font-black text-center space-y-4">
+                                   <div className="bg-rose-900/40 p-5 rounded-2xl border border-rose-400/30 text-left leading-relaxed">
+                                       {locationError}
+                                   </div>
+                                   <button onClick={validateLocation} className="text-[10px] bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-full border border-white/20 transition-all uppercase tracking-widest font-black">ลองตรวจสอบพิกัดใหม่อีกครั้ง 🔄</button>
                                </div>
                            )}
                         </div>
@@ -334,12 +346,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                             className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3
                             ${locationStatus === 'error' && isRestrictedType ? 'bg-slate-500 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive'}`}
                         >
-                            {locationStatus === 'checking' ? 'กรุณารอสักครู่...' : 'ถ่ายรูปบันทึกเวลา 📸'}
+                            {locationStatus === 'checking' ? 'กำลังค้นหาตำแหน่ง...' : 'ถ่ายรูปบันทึกเวลา 📸'}
                         </button>
-                        
-                        {locationStatus === 'error' && isRestrictedType && (
-                            <p className="text-[9px] text-amber-200/70 mt-2 italic">* โปรดตรวจสอบว่าคุณไม่ได้เปิดโหมดประหยัดพลังงานหรืออยู่ในอาคารอับสัญญาณ</p>
-                        )}
                     </div>
                 </div>
               )}

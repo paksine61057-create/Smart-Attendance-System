@@ -4,14 +4,11 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-// URL เว็บแอปจาก Apps Script ของคุณ
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
-    
-    // ตัดหัวข้อ data:image/jpeg;base64 ออกเพื่อให้ฝั่ง Server นำไปแปลงเป็นไฟล์ได้เลย
     const cleanImageBase64 = (record.imageUrl || "").replace(/^data:image\/\w+;base64,/, "");
 
     const payload = {
@@ -36,7 +33,7 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Location": `https://www.google.com/maps?q=${record.location.lat},${record.location.lng}`,
       "Distance (m)": Math.round(record.distanceFromBase),
       "AI Verification": record.aiVerification || '-',
-      "imageBase64": cleanImageBase64 // ส่งรหัสภาพไปให้ Server สร้างไฟล์
+      "imageBase64": cleanImageBase64
     };
 
     await fetch(url, {
@@ -74,15 +71,54 @@ export const saveRecord = async (record: CheckInRecord) => {
   }
 };
 
+export const getRecords = (): CheckInRecord[] => {
+  const data = localStorage.getItem(RECORDS_KEY);
+  return data ? JSON.parse(data) : [];
+};
+
+export const clearRecords = () => localStorage.removeItem(RECORDS_KEY);
+
+export const saveSettings = async (settings: AppSettings) => {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+};
+
+export const getSettings = (): AppSettings & { lockLocation?: boolean } => {
+  const data = localStorage.getItem(SETTINGS_KEY);
+  let s = data ? JSON.parse(data) : { officeLocation: null, maxDistanceMeters: 100, googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL, lockLocation: false };
+  if (!s.googleSheetUrl || s.googleSheetUrl === "") s.googleSheetUrl = DEFAULT_GOOGLE_SHEET_URL;
+  return s;
+};
+
+export const syncSettingsFromCloud = async (): Promise<boolean> => {
+    const s = getSettings();
+    
+    // ถ้าตั้งค่า Lock พิกัดไว้ จะไม่ดึงพิกัดจาก Cloud มาทับ
+    if (s.lockLocation) return false;
+
+    const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+    if (!targetUrl) return false;
+    try {
+        const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`);
+        const cloud = await response.json();
+        if (cloud && cloud.officeLocation && cloud.officeLocation.lat !== 0) {
+            const updatedSettings = { 
+              ...s, 
+              officeLocation: cloud.officeLocation, 
+              maxDistanceMeters: cloud.maxDistanceMeters || s.maxDistanceMeters 
+            };
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
+            return true;
+        }
+    } catch (e) { /* ignore */ }
+    return false;
+}
+
 export const syncUnsyncedRecords = async () => {
     const records = getRecords();
     const unsynced = records.filter(r => !r.syncedToSheets);
     if (unsynced.length === 0) return;
-
     const settings = getSettings();
     const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-    if (!targetUrl) return;
-
     for (const record of unsynced) {
         if (await sendToGoogleSheets(record, targetUrl)) {
             record.syncedToSheets = true;
@@ -94,10 +130,8 @@ export const syncUnsyncedRecords = async () => {
 export const deleteRecord = async (record: CheckInRecord) => {
   const records = getRecords();
   localStorage.setItem(RECORDS_KEY, JSON.stringify(records.filter(r => r.id !== record.id)));
-
   const settings = getSettings();
   const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-
   if (targetUrl) {
       try {
         await fetch(targetUrl, {
@@ -111,55 +145,12 @@ export const deleteRecord = async (record: CheckInRecord) => {
   return true;
 };
 
-export const getRecords = (): CheckInRecord[] => {
-  const data = localStorage.getItem(RECORDS_KEY);
-  return data ? JSON.parse(data) : [];
-};
-
-export const clearRecords = () => localStorage.removeItem(RECORDS_KEY);
-
-export const saveSettings = async (settings: AppSettings) => {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-};
-
-export const getSettings = (): AppSettings => {
-  const data = localStorage.getItem(SETTINGS_KEY);
-  let s = data ? JSON.parse(data) : { officeLocation: null, maxDistanceMeters: 50, googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL };
-  if (!s.googleSheetUrl || s.googleSheetUrl === "") s.googleSheetUrl = DEFAULT_GOOGLE_SHEET_URL;
-  return s;
-};
-
-export const syncSettingsFromCloud = async (): Promise<boolean> => {
-    const s = getSettings();
-    const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-    if (!targetUrl) return false;
-    try {
-        const response = await fetch(`${targetUrl}?t=${Date.now()}`);
-        const cloud = await response.json();
-        if (cloud && cloud.officeLocation) {
-            const updatedSettings = { 
-              ...s, 
-              officeLocation: cloud.officeLocation, 
-              maxDistanceMeters: cloud.maxDistanceMeters || 50 
-            };
-            localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
-            return true;
-        }
-    } catch (e) { /* ignore */ }
-    return false;
-}
-
 export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     const s = getSettings();
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-    if (!targetUrl) return [];
-    
     try {
         const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
-        if (!response.ok) throw new Error("HTTP Error");
-        
         const data = await response.json();
-
         if (Array.isArray(data)) {
             return data.map((r: any) => {
                 const getVal = (keys: string[]) => {
@@ -171,69 +162,25 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     }
                     return null;
                 };
-
                 let ts = Date.now();
                 const rawTs = getVal(['timestamp', 'Timestamp']);
-                const rawDate = getVal(['date', 'Date']);
-                const rawTime = getVal(['time', 'Time']);
-
-                if (rawTs && !isNaN(Number(rawTs))) {
-                    ts = Number(rawTs);
-                } else if (rawDate) {
-                    // แยกระบบวันที่แบบ DD/MM/YYYY
-                    const dateParts = String(rawDate).split(/[\/\-]/);
-                    if (dateParts.length === 3) {
-                        let day = parseInt(dateParts[0]);
-                        let month = parseInt(dateParts[1]) - 1;
-                        let year = parseInt(dateParts[2]);
-                        
-                        // รองรับปี พ.ศ. (ถ้า > 2500 ให้ลบ 543)
-                        if (year > 2500) year -= 543;
-                        
-                        let hours = 0, mins = 0, secs = 0;
-                        if (rawTime) {
-                            const timeParts = String(rawTime).split(':');
-                            hours = parseInt(timeParts[0]) || 0;
-                            mins = parseInt(timeParts[1]) || 0;
-                            secs = parseInt(timeParts[2]) || 0;
-                        }
-                        const d = new Date(year, month, day, hours, mins, secs);
-                        ts = d.getTime();
-                    }
-                }
-
-                const rawType = String(getVal(['type', 'Type']) || "").toLowerCase();
-                let type: AttendanceType = 'arrival';
-                if (rawType.includes('มา')) type = 'arrival';
-                else if (rawType.includes('กลับ')) type = 'departure';
-                else if (rawType.includes('ราชการ') || rawType === 'duty') type = 'duty';
-                else if (rawType.includes('ป่วย') || rawType === 'sick_leave' || rawType === 'sick leave') type = 'sick_leave';
-                else if (rawType.includes('กิจ') || rawType === 'personal_leave' || rawType === 'personal leave') type = 'personal_leave';
-                else if (rawType.includes('อื่น') || rawType === 'other_leave' || rawType === 'other leave') type = 'other_leave';
-                else if (rawType.includes('อนุญาต') || rawType === 'authorized_late' || rawType === 'authorized late') type = 'authorized_late';
-
-                let cloudImage = String(getVal(['imageUrl', 'imageurl', 'Image', 'imageBase64', 'หลักฐาน', 'รูปภาพ']) || "").trim();
-                if (cloudImage === "-" || cloudImage.length < 5) cloudImage = "";
-
+                if (rawTs && !isNaN(Number(rawTs))) ts = Number(rawTs);
                 return {
                     id: String(getVal(['id', 'Timestamp']) || ts),
                     staffId: getVal(['staffId', 'staffid', 'Staff ID']) || "",
                     name: getVal(['name', 'Name']) || "Unknown",
                     role: getVal(['role', 'Role']) || "",
                     timestamp: ts,
-                    type: type,
+                    type: 'arrival',
                     status: getVal(['status', 'Status']) || "Normal",
                     reason: getVal(['reason', 'Reason']) || "",
                     location: { lat: 0, lng: 0 },
                     distanceFromBase: Number(getVal(['distance', 'Distance (m)']) || 0),
                     aiVerification: getVal(['aiVerification', 'AI Verification']) || "",
-                    imageUrl: cloudImage
+                    imageUrl: String(getVal(['imageUrl', 'imageBase64']) || "")
                 };
             });
         }
-        return [];
-    } catch (e) { 
-        console.error("Cloud fetch failed:", e);
-        return []; 
-    }
+    } catch (e) { }
+    return [];
 };

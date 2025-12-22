@@ -26,11 +26,10 @@ export const getCurrentPosition = (options?: PositionOptions): Promise<Geolocati
       return;
     }
     
-    // บังคับให้ใช้ค่าล่าสุดเสมอ ไม่ใช้ Cache
     const defaultOptions: PositionOptions = {
       enableHighAccuracy: true,
       timeout: 15000,
-      maximumAge: 0,
+      maximumAge: 0, // บังคับดึงใหม่เสมอ ไม่ใช้ Cache
       ...options
     };
 
@@ -38,13 +37,13 @@ export const getCurrentPosition = (options?: PositionOptions): Promise<Geolocati
       let message = 'ไม่สามารถระบุตำแหน่งได้';
       switch (error.code) {
         case error.PERMISSION_DENIED:
-          message = 'โปรดอนุญาตสิทธิ์การเข้าถึงตำแหน่ง (Location Permission)';
+          message = 'โปรดอนุญาตสิทธิ์การเข้าถึงตำแหน่งในเบราว์เซอร์';
           break;
         case error.POSITION_UNAVAILABLE:
-          message = 'ข้อมูลพิกัดไม่พร้อมใช้งาน (โปรดเปิด GPS)';
+          message = 'สัญญาณ GPS อ่อนหรือไม่พร้อมใช้งาน (ลองออกไปที่โล่ง)';
           break;
         case error.TIMEOUT:
-          message = 'ค้นหาสัญญาณพิกัดนานเกินไป (โปรดลองใหม่อีกครั้ง)';
+          message = 'การค้นหาพิกัดใช้เวลานานเกินไป โปรดลองใหม่อีกครั้ง';
           break;
       }
       reject(new Error(message));
@@ -52,18 +51,27 @@ export const getCurrentPosition = (options?: PositionOptions): Promise<Geolocati
   });
 };
 
-// ฟังก์ชันพิเศษสำหรับแอดมิน: พยายามหาจุดที่แม่นยำที่สุด
-export const getAccuratePosition = async (maxAttempts = 3): Promise<GeolocationPosition> => {
+/**
+ * พยายามดึงพิกัดที่แม่นยำที่สุด (Accuracy ต่ำกว่า 30 เมตร)
+ */
+export const getAccuratePosition = async (maxAttempts = 5): Promise<GeolocationPosition> => {
     let lastPos: GeolocationPosition | null = null;
+    
     for (let i = 0; i < maxAttempts; i++) {
-        const pos = await getCurrentPosition({ timeout: 10000 });
-        if (!lastPos || pos.coords.accuracy < lastPos.coords.accuracy) {
-            lastPos = pos;
+        try {
+            const pos = await getCurrentPosition({ timeout: 8000 });
+            // เก็บตัวที่แม่นที่สุดไว้
+            if (!lastPos || pos.coords.accuracy < lastPos.coords.accuracy) {
+                lastPos = pos;
+            }
+            // ถ้าแม่นยำต่ำกว่า 20 เมตร ถือว่าดีเยี่ยม ใช้ได้เลย
+            if (pos.coords.accuracy <= 20) return pos;
+        } catch (e) {
+            console.warn(`Attempt ${i+1} failed:`, e);
         }
-        // ถ้าแม่นยำกว่า 15 เมตร ถือว่าใช้ได้เลย
-        if (pos.coords.accuracy <= 15) return pos;
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 800)); // พักแป๊บเดียวแล้วลองใหม่
     }
-    if (!lastPos) throw new Error("ไม่สามารถค้นหาพิกัดได้");
+    
+    if (!lastPos) throw new Error("ไม่สามารถค้นหาพิกัดที่แม่นยำได้ โปรดตรวจสอบว่าเปิด GPS และอินเทอร์เน็ตแล้ว");
     return lastPos;
 };
