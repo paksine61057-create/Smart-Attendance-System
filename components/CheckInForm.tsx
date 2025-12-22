@@ -33,6 +33,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [locationError, setLocationError] = useState('');
   const [lastLocation, setLastLocation] = useState<GeoLocation | null>(null);
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
+  const [currentAccuracy, setCurrentAccuracy] = useState<number | null>(null);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState('normal');
   const [todayHoliday, setTodayHoliday] = useState<string | null>(null);
@@ -63,15 +64,17 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const validateLocation = async () => {
     setLocationStatus('checking');
     setLocationError('');
+    
+    // ดึงค่าล่าสุดจาก Local Storage เสมอ
     const s = getSettings();
     
-    if (!s.officeLocation) {
+    if (!s.officeLocation || !s.officeLocation.lat) {
         setLocationStatus('found');
         return { lat: 0, lng: 0 };
     }
 
     try {
-      const pos = await getCurrentPosition();
+      const pos = await getCurrentPosition({ timeout: 15000 });
       const dist = getDistanceFromLatLonInMeters(
         pos.coords.latitude, pos.coords.longitude, 
         s.officeLocation.lat, s.officeLocation.lng
@@ -80,10 +83,15 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       setLastLocation(loc);
       setCurrentDistance(dist);
+      setCurrentAccuracy(pos.coords.accuracy);
 
-      if (isRestrictedType && dist > s.maxDistanceMeters) {
+      // ใช้ระยะทางลบด้วยค่าความคลาดเคลื่อน (Accuracy Buffer)
+      // เช่น ห่าง 110 ม. แต่ GPS แกว่ง 20 ม. ระยะที่นำมาคิดจะเป็น 90 ม.
+      const adjustedDist = Math.max(0, dist - (pos.coords.accuracy / 2));
+
+      if (isRestrictedType && adjustedDist > s.maxDistanceMeters) {
           setLocationStatus('error');
-          setLocationError(`คุณอยู่นอกพื้นที่โรงเรียน (${Math.round(dist)} เมตร) โปรดเข้ามาใกล้จุดลงเวลามากกว่านี้ (ระยะที่กำหนด: ${s.maxDistanceMeters} เมตร)`);
+          setLocationError(`คุณอยู่นอกเขตโรงเรียน (ห่าง ${Math.round(dist)} ม.) โปรดเข้ามาให้ใกล้จุดลงเวลามากกว่านี้ (พิกัดปัจจุบัน +/- ${Math.round(pos.coords.accuracy)} ม.)`);
           return null;
       }
 
@@ -92,10 +100,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     } catch (err: any) {
       if (isRestrictedType) {
           setLocationStatus('error');
-          setLocationError(err.message || "ไม่สามารถดึงตำแหน่ง GPS ได้ โปรดเปิดสิทธิ์การเข้าถึงตำแหน่งและลองใหม่อีกครั้ง");
+          setLocationError(err.message || "ไม่สามารถดึงตำแหน่ง GPS ได้");
           return null;
       } else {
-          // ถ้าไม่ใช่ประเภทที่ถูกจำกัด ให้ยอมให้ผ่านได้ด้วยพิกัด 0,0
           setLocationStatus('found');
           setCurrentDistance(0);
           return { lat: 0, lng: 0 };
@@ -307,7 +314,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                                        พิกัดถูกต้อง
                                    </div>
                                    {currentDistance !== null && (
-                                       <span className="text-white/60 text-[10px] font-bold tracking-widest">ห่าง {Math.round(currentDistance)} ม.</span>
+                                       <span className="text-white/60 text-[10px] font-bold tracking-widest">
+                                           ห่าง {Math.round(currentDistance)} ม. (+/- {currentAccuracy ? Math.round(currentAccuracy) : 0})
+                                       </span>
                                    )}
                                </div>
                            )}
@@ -329,7 +338,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         </button>
                         
                         {locationStatus === 'error' && isRestrictedType && (
-                            <p className="text-[9px] text-amber-200/70 mt-2 italic">* สำหรับการมาทำงาน/กลับบ้าน ต้องอยู่ในระยะที่โรงเรียนกำหนดเท่านั้น</p>
+                            <p className="text-[9px] text-amber-200/70 mt-2 italic">* โปรดตรวจสอบว่าคุณไม่ได้เปิดโหมดประหยัดพลังงานหรืออยู่ในอาคารอับสัญญาณ</p>
                         )}
                     </div>
                 </div>

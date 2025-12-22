@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppSettings, GeoLocation, Staff, SpecialHoliday } from '../types';
 import { getSettings, saveSettings, clearRecords } from '../services/storageService';
-import { getCurrentPosition } from '../services/geoService';
+import { getAccuratePosition, getDistanceFromLatLonInMeters, getCurrentPosition } from '../services/geoService';
 import { getAllStaff, addStaff, removeStaff } from '../services/staffService';
 import { getSpecialHolidays, addSpecialHolidayRange, removeSpecialHoliday } from '../services/holidayService';
 
@@ -16,6 +16,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
   const [isError, setIsError] = useState(false);
+  const [testDist, setTestDist] = useState<number | null>(null);
 
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [newStaff, setNewStaff] = useState<Staff>({ id: '', name: '', role: '' });
@@ -34,21 +35,40 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const handleSetCurrentLocation = async () => {
     setLoading(true);
     setIsError(false);
-    setMsg('กำลังค้นหาสัญญาณพิกัด (โปรดรอสักครู่)...');
+    setMsg('กำลังล็อกสัญญาณพิกัดที่แม่นยำที่สุด (โปรดรอสักครู่)...');
     try {
-      const pos = await getCurrentPosition();
+      const pos = await getAccuratePosition();
       const newLoc: GeoLocation = {
         lat: pos.coords.latitude,
         lng: pos.coords.longitude
       };
-      const newSettings = { ...settings, officeLocation: newLoc };
-      setSettingsState(newSettings);
-      setMsg(`ดึงพิกัดสำเร็จ! แม่นยำภายใน ${Math.round(pos.coords.accuracy)} เมตร`);
+      setSettingsState(prev => ({ ...prev, officeLocation: newLoc }));
+      setMsg(`ดึงพิกัดสำเร็จ! (แม่นยำ +/- ${Math.round(pos.coords.accuracy)} ม.)`);
+      setTestDist(0);
     } catch (err: any) {
       setIsError(true);
       setMsg(err.message || 'ไม่พบสัญญาณ - โปรดเปิด GPS');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleTestDistance = async () => {
+    if (!settings.officeLocation) return;
+    setLoading(true);
+    try {
+        const pos = await getCurrentPosition();
+        const dist = getDistanceFromLatLonInMeters(
+            pos.coords.latitude, pos.coords.longitude,
+            settings.officeLocation.lat, settings.officeLocation.lng
+        );
+        setTestDist(dist);
+        setMsg(`ขณะนี้คุณอยู่ห่างจากจุดที่ตั้งไว้ประมาณ ${Math.round(dist)} เมตร`);
+    } catch (err: any) {
+        setIsError(true);
+        setMsg(err.message);
+    } finally {
+        setLoading(false);
     }
   };
 
@@ -193,17 +213,25 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                         {loading ? 'กำลังระบุพิกัด...' : 'ดึงพิกัดปัจจุบันใส่ในช่อง (GPS)'}
                     </button>
 
-                    {settings.officeLocation && settings.officeLocation.lat !== 0 && (
+                    <div className="grid grid-cols-2 gap-3">
+                        <button 
+                            onClick={handleTestDistance}
+                            disabled={loading || !settings.officeLocation}
+                            className="py-3 border-2 border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 rounded-2xl transition-all flex items-center justify-center gap-2 font-black text-xs disabled:opacity-50"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            ทดสอบระยะห่าง
+                        </button>
                         <a 
-                            href={`https://www.google.com/maps?q=${settings.officeLocation.lat},${settings.officeLocation.lng}`} 
+                            href={`https://www.google.com/maps?q=${settings.officeLocation?.lat},${settings.officeLocation?.lng}`} 
                             target="_blank" 
                             rel="noopener noreferrer" 
-                            className="w-full py-3 border-2 border-stone-100 text-stone-500 hover:bg-stone-50 rounded-2xl transition-all flex items-center justify-center gap-2 font-bold text-xs"
+                            className="py-3 border-2 border-stone-100 text-stone-500 hover:bg-stone-50 rounded-2xl transition-all flex items-center justify-center gap-2 font-bold text-xs"
                         >
                             <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                            ตรวจสอบตำแหน่งบน Google Maps
+                            ดูใน Maps
                         </a>
-                    )}
+                    </div>
                 </div>
                 
                 {msg && (
@@ -225,7 +253,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                         <input type="number" value={settings.maxDistanceMeters} onChange={handleDistanceChange} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none font-black text-rose-600 focus:border-rose-300" />
                         <span className="absolute right-5 top-1/2 -translate-y-1/2 text-stone-400 font-bold text-sm">m.</span>
                     </div>
-                    <p className="text-[9px] text-stone-400 mt-2 italic font-bold">* แนะนำที่ 50-100 เมตร ขึ้นอยู่กับความกว้างของประตูโรงเรียน</p>
+                    <p className="text-[9px] text-stone-400 mt-2 italic font-bold">* แนะนำที่ 100 เมตร เพื่อรองรับความคลาดเคลื่อนของ GPS มือถือบางรุ่น</p>
                  </div>
                  <div>
                     <label className="block text-[10px] font-black text-stone-400 mb-2 uppercase tracking-widest">Google Apps Script URL (Sync Cloud)</label>
