@@ -11,7 +11,7 @@ import 'jspdf-autotable';
 type TabType = 'today' | 'official' | 'monthly' | 'manual';
 
 const SCHOOL_LOGO_URL = 'https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png';
-const CUTOFF_TIMESTAMP = new Date(2025, 11, 11, 0, 0, 0, 0).getTime();
+const CUTOFF_TIMESTAMP = new Date(2025, 0, 1, 0, 0, 0, 0).getTime(); // ขยับให้เห็นข้อมูลตั้งแต่ต้นปี 2025
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('today');
@@ -44,29 +44,43 @@ const Dashboard: React.FC = () => {
   const syncData = useCallback(async () => {
     setIsSyncing(true);
     try {
+      // 1. ส่งข้อมูลที่ยังไม่ซิงค์
       await syncUnsyncedRecords();
+      
+      // 2. ดึงข้อมูลจาก Cloud และ Local
       const cloud = await fetchGlobalRecords();
       const local = getRecords();
       
-      const getSig = (r: CheckInRecord) => `${r.timestamp}_${String(r.staffId || '').toUpperCase().trim()}_${r.type}`;
-      
       const mergedMap = new Map<string, CheckInRecord>();
       
+      // ฟังก์ชันสร้าง Key สำหรับเช็คความซ้ำซ้อน
+      const getSig = (r: CheckInRecord) => `${String(r.staffId).trim()}_${r.type}_${new Date(r.timestamp).toDateString()}`;
+      
+      // นำข้อมูล Cloud มาตั้งต้น
       cloud.forEach(r => {
         mergedMap.set(getSig(r), { ...r, syncedToSheets: true });
       });
       
+      // นำข้อมูล Local มาทับ (หากข้อมูล Local มีรูปภาพ Base64 ที่สมบูรณ์กว่า)
       local.forEach(l => {
         const sig = getSig(l);
-        if (!mergedMap.has(sig)) {
-          mergedMap.set(sig, l);
+        const cloudRecord = mergedMap.get(sig);
+        
+        if (!cloudRecord) {
+            mergedMap.set(sig, l);
         } else {
-          const cloudRecord = mergedMap.get(sig)!;
-          const isCloudImgValid = cloudRecord.imageUrl && cloudRecord.imageUrl.startsWith('http');
-          
-          if (!isCloudImgValid && l.imageUrl && l.imageUrl.length > 100) {
-            mergedMap.set(sig, { ...cloudRecord, imageUrl: l.imageUrl });
-          }
+            // กรณีมีทั้งคู่: ถ้า Cloud ไม่มี URL รูปภาพ หรือเป็นแค่ขีด (-) ให้ใช้รูปจาก Local (Base64) แทน
+            const cloudImg = cloudRecord.imageUrl || "";
+            const hasCloudImage = cloudImg.startsWith('http') || cloudImg.length > 50;
+            
+            if (!hasCloudImage && l.imageUrl && l.imageUrl.length > 100) {
+                mergedMap.set(sig, { ...cloudRecord, imageUrl: l.imageUrl });
+            }
+            
+            // อัปเดตสถานะจาก Cloud เพราะถือว่า Cloud เป็นความจริงล่าสุด
+            if (cloudRecord.status) {
+                mergedMap.get(sig)!.status = cloudRecord.status;
+            }
         }
       });
       
@@ -74,8 +88,7 @@ const Dashboard: React.FC = () => {
       setAllRecords(filtered);
     } catch (e) {
       console.error("Sync error:", e);
-      const localOnly = getRecords().filter(r => r.timestamp >= CUTOFF_TIMESTAMP);
-      setAllRecords(localOnly);
+      setAllRecords(getRecords().filter(r => r.timestamp >= CUTOFF_TIMESTAMP));
     } finally { setIsSyncing(false); }
   }, []);
 
@@ -98,6 +111,7 @@ const Dashboard: React.FC = () => {
       }
       return cleanUrl;
     }
+    // กรณีเป็น Base64 ที่ไม่มี Header
     if (cleanUrl.length > 100 && !cleanUrl.includes(':')) {
        return `data:image/jpeg;base64,${cleanUrl}`;
     }
@@ -114,7 +128,7 @@ const Dashboard: React.FC = () => {
 
   const officialData = useMemo(() => {
     return staffList.map((staff, index) => {
-      const records = filteredToday.filter(r => r.staffId === staff.id);
+      const records = filteredToday.filter(r => String(r.staffId).toUpperCase() === staff.id.toUpperCase());
       const arrival = records.find(r => r.type === 'arrival' || r.type === 'authorized_late');
       const departure = records.find(r => r.type === 'departure');
       const special = records.find(r => ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type));
@@ -127,7 +141,7 @@ const Dashboard: React.FC = () => {
       let mainRecord = arrival || special || departure;
 
       const statusMap: Record<string, string> = {
-        'Duty': 'ไปราชการ', 'Sick Leave': 'ลาป่วย', 'Personal Leave': 'ลากิจ', 'Other Leave': 'ลาอื่นๆ', 'Authorized Late': 'อนุญาตสาย', 'Admin Assist': 'แอดมินลงเวลาให้'
+        'Duty': 'ไปราชการ', 'Sick Leave': 'ลาป่วย', 'Personal Leave': 'ลากิจ', 'Other Leave': 'ลาอื่นๆ', 'Authorized Late': 'อนุญาตสาย', 'Admin Assist': 'ลงเวลาแทน'
       };
 
       if (special) {
@@ -143,7 +157,6 @@ const Dashboard: React.FC = () => {
           arrivalValue = time.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
           if (arrival.type === 'authorized_late' || arrival.status === 'Authorized Late') remark = 'อนุญาตสาย' + (arrival.reason ? ` (${arrival.reason})` : '');
           else if (arrival.status === 'Late') remark = 'สาย' + (arrival.reason ? ` (${arrival.reason})` : '');
-          else if (arrival.status === 'Admin Assist') remark = 'แอดมินลงเวลาให้';
         }
         if (departure) {
           const time = new Date(departure.timestamp);
@@ -151,7 +164,7 @@ const Dashboard: React.FC = () => {
           if (departure.status === 'Early Leave') {
             const leaveMsg = 'กลับก่อน' + (departure.reason ? ` (${departure.reason})` : '');
             remark = remark ? `${remark}, ${leaveMsg}` : leaveMsg;
-          } else if (departure.status === 'Admin Assist' && !remark.includes('แอดมิน')) remark = remark ? `${remark}, แอดมินลงเวลาให้` : 'แอดมินลงเวลาให้';
+          }
         }
       }
 
@@ -210,7 +223,7 @@ const Dashboard: React.FC = () => {
     });
 
     return staffList.map((staff, index) => {
-      const staffRecords = monthlyRecords.filter(r => r.staffId === staff.id);
+      const staffRecords = monthlyRecords.filter(r => String(r.staffId).toUpperCase() === staff.id.toUpperCase());
       
       const lateRecords = staffRecords.filter(r => r.status === 'Late');
       const lateDates = lateRecords.map(r => new Date(r.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })).join(', ');
@@ -314,7 +327,6 @@ const Dashboard: React.FC = () => {
     const now = new Date();
     const timestamp = new Date(year, month - 1, day, now.getHours(), now.getMinutes()).getTime();
     
-    // Mapping internal status to readable string
     let statusLabel: any = 'Other Leave';
     if (type === 'duty') statusLabel = 'Duty';
     else if (type === 'sick_leave') statusLabel = 'Sick Leave';
@@ -324,7 +336,7 @@ const Dashboard: React.FC = () => {
     const record: CheckInRecord = {
       id: crypto.randomUUID(), staffId: staff.id, name: staff.name, role: staff.role, timestamp, type,
       status: statusLabel,
-      reason: `Admin recorded: ${type.replace('_', ' ')}`, location: { lat: 0, lng: 0 }, distanceFromBase: 0, aiVerification: 'Admin Direct Authorized'
+      reason: `บันทึกโดยแอดมิน: ${type.replace('_', ' ')}`, location: { lat: 0, lng: 0 }, distanceFromBase: 0, aiVerification: 'แอดมินยืนยัน'
     };
     await saveRecord(record); await syncData();
   };
@@ -351,7 +363,7 @@ const Dashboard: React.FC = () => {
     }
     const record: CheckInRecord = {
       id: crypto.randomUUID(), staffId: staff.id, name: staff.name, role: staff.role, timestamp: manualTimestamp, type: manualType,
-      status, reason: manualReason || 'Manual override by admin', location: { lat: 0, lng: 0 }, distanceFromBase: 0, aiVerification: 'Admin Authorized'
+      status, reason: manualReason || 'ลงเวลาแทนโดยแอดมิน', location: { lat: 0, lng: 0 }, distanceFromBase: 0, aiVerification: 'แอดมินยืนยัน'
     };
     await saveRecord(record); setManualReason(''); setSelectedDate(manualDate); await syncData(); setActiveTab('today');
   };
@@ -401,11 +413,11 @@ const Dashboard: React.FC = () => {
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6 no-print bg-white/10 backdrop-blur-md p-8 rounded-[3rem] border border-white/20">
         <div className="text-center md:text-left">
           <h2 className="text-4xl font-black text-white flex items-center gap-3">Admin Dashboard ❄️</h2>
-          <p className="text-rose-200 text-xs font-bold tracking-widest uppercase mt-2 opacity-80">Attendance Monitoring (Started 11 Dec 2025)</p>
+          <p className="text-rose-200 text-xs font-bold tracking-widest uppercase mt-2 opacity-80">จัดการระบบและรายงานการลงเวลา</p>
         </div>
         <div className="flex flex-wrap justify-center gap-3">
           <button onClick={syncData} disabled={isSyncing} className="px-6 py-3 bg-white/20 hover:bg-white/30 text-white rounded-2xl font-bold text-sm transition-all flex items-center gap-2">
-            {isSyncing ? '🔄 Syncing...' : '🔄 Sync Cloud'}
+            {isSyncing ? '🔄 กำลังซิงค์...' : '🔄 ซิงค์ Cloud ล่าสุด'}
           </button>
           <div className="flex flex-col">
             <label className="text-[10px] text-white/60 font-black uppercase mb-1 ml-1">วันที่แสดงข้อมูล</label>
@@ -427,7 +439,7 @@ const Dashboard: React.FC = () => {
             <div className="absolute inset-0 bg-white/50 backdrop-blur-sm z-[20] flex items-center justify-center">
                 <div className="flex flex-col items-center">
                     <div className="w-12 h-12 border-4 border-rose-500 border-t-transparent rounded-full animate-spin mb-4" />
-                    <p className="text-rose-600 font-black text-xs uppercase tracking-widest animate-pulse">กำลังโหลดข้อมูลจาก Cloud... ❄️</p>
+                    <p className="text-rose-600 font-black text-xs uppercase tracking-widest animate-pulse">กำลังซิงค์ข้อมูล... ❄️</p>
                 </div>
             </div>
         )}
@@ -452,7 +464,7 @@ const Dashboard: React.FC = () => {
                 <p className="text-3xl font-black text-amber-600">{dailyAnalysis.duty}</p>
               </div>
               <div className="bg-slate-50 p-6 rounded-[2.5rem] border-2 border-slate-100 text-center shadow-sm">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ยังไม่ลงชื่อเช้า</p>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">ยังไม่มาเช้า</p>
                 <p className="text-3xl font-black text-slate-600">{dailyAnalysis.absentCount}</p>
               </div>
             </div>
@@ -462,7 +474,7 @@ const Dashboard: React.FC = () => {
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                   <div>
                     <h3 className="text-2xl font-black text-stone-800">รายละเอียดวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })} ⛄</h3>
-                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">Attendance Records List (Retrieved from Cloud)</p>
+                    <p className="text-stone-400 text-xs font-bold mt-1 uppercase tracking-widest">ข้อมูลล่าสุดจากคลาวด์และหน่วยความจำ</p>
                   </div>
                   <button onClick={handleAiSummary} disabled={isGeneratingAi || filteredToday.length === 0} className="px-5 py-3 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl font-bold text-xs flex items-center gap-2 shadow-lg disabled:opacity-50">
                     {isGeneratingAi ? '...' : '✨ AI วิเคราะห์'}
@@ -474,7 +486,7 @@ const Dashboard: React.FC = () => {
                   <table className="w-full text-left">
                     <thead>
                       <tr className="bg-stone-50 text-[10px] font-black uppercase text-stone-400 border-b border-stone-100">
-                        <th className="p-5">เวลา</th><th className="p-5">รหัส</th><th className="p-5">ชื่อ-นามสกุล</th><th className="p-5 text-center">สถานะ</th><th className="p-5 text-center">หลักฐาน (รูปถ่าย)</th><th className="p-5 text-right">ลบ</th>
+                        <th className="p-5">เวลา</th><th className="p-5">รหัส</th><th className="p-5">ชื่อ-นามสกุล</th><th className="p-5 text-center">สถานะ</th><th className="p-5 text-center">รูปถ่าย</th><th className="p-5 text-right">ลบ</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-stone-50">
@@ -483,23 +495,24 @@ const Dashboard: React.FC = () => {
                           <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'})}</td>
                           <td className="p-5 font-bold text-stone-400">{r.staffId || '-'}</td>
                           <td className="p-5"><div className="font-bold text-stone-800 whitespace-nowrap">{r.name}</div><div className="text-[10px] text-stone-400 font-bold uppercase whitespace-nowrap">{r.role}</div></td>
-                          <td className="p-5 text-center"><span className={`px-4 py-1.5 rounded-full text-[10px] font-black whitespace-nowrap ${r.status.includes('Time') ? 'bg-emerald-100 text-emerald-700' : r.status.includes('Late') ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}`}>{r.status === 'On Time' ? 'มาตรงเวลา' : r.status === 'Late' ? 'มาสาย' : r.status === 'Duty' ? 'ไปราชการ' : r.status.includes('Leave') ? 'ลา' : r.status}</span></td>
+                          <td className="p-5 text-center"><span className={`px-4 py-1.5 rounded-full text-[10px] font-black whitespace-nowrap ${r.status === 'On Time' ? 'bg-emerald-100 text-emerald-700' : r.status === 'Late' ? 'bg-rose-100 text-rose-700' : 'bg-blue-100 text-blue-700'}`}>{r.status === 'On Time' ? 'มาตรงเวลา' : r.status === 'Late' ? 'มาสาย' : r.status === 'Duty' ? 'ไปราชการ' : r.status === 'Sick Leave' ? 'ลาป่วย' : r.status === 'Personal Leave' ? 'ลากิจ' : r.status === 'Other Leave' ? 'ลาอื่นๆ' : r.status === 'Authorized Late' ? 'อนุญาตสาย' : r.status}</span></td>
                           <td className="p-5 text-center">
                             {r.imageUrl && r.imageUrl.length > 5 ? (
                                 <button 
                                     onClick={() => openPreview(r.imageUrl!, r.name, r.timestamp, r.aiVerification || '')} 
                                     className="w-12 h-12 rounded-2xl bg-stone-900 overflow-hidden border-2 border-white shadow-lg active:scale-95 transition-all hover:ring-4 hover:ring-rose-100" 
-                                    title="กดเพื่อดูรูปขยายใหญ่"
+                                    title="ดูรูปขยาย"
                                 >
                                     <img 
                                       src={formatImageUrl(r.imageUrl)} 
                                       className="w-full h-full object-cover opacity-90" 
-                                      alt="Thumbnail" 
+                                      alt="identity" 
                                       loading="lazy"
+                                      onError={(e) => { (e.target as any).src = "https://via.placeholder.com/100?text=Error"; }}
                                     />
                                 </button>
                             ) : (
-                                <span className="text-[10px] text-stone-300 italic">ไม่มีรูปถ่าย</span>
+                                <span className="text-[10px] text-stone-300 italic">ไม่มีรูป</span>
                             )}
                           </td>
                           <td className="p-5 text-right"><button onClick={() => { if(confirm('ต้องการลบข้อมูลหรือไม่?')) deleteRecord(r).then(syncData) }} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button></td>

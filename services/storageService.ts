@@ -36,7 +36,7 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "imageBase64": cleanImageBase64
     };
 
-    await fetch(url, {
+    const response = await fetch(url, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -90,7 +90,6 @@ export const getSettings = (): AppSettings => {
 };
 
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
-    // โหมดลงเวลาที่ไหนก็ได้ ไม่ต้องซิงค์พิกัดจาก Cloud อีกต่อไป
     return true;
 }
 
@@ -132,37 +131,61 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     try {
         const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`, { cache: 'no-store' });
         const data = await response.json();
+        
         if (Array.isArray(data)) {
             return data.map((r: any) => {
                 const getVal = (keys: string[]) => {
-                    for (const k of keys) {
-                        const lowK = k.toLowerCase().replace(/\s/g, '');
-                        for (const objKey in r) {
-                            if (objKey.toLowerCase().replace(/\s/g, '') === lowK) return r[objKey];
-                        }
+                    const normalizedKeys = keys.map(k => k.toLowerCase().replace(/[^a-z0-9]/g, ''));
+                    for (const objKey in r) {
+                        const normalizedObjKey = objKey.toLowerCase().replace(/[^a-z0-9]/g, '');
+                        if (normalizedKeys.includes(normalizedObjKey)) return r[objKey];
                     }
                     return null;
                 };
+
                 let ts = Date.now();
-                const rawTs = getVal(['id', 'timestamp', 'Timestamp']);
+                const rawTs = getVal(['timestamp', 'id']);
                 if (rawTs && !isNaN(Number(rawTs))) ts = Number(rawTs);
                 
+                // แปลง Status กลับเป็น English Key สำหรับระบบภายใน
+                const rawStatus = getVal(['status']) || "Normal";
+                let status: any = rawStatus;
+                if (rawStatus === 'มาตรงเวลา') status = 'On Time';
+                if (rawStatus === 'มาสาย') status = 'Late';
+                if (rawStatus === 'ไปราชการ') status = 'Duty';
+                if (rawStatus === 'ลาป่วย') status = 'Sick Leave';
+                if (rawStatus === 'ลากิจ') status = 'Personal Leave';
+                if (rawStatus === 'ลาอื่นๆ') status = 'Other Leave';
+                if (rawStatus === 'อนุญาตสาย') status = 'Authorized Late';
+
+                // ตรวจสอบ Type
+                const rawType = getVal(['type']) || 'arrival';
+                let type: AttendanceType = 'arrival';
+                if (rawType === 'กลับบ้าน') type = 'departure';
+                else if (rawType === 'ไปราชการ') type = 'duty';
+                else if (rawType === 'ลาป่วย') type = 'sick_leave';
+                else if (rawType === 'ลากิจ') type = 'personal_leave';
+                else if (rawType === 'ลาอื่นๆ') type = 'other_leave';
+                else if (rawType === 'อนุญาตสาย') type = 'authorized_late';
+
                 return {
-                    id: String(getVal(['id', 'Timestamp']) || ts),
-                    staffId: getVal(['staffId', 'staffid', 'Staff ID']) || "",
-                    name: getVal(['name', 'Name']) || "Unknown",
-                    role: getVal(['role', 'Role']) || "",
+                    id: String(getVal(['id']) || ts),
+                    staffId: String(getVal(['staffId', 'staffid', 'idพนักงาน']) || ""),
+                    name: String(getVal(['name', 'ชื่อ']) || "ไม่ระบุชื่อ"),
+                    role: String(getVal(['role', 'ตำแหน่ง']) || ""),
                     timestamp: ts,
-                    type: 'arrival',
-                    status: getVal(['status', 'Status']) || "Normal",
-                    reason: getVal(['reason', 'Reason']) || "",
+                    type: type,
+                    status: status,
+                    reason: String(getVal(['reason', 'เหตุผล']) || ""),
                     location: { lat: 0, lng: 0 },
                     distanceFromBase: 0,
-                    aiVerification: getVal(['aiVerification', 'AI Verification']) || "",
-                    imageUrl: String(getVal(['imageUrl', 'imageBase64', 'Image']) || "")
+                    aiVerification: String(getVal(['aiVerification', 'ai', 'การตรวจสอบ']) || ""),
+                    imageUrl: String(getVal(['imageUrl', 'image', 'รูปภาพ', 'url']) || "")
                 };
             });
         }
-    } catch (e) { }
+    } catch (e) {
+        console.error("Fetch global records failed", e);
+    }
     return [];
 };
