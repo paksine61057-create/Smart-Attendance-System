@@ -5,14 +5,18 @@ const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
 /** 
- * URL ที่เชื่อมกับ Google Sheets ของคุณ: 
- * https://docs.google.com/spreadsheets/d/1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI/edit
+ * URL ที่เชื่อมกับ Google Sheets ของคุณ (Deploy as Web App)
+ * Spreadsheet: https://docs.google.com/spreadsheets/d/1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI/edit
  */
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzUoPM2lDmpMbCwfryM1EuiZDQnFPuF4paqayK5XWL0nNF_MYGmPcOS7AEjDTNEaM1q/exec'; 
 
+/**
+ * ส่งข้อมูลไปยัง Google Sheets (doPost)
+ */
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
+    // ลบส่วนหัว Base64 เพื่อให้ Apps Script นำไปสร้างไฟล์ใน Drive ได้
     const cleanImageBase64 = (record.imageUrl || "").replace(/^data:image\/\w+;base64,/, "");
 
     const payload = {
@@ -140,6 +144,14 @@ export const deleteRecord = async (record: CheckInRecord) => {
   return true;
 };
 
+/**
+ * ดึงข้อมูลจาก Google Sheets (doGet)
+ * อ้างอิง Key Mapping จาก Apps Script:
+ * - Staff ID -> staffId
+ * - Distance (m) -> distanceFromBase
+ * - AI Verification -> aiVerification
+ * - Image -> imageUrl
+ */
 export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     const s = getSettings();
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
@@ -159,7 +171,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (rawType.includes('อนุญาตสาย')) type = 'authorized_late';
 
                 return {
-                    id: String(r.timestamp), 
+                    id: String(r.id || r.timestamp), 
                     staffId: String(r.staffId || ""),
                     name: String(r.name || "ไม่ทราบชื่อ"),
                     role: String(r.role || ""),
