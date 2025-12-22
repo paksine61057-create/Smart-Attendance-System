@@ -29,6 +29,9 @@ const Dashboard: React.FC = () => {
 
   const staffList = useMemo(() => getAllStaff(), []);
 
+  // รวมประเภทการลงเวลาที่ถือว่า "มาปฏิบัติหน้าที่" (รวมลาและราชการ)
+  const ATTENDANCE_START_TYPES: AttendanceType[] = ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'];
+
   const getDisplayName = (record: CheckInRecord | {name?: string, staffId?: string}) => {
     if (record.name && record.name !== "ไม่ระบุชื่อ" && record.name !== "undefined" && record.name.trim() !== "") {
       return record.name;
@@ -99,7 +102,8 @@ const Dashboard: React.FC = () => {
   }, [allRecords, selectedDate]);
 
   const dailyAnalysis = useMemo(() => {
-    const presentIds = new Set(filteredToday.filter(r => ['arrival', 'duty', 'authorized_late'].includes(r.type)).map(r => r.staffId?.toUpperCase()));
+    // แก้ไข: รวมทุกประเภทการลงเวลา (รวมลา) เข้าไปในเซตผู้ที่มาปฏิบัติหน้าที่/ลงเวลาแล้ว
+    const presentIds = new Set(filteredToday.filter(r => ATTENDANCE_START_TYPES.includes(r.type)).map(r => r.staffId?.toUpperCase()));
     const absentStaff = staffList.filter(s => !presentIds.has(s.id.toUpperCase()));
     
     return {
@@ -110,7 +114,7 @@ const Dashboard: React.FC = () => {
       absentCount: absentStaff.length,
       absentList: absentStaff
     };
-  }, [filteredToday, staffList]);
+  }, [filteredToday, staffList, ATTENDANCE_START_TYPES]);
 
   const handleManualSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -150,7 +154,7 @@ const Dashboard: React.FC = () => {
   };
 
   const getStatusLabel = (status: string) => {
-    const map: any = { 'On Time': 'ตรงเวลา', 'Late': 'มาสาย', 'Authorized Late': 'ขอเข้าสาย', 'Sick Leave': 'ลาป่วย', 'Personal Leave': 'ลากิจ', 'Duty': 'ไปราชการ', 'Early Leave': 'กลับก่อน', 'Normal': 'ปกติ', 'Admin Assist': 'แอดมินลงให้' };
+    const map: any = { 'On Time': 'ตรงเวลา', 'Late': 'มาสาย', 'Authorized Late': 'ขอเข้าสาย', 'Sick Leave': 'ลาป่วย', 'Personal Leave': 'ลากิจ', 'Other Leave': 'ลาอื่นๆ', 'Duty': 'ไปราชการ', 'Early Leave': 'กลับก่อน', 'Normal': 'ปกติ', 'Admin Assist': 'แอดมินลงให้' };
     return map[status] || status;
   };
 
@@ -158,7 +162,7 @@ const Dashboard: React.FC = () => {
     if (['On Time', 'Normal'].includes(status)) return 'bg-emerald-100 text-emerald-700';
     if (status === 'Late') return 'bg-rose-100 text-rose-700';
     if (['Duty', 'ไปราชการ'].includes(status)) return 'bg-blue-100 text-blue-700';
-    if (['Sick Leave', 'Personal Leave', 'ลาป่วย', 'ลากิจ'].includes(status)) return 'bg-amber-100 text-amber-700';
+    if (['Sick Leave', 'Personal Leave', 'Other Leave', 'ลาป่วย', 'ลากิจ', 'ลาอื่นๆ'].includes(status)) return 'bg-amber-100 text-amber-700';
     return 'bg-slate-100 text-slate-700';
   };
 
@@ -192,7 +196,8 @@ const Dashboard: React.FC = () => {
         // เงื่อนไข 3: นับสถิติเฉพาะวันปกติ ไม่นับวันหยุด
         if (!holiday) {
           const dayRecords = staffRecords.filter(r => new Date(r.timestamp).getDate() === d);
-          const arrivalRecord = dayRecords.find(r => ['arrival', 'duty', 'sick_leave', 'personal_leave', 'authorized_late'].includes(r.type));
+          // แก้ไข: ใช้ ATTENDANCE_START_TYPES เพื่อรวมการลาทุกประเภทเข้าไปในสถิติว่าลงเวลาแล้ว
+          const arrivalRecord = dayRecords.find(r => ATTENDANCE_START_TYPES.includes(r.type));
 
           if (!arrivalRecord) {
             missingCount++;
@@ -213,12 +218,13 @@ const Dashboard: React.FC = () => {
         missingCount
       };
     });
-  }, [staffList, allRecords, selectedMonth]);
+  }, [staffList, allRecords, selectedMonth, ATTENDANCE_START_TYPES]);
 
   const officialDailyData = useMemo(() => {
     return staffList.map((staff, idx) => {
       const dayRecs = filteredToday.filter(r => r.staffId?.toUpperCase() === staff.id.toUpperCase());
-      const arrival = dayRecs.find(r => ['arrival', 'duty', 'sick_leave', 'personal_leave', 'authorized_late'].includes(r.type));
+      // แก้ไข: ใช้ ATTENDANCE_START_TYPES สำหรับดึงข้อมูลเวลามาปฏิบัติงาน
+      const arrival = dayRecs.find(r => ATTENDANCE_START_TYPES.includes(r.type));
       const departure = dayRecs.find(r => r.type === 'departure');
       
       let remark = '';
@@ -238,7 +244,7 @@ const Dashboard: React.FC = () => {
         remark
       };
     });
-  }, [staffList, filteredToday]);
+  }, [staffList, filteredToday, ATTENDANCE_START_TYPES]);
 
   const printMonthLabel = useMemo(() => {
       const [year, month] = selectedMonth.split('-').map(Number);
@@ -251,7 +257,7 @@ const Dashboard: React.FC = () => {
       {previewData && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setPreviewData(null)}>
           <div className="bg-white rounded-3xl p-6 max-w-sm w-full animate-in zoom-in" onClick={e => e.stopPropagation()}>
-             <img src={previewData.url} className="w-full aspect-square object-cover rounded-2xl mb-4" alt="preview" onError={(e) => (e.target as any).src="https://via.placeholder.com/300?text=Image+Not+Found"} />
+             <img src={previewData.url} crossOrigin="anonymous" className="w-full aspect-square object-cover rounded-2xl mb-4" alt="preview" onError={(e) => (e.target as any).src="https://via.placeholder.com/300?text=Image+Not+Found"} />
              <h3 className="font-bold text-center text-stone-800">{previewData.title}</h3>
              <p className="text-center text-xs text-stone-400 mt-1">{previewData.time}</p>
              <button onClick={() => setPreviewData(null)} className="w-full mt-4 py-3 bg-stone-100 rounded-xl font-bold">ปิดหน้าต่าง</button>
@@ -350,7 +356,7 @@ const Dashboard: React.FC = () => {
                         <td className="p-5 text-center">
                           {r.imageUrl && r.imageUrl.length > 20 ? (
                             <button onClick={() => openPreview(r.imageUrl!, getDisplayName(r), r.timestamp, r.aiVerification || '')} className="w-12 h-12 rounded-xl bg-stone-100 border-2 border-white shadow-sm overflow-hidden hover:scale-110 transition-transform">
-                               <img src={r.imageUrl} className="w-full h-full object-cover" alt="thumb" onError={(e) => (e.target as any).src="https://via.placeholder.com/100?text=Err"} />
+                               <img src={r.imageUrl} crossOrigin="anonymous" className="w-full h-full object-cover" alt="thumb" onError={(e) => (e.target as any).src="https://via.placeholder.com/100?text=Err"} />
                             </button>
                           ) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูป</span>}
                         </td>
@@ -428,6 +434,7 @@ const Dashboard: React.FC = () => {
                        <option value="duty">ไปราชการ</option>
                        <option value="sick_leave">ลาป่วย</option>
                        <option value="personal_leave">ลากิจ</option>
+                       <option value="other_leave">ลาอื่นๆ</option>
                        <option value="authorized_late">อนุญาตเข้าสาย</option>
                     </select>
                   </div>
@@ -516,15 +523,15 @@ const Dashboard: React.FC = () => {
                            <tr key={s.id} className="hover:bg-stone-50/50 transition-colors">
                               <td className="border border-stone-500 px-1 py-2 text-center font-mono font-black text-stone-400 text-[9px]">{s.no}</td>
                               <td className="border border-stone-500 px-2 py-2 whitespace-nowrap">
-                                 <div className="font-black text-stone-900 text-[10px] leading-tight">{getDisplayName(s)}</div>
+                                 <div className="font-black text-stone-900 text-[10px] leading-tight text-center">{getDisplayName(s)}</div>
                               </td>
                               <td className="border border-stone-500 px-2 py-2 whitespace-nowrap">
-                                 <div className="text-[9px] text-stone-500 font-bold leading-tight">{getDisplayRole(s)}</div>
+                                 <div className="text-[9px] text-stone-500 font-bold leading-tight text-center">{getDisplayRole(s)}</div>
                               </td>
                               <td className="border border-stone-500 px-1 py-2 text-center">
                                  <span className="font-mono font-black text-rose-500 text-[11px]">{s.lateCount}</span>
                               </td>
-                              <td className="border border-stone-500 px-2 py-2 text-[9px] italic text-stone-500 font-bold leading-tight">
+                              <td className="border border-stone-500 px-2 py-2 text-[9px] italic text-stone-500 font-bold leading-tight text-center">
                                  {s.lateDates || '-'}
                               </td>
                               <td className="border border-stone-500 px-1 py-2 text-center">

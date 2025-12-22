@@ -71,7 +71,6 @@ export const saveRecord = async (record: CheckInRecord) => {
   }
 };
 
-// Fix: Added missing clearRecords export to resolve import error in Settings.tsx
 export const clearRecords = () => {
   localStorage.removeItem(RECORDS_KEY);
 };
@@ -146,11 +145,15 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (typeStr.includes('กิจ')) type = 'personal_leave';
                 else if (typeStr.includes('อนุญาตสาย')) type = 'authorized_late';
 
-                // แก้ไข: ตรวจสอบคีย์รูปภาพหลายรูปแบบที่อาจถูกส่งกลับมาจาก Google Sheets
+                // แก้ไข: ปรับปรุงการดึงรูปภาพให้ฉลาดขึ้น
                 let rawImg = r.imageUrl || r.imageurl || r.imageBase64 || r.imagebase64 || "";
-                if (rawImg && typeof rawImg === 'string' && rawImg.length > 50) {
-                    // ถ้าไม่มี prefix data:image ให้เติมเข้าไป
-                    if (!rawImg.startsWith('data:image')) {
+                if (rawImg && typeof rawImg === 'string' && rawImg.length > 30) {
+                    // ถ้าข้อมูลเป็น URL (ส่งมาจาก Google Drive) ไม่ต้องเติม Prefix
+                    if (rawImg.startsWith('http')) {
+                        // คงเดิม
+                    } 
+                    // ถ้าเป็น Base64 แต่ไม่มี Prefix ให้เติมเข้าไป
+                    else if (!rawImg.startsWith('data:image')) {
                         rawImg = `data:image/jpeg;base64,${rawImg}`;
                     }
                 }
