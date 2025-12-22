@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getRecords, fetchGlobalRecords, syncUnsyncedRecords, deleteRecord, saveRecord } from '../services/storageService';
-import { getAllStaff } from '../services/staffService';
+import { getAllStaff, getStaffById } from '../services/staffService';
 import { getHoliday } from '../services/holidayService';
 import { CheckInRecord, Staff, AttendanceType } from '../types';
 import { jsPDF } from 'jspdf';
@@ -16,9 +16,8 @@ const Dashboard: React.FC = () => {
   const [allRecords, setAllRecords] = useState<CheckInRecord[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().substring(0, 7)); // YYYY-MM
+  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().substring(0, 7)); 
   
-  // Manual Entry States
   const [manualStaffId, setManualStaffId] = useState('');
   const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
   const [manualTime, setManualTime] = useState(new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', hour12: false }).replace(':', '.'));
@@ -28,6 +27,26 @@ const Dashboard: React.FC = () => {
   const [previewData, setPreviewData] = useState<{url: string, title: string, time: string, ai: string} | null>(null);
 
   const staffList = useMemo(() => getAllStaff(), []);
+
+  // ฟังก์ชันช่วยเหลือในการดึงชื่อที่ถูกต้องมาแสดง (Smart Name Lookup)
+  const getDisplayName = (record: CheckInRecord) => {
+    if (record.name && record.name !== "ไม่ระบุชื่อ" && record.name !== "undefined" && record.name.trim() !== "") return record.name;
+    if (record.staffId) {
+      const staff = getStaffById(record.staffId);
+      if (staff) return staff.name;
+    }
+    return record.name || "ไม่ทราบชื่อ";
+  };
+
+  // ฟังก์ชันช่วยเหลือในการดึงตำแหน่งที่ถูกต้องมาแสดง
+  const getDisplayRole = (record: CheckInRecord) => {
+    if (record.role && record.role !== "undefined" && record.role.trim() !== "") return record.role;
+    if (record.staffId) {
+      const staff = getStaffById(record.staffId);
+      if (staff) return staff.role;
+    }
+    return record.role || "-";
+  };
 
   const openPreview = (url: string, title: string, timestamp: number, ai: string) => {
     setPreviewData({
@@ -288,7 +307,7 @@ const Dashboard: React.FC = () => {
                   <thead>
                     <tr className="bg-stone-50 text-[10px] font-black uppercase text-stone-400 border-b">
                       <th className="p-5">เวลา</th>
-                      <th className="p-5">ชื่อ-นามสกุล</th>
+                      <th className="p-5">ชื่อ-นามสกุล และตำแหน่ง</th>
                       <th className="p-5">สถานะ</th>
                       <th className="p-5 text-center">รูป</th>
                       <th className="p-5 text-right">จัดการ</th>
@@ -301,9 +320,9 @@ const Dashboard: React.FC = () => {
                       <tr key={r.id} className="hover:bg-rose-50/20 transition-colors">
                         <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</td>
                         <td className="p-5">
-                          {/* ปรับให้ชื่อเด่นกว่าตำแหน่ง */}
-                          <div className="font-black text-stone-900 text-base leading-tight mb-0.5">{r.name}</div>
-                          <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">{r.role}</div>
+                          {/* ชื่อโดดเด่นกว่าตำแหน่ง */}
+                          <div className="font-black text-stone-900 text-lg leading-tight mb-0.5">{getDisplayName(r)}</div>
+                          <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">{getDisplayRole(r)}</div>
                         </td>
                         <td className="p-5">
                           <span className={`px-4 py-1.5 rounded-full text-[10px] font-black whitespace-nowrap shadow-sm ${getStatusColor(r.status)}`}>
@@ -312,7 +331,7 @@ const Dashboard: React.FC = () => {
                         </td>
                         <td className="p-5 text-center">
                           {r.imageUrl && r.imageUrl.length > 20 ? (
-                            <button onClick={() => openPreview(r.imageUrl!, r.name, r.timestamp, r.aiVerification || '')} className="w-10 h-10 rounded-xl bg-stone-100 border-2 border-white shadow-sm overflow-hidden hover:scale-110 transition-transform">
+                            <button onClick={() => openPreview(r.imageUrl!, getDisplayName(r), r.timestamp, r.aiVerification || '')} className="w-12 h-12 rounded-xl bg-stone-100 border-2 border-white shadow-sm overflow-hidden hover:scale-110 transition-transform">
                                <img src={r.imageUrl} className="w-full h-full object-cover" alt="thumb" onError={(e) => (e.target as any).src="https://via.placeholder.com/100?text=Err"} />
                             </button>
                           ) : <span className="text-[10px] text-stone-300 italic">ไม่มีรูป</span>}
@@ -344,12 +363,12 @@ const Dashboard: React.FC = () => {
                           <button onClick={() => { setManualStaffId(s.id); setManualType('personal_leave'); setActiveTab('manual'); }} className="py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[9px] font-black transition-colors">ลากิจ</button>
                           <button onClick={() => { setManualStaffId(s.id); setManualType('sick_leave'); setActiveTab('manual'); }} className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[9px] font-black transition-colors">ลาป่วย</button>
                           <button onClick={() => { setManualStaffId(s.id); setManualType('duty'); setActiveTab('manual'); }} className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black transition-colors">ราชการ</button>
-                          <button onClick={() => { setManualStaffId(s.id); setManualType('authorized_late'); setActiveTab('manual'); }} className="py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[9px] font-black transition-colors">ขอเข้าสาย</button>
+                          <button onClick={() => { setManualStaffId(s.id); setManualType('authorized_late'); setActiveTab('manual'); }} className="py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[9px] font-black transition-colors">เข้าสาย</button>
                         </div>
                       </div>
                     ))}
                     {dailyAnalysis.absentList.length === 0 && (
-                        <div className="p-10 text-center text-stone-300 italic text-[10px] font-bold uppercase tracking-widest">บุคลากรลงเวลาครบแล้ว 🎉</div>
+                        <div className="p-10 text-center text-stone-300 italic text-[10px] font-bold uppercase tracking-widest">ลงเวลาครบแล้ว 🎉</div>
                     )}
                   </div>
                 </div>
@@ -392,7 +411,7 @@ const Dashboard: React.FC = () => {
                        <option value="duty">ไปราชการ</option>
                        <option value="sick_leave">ลาป่วย</option>
                        <option value="personal_leave">ลากิจ</option>
-                       <option value="authorized_late">อนุญาตเข้าสาย (Authorized)</option>
+                       <option value="authorized_late">อนุญาตเข้าสาย</option>
                     </select>
                   </div>
                </div>
@@ -442,29 +461,25 @@ const Dashboard: React.FC = () => {
                       ))}
                    </tbody>
                 </table>
-                <div className="mt-20 text-center ml-auto w-64 no-print-placeholder">
-                    <p className="text-[11px] font-bold">(ลงชื่อ)........................................................</p>
-                    <p className="text-[11px] font-bold mt-2">เจ้าหน้าที่ผู้ตรวจสอบ</p>
-                </div>
              </div>
           </div>
         )}
 
-        {/* TAB: MONTHLY SUMMARY (Official A4 Style) */}
+        {/* TAB: MONTHLY SUMMARY */}
         {activeTab === 'monthly' && (
            <div className="p-5 bg-stone-100 min-h-screen overflow-auto">
               <div className="max-w-4xl mx-auto mb-6 flex justify-end no-print">
                  <div className="bg-white p-4 rounded-3xl shadow-lg border border-stone-100 flex items-center gap-4">
-                    <label className="text-xs font-black text-stone-400 uppercase tracking-widest">เดือนที่ออกรายงาน:</label>
-                    <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="p-3 bg-stone-50 border-2 border-stone-100 rounded-xl font-black text-rose-600 outline-none focus:border-rose-300" />
+                    <label className="text-xs font-black text-stone-400 uppercase tracking-widest">เดือน:</label>
+                    <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="p-3 bg-stone-50 border-2 border-stone-100 rounded-xl font-black text-rose-600 outline-none" />
                  </div>
               </div>
 
               <div className="mx-auto bg-white shadow-2xl p-[10mm] border border-stone-300 print-page-a4" style={{ width: '210mm', minHeight: '297mm', boxSizing: 'border-box' }}>
                   <div className="text-center mb-10">
                      <img src={SCHOOL_LOGO_URL} alt="logo" className="w-16 h-16 mx-auto mb-2 object-contain" />
-                     <h1 className="text-lg font-black uppercase tracking-tight">รายงานสรุปสถิติการมาสายและไม่ลงเวลาปฏิบัติราชการ</h1>
-                     <p className="text-sm font-bold text-stone-600">โรงเรียนประจักษ์ศิลปาคม สำนักงานเขตพื้นที่การศึกษามัธยมศึกษาอุดรธานี</p>
+                     <h1 className="text-lg font-black uppercase tracking-tight">รายงานสรุปสถิติการมาสายและลา</h1>
+                     <p className="text-sm font-bold text-stone-600">โรงเรียนประจักษ์ศิลปาคม</p>
                      <p className="text-xs font-black mt-1">ประจำเดือน {printMonthLabel}</p>
                   </div>
 
@@ -474,40 +489,20 @@ const Dashboard: React.FC = () => {
                            <th className="border border-stone-500 p-3 w-10">ที่</th>
                            <th className="border border-stone-500 p-3 text-left">ชื่อ - นามสกุล</th>
                            <th className="border border-stone-500 p-3 w-28">มาสาย (ครั้ง)</th>
-                           <th className="border border-stone-500 p-3">วันที่มาสาย (วันที่)</th>
-                           <th className="border border-stone-500 p-3 w-28">ไม่ลงเวลามา (วัน)</th>
+                           <th className="border border-stone-500 p-3">วันที่มาสาย</th>
                         </tr>
                      </thead>
                      <tbody>
                         {monthlySummary.map(s => (
-                           <tr key={s.id} className="hover:bg-stone-50/50">
-                              <td className="border border-stone-500 p-3 text-center font-bold">{s.no}</td>
+                           <tr key={s.id}>
+                              <td className="border border-stone-500 p-3 text-center">{s.no}</td>
                               <td className="border border-stone-500 p-3 font-bold">{s.name}</td>
-                              <td className="border border-stone-500 p-3 text-center">
-                                 {s.lateCount > 0 ? <span className="font-black text-rose-600 text-sm">{s.lateCount}</span> : '0'}
-                              </td>
-                              <td className="border border-stone-500 p-3 text-[10px] italic text-stone-500 font-mono leading-relaxed">
-                                 {s.lateDates || '-'}
-                              </td>
-                              <td className="border border-stone-500 p-3 text-center">
-                                 {s.missingCount > 0 ? <span className="font-black text-rose-800 text-sm">{s.missingCount}</span> : '0'}
-                              </td>
+                              <td className="border border-stone-500 p-3 text-center font-black text-rose-600">{s.lateCount}</td>
+                              <td className="border border-stone-500 p-3 text-[10px] italic text-stone-500">{s.lateDates || '-'}</td>
                            </tr>
                         ))}
                      </tbody>
                   </table>
-                  
-                  <div className="mt-12 text-[10px] text-stone-500 italic space-y-1">
-                      <p>* หมายเหตุ: ระบบจะไม่นับรวมวันหยุดเสาร์-อาทิตย์ และวันหยุดนักขัตฤกษ์ที่ตั้งค่าไว้ในระบบ</p>
-                      <p>* สรุปข้อมูลโดย: ระบบ School Attendance AI (Prachaksinlapakhom School)</p>
-                  </div>
-
-                  <div className="mt-20 flex justify-end text-center no-print-placeholder">
-                      <div className="w-64">
-                        <p className="text-[11px] font-bold">ลงชื่อ........................................................</p>
-                        <p className="text-[11px] font-bold mt-2">ผู้สรุปรายงาน</p>
-                      </div>
-                  </div>
               </div>
            </div>
         )}
