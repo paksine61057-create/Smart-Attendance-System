@@ -15,13 +15,12 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const [settings, setSettingsState] = useState<AppSettings>(getSettings());
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState('');
+  const [isError, setIsError] = useState(false);
 
-  // Staff Management State
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [newStaff, setNewStaff] = useState<Staff>({ id: '', name: '', role: '' });
   const [staffError, setStaffError] = useState('');
 
-  // Holiday Management State
   const [holidayList, setHolidayList] = useState<SpecialHoliday[]>([]);
   const [newHolidayStartDate, setNewHolidayStartDate] = useState('');
   const [newHolidayEndDate, setNewHolidayEndDate] = useState('');
@@ -34,7 +33,8 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
 
   const handleSetCurrentLocation = async () => {
     setLoading(true);
-    setMsg('กำลังค้นหาสัญญาณ GPS...');
+    setIsError(false);
+    setMsg('กำลังค้นหาสัญญาณพิกัด (โปรดรอสักครู่)...');
     try {
       const pos = await getCurrentPosition();
       const newLoc: GeoLocation = {
@@ -43,9 +43,10 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
       };
       const newSettings = { ...settings, officeLocation: newLoc };
       setSettingsState(newSettings);
-      setMsg('ดึงพิกัดปัจจุบันเรียบร้อย');
-    } catch (err) {
-      setMsg('ไม่พบสัญญาณ - โปรดเปิด GPS');
+      setMsg(`ดึงพิกัดสำเร็จ! แม่นยำภายใน ${Math.round(pos.coords.accuracy)} เมตร`);
+    } catch (err: any) {
+      setIsError(true);
+      setMsg(err.message || 'ไม่พบสัญญาณ - โปรดเปิด GPS');
     } finally {
       setLoading(false);
     }
@@ -56,15 +57,15 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     setSettingsState(prev => ({
         ...prev,
         officeLocation: {
-            lat: field === 'lat' ? numValue : (prev.officeLocation?.lat || 0),
-            lng: field === 'lng' ? numValue : (prev.officeLocation?.lng || 0)
+            lat: field === 'lat' ? (isNaN(numValue) ? 0 : numValue) : (prev.officeLocation?.lat || 0),
+            lng: field === 'lng' ? (isNaN(numValue) ? 0 : numValue) : (prev.officeLocation?.lng || 0)
         }
     }));
   };
 
   const handleDistanceChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = parseInt(e.target.value);
-    setSettingsState(prev => ({ ...prev, maxDistanceMeters: val }));
+    setSettingsState(prev => ({ ...prev, maxDistanceMeters: isNaN(val) ? 0 : val }));
   };
   
   const handleUrlChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -98,9 +99,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
         alert('กรุณากรอกวันที่เริ่มต้นและชื่อวันหยุด');
         return;
     }
-    // If end date is empty, assume single day
     const endDate = newHolidayEndDate || newHolidayStartDate;
-    
     const success = addSpecialHolidayRange(newHolidayStartDate, endDate, newHolidayName);
     if (success) {
         setHolidayList(getSpecialHolidays());
@@ -141,12 +140,12 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
               </span>
               ตั้งค่าระบบ (Settings)
           </h2>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600">
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 p-2">
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
           </button>
         </div>
 
-        <div className="flex border-b border-stone-100 px-6 pt-2 overflow-x-auto">
+        <div className="flex border-b border-stone-100 px-6 pt-2 overflow-x-auto bg-white sticky top-0 z-10">
           <button onClick={() => setActiveTab('general')} className={`pb-3 px-4 text-sm font-bold transition-all relative whitespace-nowrap ${activeTab === 'general' ? 'text-rose-600' : 'text-stone-400 hover:text-stone-600'}`}>
             ทั่วไป {activeTab === 'general' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-rose-600 rounded-t-full"></div>}
           </button>
@@ -161,66 +160,120 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
         <div className="overflow-y-auto p-6 flex-1 bg-stone-50/30">
           {activeTab === 'general' && (
             <div className="space-y-6">
-              <div className="p-6 bg-white rounded-2xl border border-stone-100 shadow-sm">
-                <h3 className="font-bold text-stone-400 mb-3 text-xs uppercase tracking-widest">จุดลงเวลา (Location)</h3>
-                <div className="flex gap-3 mb-4">
+              <div className="p-6 bg-white rounded-3xl border border-stone-100 shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-10"><svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg></div>
+                <h3 className="font-black text-stone-800 mb-4 text-sm uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                    จุดลงเวลาโรงเรียน (Office Location)
+                </h3>
+                
+                <div className="flex gap-3 mb-6">
                     <div className="flex-1">
-                        <label className="text-[10px] font-bold text-stone-400 mb-1 block">ละติจูด</label>
-                        <input type="number" step="any" value={settings.officeLocation?.lat || ''} onChange={(e) => handleCoordinateChange('lat', e.target.value)} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-800 font-mono text-sm outline-none focus:ring-2 focus:ring-rose-200" placeholder="13.xxxxxx" />
+                        <label className="text-[10px] font-black text-stone-400 mb-1.5 block uppercase">ละติจูด (Latitude)</label>
+                        <input type="number" step="any" value={settings.officeLocation?.lat || ''} onChange={(e) => handleCoordinateChange('lat', e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl text-stone-800 font-mono text-sm outline-none focus:border-rose-300 transition-all" placeholder="13.xxxxxx" />
                     </div>
                     <div className="flex-1">
-                        <label className="text-[10px] font-bold text-stone-400 mb-1 block">ลองจิจูด</label>
-                        <input type="number" step="any" value={settings.officeLocation?.lng || ''} onChange={(e) => handleCoordinateChange('lng', e.target.value)} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl text-stone-800 font-mono text-sm outline-none focus:ring-2 focus:ring-rose-200" placeholder="100.xxxxxx" />
+                        <label className="text-[10px] font-black text-stone-400 mb-1.5 block uppercase">ลองจิจูด (Longitude)</label>
+                        <input type="number" step="any" value={settings.officeLocation?.lng || ''} onChange={(e) => handleCoordinateChange('lng', e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl text-stone-800 font-mono text-sm outline-none focus:border-rose-300 transition-all" placeholder="100.xxxxxx" />
                     </div>
                 </div>
-                <button onClick={handleSetCurrentLocation} disabled={loading} className="w-full bg-white border border-stone-200 text-stone-600 hover:bg-stone-50 py-3 rounded-xl transition-all flex items-center justify-center gap-2 font-bold text-sm">
-                  {loading ? 'Locating...' : 'ดึงพิกัดปัจจุบันใส่ในช่อง'}
-                </button>
-                {msg && <p className="text-[10px] text-emerald-600 mt-3 text-center font-bold">{msg}</p>}
+
+                <div className="space-y-3">
+                    <button 
+                        onClick={handleSetCurrentLocation} 
+                        disabled={loading} 
+                        className={`w-full py-4 rounded-2xl transition-all flex items-center justify-center gap-3 font-black text-sm shadow-lg active:scale-[0.98]
+                        ${loading ? 'bg-stone-200 text-stone-500' : 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white hover:from-emerald-600 hover:to-teal-700'}`}
+                    >
+                        {loading ? (
+                            <div className="w-5 h-5 border-3 border-t-white border-white/30 rounded-full animate-spin"></div>
+                        ) : (
+                            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path><circle cx="12" cy="10" r="3"></circle></svg>
+                        )}
+                        {loading ? 'กำลังระบุพิกัด...' : 'ดึงพิกัดปัจจุบันใส่ในช่อง (GPS)'}
+                    </button>
+
+                    {settings.officeLocation && settings.officeLocation.lat !== 0 && (
+                        <a 
+                            href={`https://www.google.com/maps?q=${settings.officeLocation.lat},${settings.officeLocation.lng}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="w-full py-3 border-2 border-stone-100 text-stone-500 hover:bg-stone-50 rounded-2xl transition-all flex items-center justify-center gap-2 font-bold text-xs"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                            ตรวจสอบตำแหน่งบน Google Maps
+                        </a>
+                    )}
+                </div>
+                
+                {msg && (
+                    <p className={`text-[11px] mt-4 text-center font-black p-3 rounded-xl border animate-in slide-in-from-top-2
+                    ${isError ? 'bg-rose-50 border-rose-100 text-rose-600' : 'bg-emerald-50 border-emerald-100 text-emerald-600'}`}>
+                        {isError ? '❌ ' : '✅ '}{msg}
+                    </p>
+                )}
               </div>
 
-              <div className="p-6 bg-white rounded-2xl border border-stone-100 shadow-sm">
-                 <h3 className="font-bold text-stone-400 mb-3 text-xs uppercase tracking-widest">การตั้งค่าทั่วไป</h3>
-                 <div className="mb-4">
-                    <label className="block text-xs font-bold text-stone-500 mb-2">ระยะห่างสูงสุด (เมตร)</label>
-                    <input type="number" value={settings.maxDistanceMeters} onChange={handleDistanceChange} className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none font-bold" />
+              <div className="p-6 bg-white rounded-3xl border border-stone-100 shadow-sm">
+                 <h3 className="font-black text-stone-800 mb-6 text-sm uppercase tracking-widest flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-amber-500"></span>
+                    การตั้งค่ารัศมีและเซิร์ฟเวอร์
+                 </h3>
+                 <div className="mb-6">
+                    <label className="block text-[10px] font-black text-stone-400 mb-2 uppercase tracking-widest">รัศมีลงเวลาสูงสุด (เมตร)</label>
+                    <div className="relative">
+                        <input type="number" value={settings.maxDistanceMeters} onChange={handleDistanceChange} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none font-black text-rose-600 focus:border-rose-300" />
+                        <span className="absolute right-5 top-1/2 -translate-y-1/2 text-stone-400 font-bold text-sm">m.</span>
+                    </div>
+                    <p className="text-[9px] text-stone-400 mt-2 italic font-bold">* แนะนำที่ 50-100 เมตร ขึ้นอยู่กับความกว้างของประตูโรงเรียน</p>
                  </div>
                  <div>
-                    <label className="block text-xs font-bold text-stone-500 mb-2">Google Apps Script URL</label>
-                    <input type="text" value={settings.googleSheetUrl || ''} onChange={handleUrlChange} placeholder="https://script.google.com/macros/s/..." className="w-full p-3 bg-stone-50 border border-stone-200 rounded-xl outline-none text-xs" />
+                    <label className="block text-[10px] font-black text-stone-400 mb-2 uppercase tracking-widest">Google Apps Script URL (Sync Cloud)</label>
+                    <input type="text" value={settings.googleSheetUrl || ''} onChange={handleUrlChange} placeholder="https://script.google.com/macros/s/..." className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl outline-none text-[10px] font-mono focus:border-rose-300" />
                  </div>
               </div>
 
-              <div className="p-6 bg-red-50 rounded-2xl border border-red-100 shadow-sm">
-                 <h3 className="font-bold text-red-400 mb-2 text-xs uppercase tracking-widest">อันตราย</h3>
-                 <button onClick={handleClearAllRecords} className="w-full py-3 bg-red-500 hover:bg-red-600 text-white rounded-xl font-bold text-sm shadow-md transition-all">ล้างข้อมูลทั้งหมด</button>
+              <div className="p-6 bg-rose-50 rounded-3xl border-2 border-rose-100 shadow-sm">
+                 <h3 className="font-black text-rose-800 mb-2 text-xs uppercase tracking-widest flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                    เขตอันตราย (Danger Zone)
+                 </h3>
+                 <p className="text-[10px] text-rose-700/60 font-bold mb-4 italic">การล้างข้อมูลจะลบเฉพาะข้อมูล "ที่เก็บไว้ในเครื่องนี้" เท่านั้น ไม่กระทบบน Google Sheets</p>
+                 <button onClick={handleClearAllRecords} className="w-full py-4 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-sm shadow-lg transition-all active:scale-[0.98]">ล้างข้อมูลในเครื่องทั้งหมด 🗑️</button>
               </div>
             </div>
           )}
 
           {activeTab === 'staff' && (
              <div className="space-y-6">
-                <div className="p-4 bg-white rounded-2xl border border-stone-100 shadow-sm">
-                    <h3 className="font-bold text-stone-400 mb-3 text-xs uppercase tracking-widest">เพิ่มบุคลากรใหม่</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <input type="text" placeholder="รหัส" value={newStaff.id} onChange={e => setNewStaff({...newStaff, id: e.target.value})} className="p-3 bg-stone-50 border rounded-xl text-sm" />
-                        <input type="text" placeholder="ชื่อ-นามสกุล" value={newStaff.name} onChange={e => setNewStaff({...newStaff, name: e.target.value})} className="p-3 bg-stone-50 border rounded-xl text-sm" />
-                        <input type="text" placeholder="ตำแหน่ง" value={newStaff.role} onChange={e => setNewStaff({...newStaff, role: e.target.value})} className="p-3 bg-stone-50 border rounded-xl text-sm" />
+                <div className="p-6 bg-white rounded-3xl border border-stone-100 shadow-sm">
+                    <h3 className="font-black text-stone-800 mb-4 text-sm uppercase tracking-widest flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                        เพิ่มบุคลากรใหม่
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+                        <input type="text" placeholder="รหัสบุคลากร" value={newStaff.id} onChange={e => setNewStaff({...newStaff, id: e.target.value})} className="p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl text-sm font-bold focus:border-emerald-300 outline-none" />
+                        <input type="text" placeholder="ชื่อ-นามสกุล" value={newStaff.name} onChange={e => setNewStaff({...newStaff, name: e.target.value})} className="p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl text-sm font-bold focus:border-emerald-300 outline-none" />
+                        <input type="text" placeholder="ตำแหน่ง" value={newStaff.role} onChange={e => setNewStaff({...newStaff, role: e.target.value})} className="p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl text-sm font-bold focus:border-emerald-300 outline-none" />
                     </div>
-                    {staffError && <p className="text-red-500 text-xs mt-2">{staffError}</p>}
-                    <button onClick={handleAddStaff} className="mt-3 w-full py-2 bg-emerald-500 hover:bg-emerald-600 text-white rounded-lg text-sm font-bold">+ เพิ่มรายชื่อ</button>
+                    {staffError && <p className="text-rose-500 text-[10px] font-black mt-2 mb-2 ml-1">❌ {staffError}</p>}
+                    <button onClick={handleAddStaff} className="w-full py-4 bg-emerald-500 hover:bg-emerald-600 text-white rounded-2xl text-sm font-black shadow-lg transition-all">+ บันทึกรายชื่อ</button>
                 </div>
-                <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-3xl border border-stone-100 shadow-sm overflow-hidden">
                     <table className="w-full text-sm text-left">
-                        <thead className="text-xs text-stone-500 uppercase bg-stone-50 border-b">
-                            <tr><th className="px-4 py-3">ID</th><th className="px-4 py-3">Name</th><th className="px-4 py-3">Role</th><th className="px-4 py-3 text-right">Action</th></tr>
+                        <thead className="text-[10px] text-stone-400 font-black uppercase bg-stone-50 border-b">
+                            <tr><th className="px-6 py-4">ID</th><th className="px-6 py-4">Name</th><th className="px-6 py-4">Role</th><th className="px-6 py-4 text-right">Action</th></tr>
                         </thead>
-                        <tbody className="divide-y">
+                        <tbody className="divide-y divide-stone-50">
                             {staffList.map((s) => (
-                                <tr key={s.id} className="hover:bg-stone-50">
-                                    <td className="px-4 py-3 font-medium">{s.id}</td><td className="px-4 py-3">{s.name}</td><td className="px-4 py-3 text-xs">{s.role}</td>
-                                    <td className="px-4 py-3 text-right">
-                                        <button onClick={() => handleRemoveStaff(s.id)} className="text-red-400 hover:text-red-600 p-1"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg></button>
+                                <tr key={s.id} className="hover:bg-stone-50 transition-colors">
+                                    <td className="px-6 py-4 font-black text-stone-400">{s.id}</td>
+                                    <td className="px-6 py-4 font-bold text-stone-700">{s.name}</td>
+                                    <td className="px-6 py-4 text-[10px] font-black text-stone-400 uppercase tracking-tighter">{s.role}</td>
+                                    <td className="px-6 py-4 text-right">
+                                        <button onClick={() => handleRemoveStaff(s.id)} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path></svg>
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -232,51 +285,64 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
 
           {activeTab === 'holidays' && (
              <div className="space-y-6">
-                <div className="p-4 bg-white rounded-2xl border border-stone-100 shadow-sm">
-                    <h3 className="font-bold text-stone-400 mb-3 text-xs uppercase tracking-widest">เพิ่มช่วงวันหยุด / ปิดเทอม 🏝️</h3>
-                    <p className="text-[10px] text-stone-500 mb-4 bg-amber-50 p-2 rounded-lg border border-amber-100">วันเสาร์-อาทิตย์ และวันหยุดนักขัตฤกษ์ ระบบจะตรวจสอบให้โดยอัตโนมัติ คุณไม่ต้องเพิ่มเอง</p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
+                <div className="p-6 bg-white rounded-3xl border border-stone-100 shadow-sm relative overflow-hidden">
+                    <div className="absolute top-0 right-0 p-4 opacity-10 rotate-12"><svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path></svg></div>
+                    <h3 className="font-black text-stone-800 mb-4 text-sm uppercase tracking-widest flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                        เพิ่มช่วงวันหยุด / ปิดเทอม 🏖️
+                    </h3>
+                    <div className="bg-amber-50 p-4 rounded-2xl border border-amber-100 mb-6">
+                        <p className="text-[10px] text-amber-700 font-bold leading-relaxed italic">
+                            💡 วันเสาร์-อาทิตย์ และวันหยุดนักขัตฤกษ์ตามประกาศรัฐบาล <span className="underline">ระบบจะตรวจสอบให้โดยอัตโนมัติ</span> คุณเพียงแค่เพิ่มวันหยุดเฉพาะของโรงเรียนเท่านั้น เช่น "ปิดเทอม" หรือ "วันหยุดกรณีพิเศษ"
+                        </p>
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                         <div>
-                            <label className="text-[10px] font-black text-stone-400 mb-1 block">วันที่เริ่มต้น</label>
-                            <input type="date" value={newHolidayStartDate} onChange={e => setNewHolidayStartDate(e.target.value)} className="p-3 bg-stone-50 border rounded-xl text-sm w-full" />
+                            <label className="text-[10px] font-black text-stone-400 mb-1.5 block uppercase tracking-widest">วันที่เริ่มต้น</label>
+                            <input type="date" value={newHolidayStartDate} onChange={e => setNewHolidayStartDate(e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl font-bold focus:border-blue-300 outline-none" />
                         </div>
                         <div>
-                            <label className="text-[10px] font-black text-stone-400 mb-1 block">วันที่สิ้นสุด (เว้นไว้ถ้าหยุดวันเดียว)</label>
-                            <input type="date" value={newHolidayEndDate} onChange={e => setNewHolidayEndDate(e.target.value)} className="p-3 bg-stone-50 border rounded-xl text-sm w-full" />
+                            <label className="text-[10px] font-black text-stone-400 mb-1.5 block uppercase tracking-widest">วันที่สิ้นสุด (ถ้าหยุดวันเดียวไม่ต้องใส่)</label>
+                            <input type="date" value={newHolidayEndDate} onChange={e => setNewHolidayEndDate(e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl font-bold focus:border-blue-300 outline-none" />
                         </div>
                     </div>
-                    <div>
-                        <label className="text-[10px] font-black text-stone-400 mb-1 block">ชื่อรายการ (เช่น ปิดเทอมภาคเรียนที่ 1)</label>
-                        <input type="text" placeholder="ระบุชื่อวันหยุด..." value={newHolidayName} onChange={e => setNewHolidayName(e.target.value)} className="p-3 bg-stone-50 border rounded-xl text-sm w-full" />
+                    <div className="mb-6">
+                        <label className="text-[10px] font-black text-stone-400 mb-1.5 block uppercase tracking-widest">ชื่อรายการวันหยุด (เช่น ปิดเทอมภาคฤดูหนาว)</label>
+                        <input type="text" placeholder="พิมพ์ชื่อวันหยุด..." value={newHolidayName} onChange={e => setNewHolidayName(e.target.value)} className="w-full p-4 bg-stone-50 border-2 border-stone-100 rounded-2xl font-bold focus:border-blue-300 outline-none" />
                     </div>
-                    <button onClick={handleAddHoliday} className="mt-4 w-full py-3 bg-rose-500 hover:bg-rose-600 text-white rounded-xl text-sm font-bold transition-all shadow-md">+ บันทึกช่วงวันหยุด</button>
+                    <button onClick={handleAddHoliday} className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl text-sm font-black shadow-lg transition-all active:scale-[0.98]">+ บันทึกวันหยุดพิเศษ</button>
                 </div>
 
-                <div className="bg-white rounded-2xl border border-stone-100 shadow-sm overflow-hidden">
+                <div className="bg-white rounded-3xl border border-stone-100 shadow-sm overflow-hidden">
                     <div className="overflow-x-auto">
                         <table className="w-full text-sm text-left">
-                            <thead className="text-xs text-stone-500 uppercase bg-stone-50 border-b">
+                            <thead className="text-[10px] text-stone-400 font-black uppercase bg-stone-50 border-b">
                                 <tr>
-                                    <th className="px-4 py-3">ช่วงเวลา</th>
-                                    <th className="px-4 py-3">รายการ</th>
-                                    <th className="px-4 py-3 text-right">ลบ</th>
+                                    <th className="px-6 py-4">ช่วงเวลา (Period)</th>
+                                    <th className="px-6 py-4">ชื่อรายการ (Label)</th>
+                                    <th className="px-6 py-4 text-right">Action</th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y">
+                            <tbody className="divide-y divide-stone-50">
                                 {holidayList.length === 0 && (
-                                    <tr><td colSpan={3} className="px-4 py-10 text-center text-stone-400 text-xs italic">ยังไม่มีการกำหนดวันหยุดพิเศษเพิ่ม</td></tr>
+                                    <tr><td colSpan={3} className="px-6 py-12 text-center text-stone-300 text-[10px] font-black uppercase italic tracking-widest">ยังไม่มีวันหยุดพิเศษเพิ่มในระบบ</td></tr>
                                 )}
                                 {holidayList.map((h) => (
-                                    <tr key={h.id} className="hover:bg-stone-50">
-                                        <td className="px-4 py-3 font-mono text-[10px] text-stone-800 leading-tight">
-                                            {new Date(h.startDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}
-                                            {h.endDate !== h.startDate && (
-                                                <> <br/> ถึง <br/> {new Date(h.endDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</>
-                                            )}
+                                    <tr key={h.id} className="hover:bg-stone-50 transition-colors group">
+                                        <td className="px-6 py-4 font-mono text-[11px] text-stone-800 leading-tight">
+                                            <div className="flex flex-col">
+                                                <span className="font-black text-blue-600">{new Date(h.startDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                                {h.endDate !== h.startDate && (
+                                                    <span className="text-[9px] text-stone-400 font-bold uppercase mt-1">ถึง {new Date(h.endDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                                                )}
+                                            </div>
                                         </td>
-                                        <td className="px-4 py-3 text-stone-600 font-bold">{h.name}</td>
-                                        <td className="px-4 py-3 text-right">
-                                            <button onClick={() => handleRemoveHoliday(h.id)} className="text-red-400 hover:text-red-600 p-1"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                                        <td className="px-6 py-4 text-stone-700 font-black text-sm">{h.name}</td>
+                                        <td className="px-6 py-4 text-right">
+                                            <button onClick={() => handleRemoveHoliday(h.id)} className="text-stone-300 hover:text-rose-500 transition-colors p-2 bg-stone-50 rounded-xl hover:bg-rose-50">
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}
@@ -288,8 +354,8 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
           )}
         </div>
 
-        <div className="p-6 bg-white border-t border-stone-100">
-          <button onClick={saveAndClose} className="w-full px-6 py-4 bg-stone-900 text-white rounded-xl hover:bg-stone-800 font-bold text-sm transition-all shadow-lg">บันทึกและปิด</button>
+        <div className="p-6 bg-white border-t border-stone-100 flex gap-4 sticky bottom-0 z-10 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+          <button onClick={saveAndClose} className="flex-1 px-6 py-5 bg-stone-900 text-white rounded-2xl hover:bg-stone-800 font-black text-sm transition-all shadow-xl active:scale-[0.98]">บันทึกการตั้งค่าและปิด ⛄</button>
         </div>
       </div>
     </div>
