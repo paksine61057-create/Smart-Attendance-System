@@ -146,9 +146,18 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (typeStr.includes('กิจ')) type = 'personal_leave';
                 else if (typeStr.includes('อนุญาตสาย')) type = 'authorized_late';
 
+                // แก้ไข: ตรวจสอบคีย์รูปภาพหลายรูปแบบที่อาจถูกส่งกลับมาจาก Google Sheets
+                let rawImg = r.imageUrl || r.imageurl || r.imageBase64 || r.imagebase64 || "";
+                if (rawImg && typeof rawImg === 'string' && rawImg.length > 50) {
+                    // ถ้าไม่มี prefix data:image ให้เติมเข้าไป
+                    if (!rawImg.startsWith('data:image')) {
+                        rawImg = `data:image/jpeg;base64,${rawImg}`;
+                    }
+                }
+
                 return {
                     id: String(r.timestamp), 
-                    staffId: String(r.staffId || ""),
+                    staffId: String(r.staffId || r.staffid || ""),
                     name: String(r.name || ""),
                     role: String(r.role || ""),
                     timestamp: Number(r.timestamp),
@@ -158,7 +167,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     location: { lat: 0, lng: 0 },
                     distanceFromBase: Number(r.distancefrombase) || 0,
                     aiVerification: String(r.aiverification || ""),
-                    imageUrl: String(r.imageUrl || ""),
+                    imageUrl: rawImg,
                     syncedToSheets: true
                 };
             });
