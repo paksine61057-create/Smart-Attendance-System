@@ -1,15 +1,16 @@
 
+// Fix: Added React import to resolve "Cannot find namespace 'React'" errors on lines 12 and 112
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { getRecords, fetchGlobalRecords, syncUnsyncedRecords, deleteRecord, saveRecord } from '../services/storageService';
 import { getAllStaff, getStaffById } from '../services/staffService';
 import { getHoliday } from '../services/holidayService';
 import { CheckInRecord, Staff, AttendanceType } from '../types';
-import { jsPDF } from 'jsPDF';
-import 'jspdf-autotable';
 
 type TabType = 'today' | 'official' | 'monthly' | 'manual';
 
 const SCHOOL_LOGO_URL = 'https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41c4-87ed-46d11f4a36fa.png';
+// กำหนดวันที่เริ่มนับสถิติ: 11 ธันวาคม 2568 (พ.ศ.) = 2025 (ค.ศ.)
+const STATS_START_DATE = new Date(2025, 11, 11);
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('today');
@@ -28,8 +29,7 @@ const Dashboard: React.FC = () => {
 
   const staffList = useMemo(() => getAllStaff(), []);
 
-  // ฟังก์ชันดึงชื่อที่ถูกต้อง (Smart Name Lookup)
-  const getDisplayName = (record: CheckInRecord) => {
+  const getDisplayName = (record: CheckInRecord | {name?: string, staffId?: string}) => {
     if (record.name && record.name !== "ไม่ระบุชื่อ" && record.name !== "undefined" && record.name.trim() !== "") {
       return record.name;
     }
@@ -40,8 +40,7 @@ const Dashboard: React.FC = () => {
     return record.name || "ไม่ทราบชื่อ";
   };
 
-  // ดึงตำแหน่งบุคลากร
-  const getDisplayRole = (record: CheckInRecord) => {
+  const getDisplayRole = (record: CheckInRecord | {role?: string, staffId?: string}) => {
     if (record.role && record.role !== "undefined" && record.role.trim() !== "") {
       return record.role;
     }
@@ -164,7 +163,9 @@ const Dashboard: React.FC = () => {
   };
 
   const monthlySummary = useMemo(() => {
-    const [year, month] = selectedMonth.split('-').map(Number);
+    const parts = selectedMonth.split('-');
+    const year = parseInt(parts[0]) || new Date().getFullYear();
+    const month = parseInt(parts[1]) || (new Date().getMonth() + 1);
     const daysInMonth = new Date(year, month, 0).getDate();
     
     return staffList.map((staff, idx) => {
@@ -174,16 +175,30 @@ const Dashboard: React.FC = () => {
         new Date(r.timestamp).getMonth() === (month - 1)
       );
 
-      const lateRecords = staffRecords.filter(r => r.status === 'Late');
-      const lateDates = lateRecords.map(r => new Date(r.timestamp).getDate()).sort((a, b) => a - b);
-      
+      let lateCount = 0;
+      let lateDatesArray: number[] = [];
       let missingCount = 0;
+      const todayDate = new Date();
+
       for (let d = 1; d <= daysInMonth; d++) {
         const checkDate = new Date(year, month - 1, d);
+        
+        // เงื่อนไข: นับสถิติตั้งแต่วันที่ 11 ธ.ค. 2568 (2025) เป็นต้นมา
+        if (checkDate < STATS_START_DATE) continue;
+        // ไม่นับวันที่ยังมาไม่ถึง
+        if (checkDate > todayDate) continue;
+
         const holiday = getHoliday(checkDate);
         if (!holiday) {
-          const hasRecord = staffRecords.some(r => new Date(r.timestamp).getDate() === d && ['arrival', 'duty', 'sick_leave', 'personal_leave', 'authorized_late'].includes(r.type));
-          if (!hasRecord) missingCount++;
+          const dayRecords = staffRecords.filter(r => new Date(r.timestamp).getDate() === d);
+          const arrivalRecord = dayRecords.find(r => ['arrival', 'duty', 'sick_leave', 'personal_leave', 'authorized_late'].includes(r.type));
+
+          if (!arrivalRecord) {
+            missingCount++;
+          } else if (arrivalRecord.status === 'Late') {
+            lateCount++;
+            lateDatesArray.push(d);
+          }
         }
       }
 
@@ -192,8 +207,8 @@ const Dashboard: React.FC = () => {
         id: staff.id,
         name: staff.name,
         role: staff.role,
-        lateCount: lateRecords.length,
-        lateDates: lateDates.join(', '),
+        lateCount: lateCount,
+        lateDates: lateDatesArray.sort((a,b) => a-b).join(', '),
         missingCount
       };
     });
@@ -301,7 +316,6 @@ const Dashboard: React.FC = () => {
             </div>
 
             <div className="flex flex-col lg:flex-row gap-8">
-              {/* Recent Transactions Table */}
               <div className="flex-1 overflow-x-auto">
                 <div className="flex items-center justify-between mb-6">
                     <h3 className="text-2xl font-black text-stone-800">รายการล่าสุด ⛄</h3>
@@ -324,7 +338,6 @@ const Dashboard: React.FC = () => {
                       <tr key={r.id} className="hover:bg-rose-50/20 transition-colors">
                         <td className="p-5 font-mono font-black text-rose-500">{new Date(r.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</td>
                         <td className="p-5">
-                          {/* ชื่อแสดงผลขนาดใหญ่และหนาเด่นชัดกว่าตำแหน่ง */}
                           <div className="font-black text-stone-900 text-lg leading-tight mb-0.5">{getDisplayName(r)}</div>
                           <div className="text-[10px] text-stone-400 font-bold uppercase tracking-wider">{getDisplayRole(r)}</div>
                         </td>
@@ -351,7 +364,6 @@ const Dashboard: React.FC = () => {
                 </table>
               </div>
 
-              {/* Absent Staff List */}
               <div className="w-full lg:w-80">
                 <div className="bg-slate-50 p-8 rounded-[3rem] border border-slate-100 flex flex-col max-h-[600px] no-print shadow-inner">
                   <h4 className="font-black text-stone-800 mb-6 flex items-center justify-between">
@@ -480,33 +492,63 @@ const Dashboard: React.FC = () => {
               </div>
 
               <div className="mx-auto bg-white shadow-2xl p-[10mm] border border-stone-300 print-page-a4" style={{ width: '210mm', minHeight: '297mm', boxSizing: 'border-box' }}>
-                  <div className="text-center mb-10">
+                  <div className="text-center mb-8">
                      <img src={SCHOOL_LOGO_URL} alt="logo" className="w-16 h-16 mx-auto mb-2 object-contain" />
                      <h1 className="text-lg font-black uppercase tracking-tight">รายงานสรุปสถิติการปฏิบัติราชการ</h1>
                      <p className="text-sm font-bold text-stone-600">โรงเรียนประจักษ์ศิลปาคม</p>
-                     <p className="text-xs font-black mt-1 uppercase tracking-widest">ประจำเดือน {printMonthLabel}</p>
+                     <p className="text-[9px] font-black mt-1 uppercase tracking-widest text-stone-400">ประจำเดือน {printMonthLabel} (นับตั้งแต่วันที่ 11 ธ.ค. 68)</p>
                   </div>
 
-                  <table className="w-full border-collapse border border-stone-500 text-[11px]">
+                  <table className="w-full border-collapse border border-stone-500">
                      <thead>
-                        <tr className="bg-stone-100">
-                           <th className="border border-stone-500 p-3 w-10">ที่</th>
-                           <th className="border border-stone-500 p-3 text-left">ชื่อ - นามสกุล</th>
-                           <th className="border border-stone-500 p-3 w-28">มาสาย (ครั้ง)</th>
-                           <th className="border border-stone-500 p-3">วันที่มาสาย</th>
+                        <tr className="bg-stone-50 text-[9px] font-black uppercase text-stone-500 border-b border-stone-500">
+                           <th className="border border-stone-500 px-1 py-2 w-7">ที่</th>
+                           <th className="border border-stone-500 px-2 py-2 text-left">ชื่อ - นามสกุล</th>
+                           <th className="border border-stone-500 px-2 py-2 text-left">ตำแหน่ง</th>
+                           <th className="border border-stone-500 px-1 py-2 w-12 text-center">มาสาย<br/>(ครั้ง)</th>
+                           <th className="border border-stone-500 px-2 py-2 text-left">วันที่มาสาย</th>
+                           <th className="border border-stone-500 px-1 py-2 w-14 text-center">ไม่ลงเวลา<br/>(วัน)</th>
                         </tr>
                      </thead>
-                     <tbody>
+                     <tbody className="divide-y divide-stone-500">
                         {monthlySummary.map(s => (
-                           <tr key={s.id} className="hover:bg-stone-50/50">
-                              <td className="border border-stone-500 p-3 text-center">{s.no}</td>
-                              <td className="border border-stone-500 p-3 font-bold text-stone-900">{s.name}</td>
-                              <td className="border border-stone-500 p-3 text-center font-black text-rose-600 text-lg">{s.lateCount}</td>
-                              <td className="border border-stone-500 p-3 text-[10px] italic text-stone-500 leading-relaxed">{s.lateDates || '-'}</td>
+                           <tr key={s.id} className="hover:bg-stone-50/50 transition-colors">
+                              <td className="border border-stone-500 px-1 py-2 text-center font-mono font-black text-stone-400 text-[9px]">{s.no}</td>
+                              <td className="border border-stone-500 px-2 py-2 whitespace-nowrap">
+                                 <div className="font-black text-stone-900 text-[10px] leading-tight">{getDisplayName(s)}</div>
+                              </td>
+                              <td className="border border-stone-500 px-2 py-2 whitespace-nowrap">
+                                 <div className="text-[9px] text-stone-500 font-bold leading-tight">{getDisplayRole(s)}</div>
+                              </td>
+                              <td className="border border-stone-500 px-1 py-2 text-center">
+                                 <span className="font-mono font-black text-rose-500 text-[11px]">{s.lateCount}</span>
+                              </td>
+                              <td className="border border-stone-500 px-2 py-2 text-[9px] italic text-stone-500 font-bold leading-tight">
+                                 {s.lateDates || '-'}
+                              </td>
+                              <td className="border border-stone-500 px-1 py-2 text-center">
+                                 <span className={`font-mono font-black text-[11px] ${s.missingCount > 0 ? 'text-amber-600' : 'text-stone-300'}`}>
+                                    {s.missingCount}
+                                 </span>
+                              </td>
                            </tr>
                         ))}
                      </tbody>
                   </table>
+
+                  {/* Footer for Signature */}
+                  <div className="mt-12 grid grid-cols-2 gap-10">
+                     <div className="text-center">
+                        <p className="text-[9px] font-bold text-stone-500 mb-10">เจ้าหน้าที่ผู้สรุปรายงาน</p>
+                        <p className="text-xs font-black">................................................................</p>
+                        <p className="text-[9px] font-bold mt-1">(................................................................)</p>
+                     </div>
+                     <div className="text-center">
+                        <p className="text-[9px] font-bold text-stone-500 mb-10">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
+                        <p className="text-xs font-black">................................................................</p>
+                        <p className="text-[9px] font-bold mt-1">(................................................................)</p>
+                     </div>
+                  </div>
               </div>
            </div>
         )}
