@@ -4,6 +4,7 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
+// URL ตัวอย่าง (คุณต้องแทนที่ด้วย Web App URL ใหม่ที่ได้จากการ Deploy GAS)
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbwtuFU-Rrc3mIGM3Oi7ECQYr_HJG-HAzxDf7Qgwt2xcku58icMVpW9Ro4Iw4avMMOIY/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
@@ -85,7 +86,7 @@ export const saveSettings = async (settings: AppSettings) => {
   if (targetUrl) {
     try {
       const payload = {
-        action: 'updateSettings',
+        action: 'updateSettings', // ใช้ชื่อ action ให้ตรงกับ GAS
         officeLocation: settings.officeLocation,
         maxDistanceMeters: settings.maxDistanceMeters,
         bypassLocation: !!settings.bypassLocation
@@ -118,6 +119,7 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
     if (!targetUrl) return false;
     
     try {
+        // เพิ่ม t=${Date.now()} เพื่อป้องกัน Cache
         const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`, {
           cache: 'no-store',
           headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
@@ -131,6 +133,7 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
               bypassLocation: cloud.bypassLocation !== undefined ? !!cloud.bypassLocation : s.bypassLocation
             };
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
+            // ส่งสัญญาณแจ้งหน้าจอว่ามีการอัปเดต (Bypass จะเปลี่ยนทันที)
             window.dispatchEvent(new Event('settings_updated'));
             return true;
         }
