@@ -66,10 +66,16 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   }, [staffIdInput]);
 
   const validateLocation = async () => {
+    // หากเปิดโหมด Bypass ให้ถือว่าพิกัดถูกต้องทันทีโดยไม่ต้องเรียก GPS
+    const s = getSettings();
+    if (s.bypassLocation) {
+        setLocationStatus('found');
+        return { lat: 0, lng: 0 };
+    }
+
     setLocationStatus('checking');
     setLocationError(null);
     
-    const s = getSettings();
     if (!s.officeLocation || !s.officeLocation.lat) {
         setLocationStatus('found');
         return { lat: 0, lng: 0 };
@@ -89,8 +95,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const buffer = pos.coords.accuracy / 2;
       const adjustedDist = Math.max(0, dist - buffer);
 
-      // ตรวจสอบระยะทาง แต่ถ้าเปิด Bypass Mode จะปล่อยผ่านทุุกกรณี
-      if (isRestrictedType && adjustedDist > s.maxDistanceMeters && !s.bypassLocation) {
+      if (isRestrictedType && adjustedDist > s.maxDistanceMeters) {
           setLocationStatus('error');
           setLocationError(
             <div className="space-y-3">
@@ -103,7 +108,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                 <div className="bg-amber-900/40 p-3 rounded-2xl text-[10px] text-left border border-amber-500/30">
                     <p className="text-amber-200/50 uppercase mb-1">พิกัดโรงเรียนที่ระบบกำลังใช้:</p>
                     <p className="font-mono">{s.officeLocation.lat.toFixed(6)}, {s.officeLocation.lng.toFixed(6)}</p>
-                    <p className="mt-2 text-rose-200 italic leading-relaxed">หากพิกัดนี้ไม่ถูกต้อง (ไม่ใช่ 17.9818, 102.8340) แสดงว่าถูกค่าจาก Cloud ทับ ให้แอดมินไปที่ "ตั้งค่า" แล้วเปิด "ล็อกพิกัด" ครับ</p>
                 </div>
             </div>
           );
@@ -113,22 +117,20 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       setLocationStatus('found');
       return { lat: pos.coords.latitude, lng: pos.coords.longitude };
     } catch (err: any) {
-      // แม้จะ Error GPS แต่ถ้าเปิด Bypass ก็ยังให้ผ่านไปถ่ายรูปได้
-      if (isRestrictedType && !s.bypassLocation) {
-          setLocationStatus('error');
-          setLocationError(err.message || "ไม่สามารถดึงข้อมูลพิกัดได้");
-          return null;
-      } else {
-          setLocationStatus('found');
-          setCurrentDistance(0);
-          return { lat: 0, lng: 0 };
-      }
+      setLocationStatus('error');
+      setLocationError(err.message || "ไม่สามารถดึงข้อมูลพิกัดได้");
+      return null;
     }
   };
 
   const startCameraStep = async () => {
+    if (isBypassMode) {
+        // หากเป็น Bypass เข้าหน้ากล้องทันที
+        setStep('camera');
+        return;
+    }
     const loc = await validateLocation();
-    if (loc || isBypassMode) {
+    if (loc) {
         setStep('camera');
     }
   };
@@ -318,19 +320,19 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
                         <div className="mt-4 p-4 bg-black/30 rounded-2xl border border-white/10 backdrop-blur-md">
                            {isBypassMode && (
-                               <div className="flex items-center justify-center gap-2 text-blue-300 text-[10px] font-black uppercase mb-3 bg-blue-900/40 p-2 rounded-xl border border-blue-500/30">
-                                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                                   Bypass Mode: ปิดการตรวจสอบพิกัดโดยแอดมิน
+                               <div className="flex items-center justify-center gap-2 text-blue-300 text-[10px] font-black uppercase bg-blue-900/40 p-3 rounded-xl border border-blue-500/30">
+                                   <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                                   Bypass Mode: ปิดการตรวจสอบพิกัดแล้ว
                                </div>
                            )}
                            
-                           {locationStatus === 'checking' && (
+                           {!isBypassMode && locationStatus === 'checking' && (
                                <div className="flex items-center justify-center gap-3 text-white text-xs font-bold animate-pulse">
                                    <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
                                    กำลังรอสัญญาณ GPS ที่แม่นยำ...
                                </div>
                            )}
-                           {locationStatus === 'found' && (
+                           {!isBypassMode && locationStatus === 'found' && (
                                <div className="flex items-center justify-between">
                                    <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-black uppercase">
                                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
@@ -343,7 +345,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                                    )}
                                </div>
                            )}
-                           {locationStatus === 'error' && (
+                           {!isBypassMode && locationStatus === 'error' && (
                                <div className="text-rose-200 text-xs font-black text-center space-y-4">
                                    <div className="bg-rose-900/40 p-5 rounded-2xl border border-rose-400/30 text-left leading-relaxed">
                                        {locationError}
@@ -355,11 +357,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         
                         <button 
                             onClick={startCameraStep}
-                            disabled={locationStatus === 'checking'}
+                            disabled={!isBypassMode && locationStatus === 'checking'}
                             className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3
-                            ${locationStatus === 'error' && isRestrictedType && !isBypassMode ? 'bg-slate-500 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive'}`}
+                            ${!isBypassMode && locationStatus === 'error' && isRestrictedType ? 'bg-slate-500 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive'}`}
                         >
-                            {locationStatus === 'checking' ? 'กำลังค้นหาตำแหน่ง...' : 'ถ่ายรูปบันทึกเวลา 📸'}
+                            {(!isBypassMode && locationStatus === 'checking') ? 'กำลังค้นหาตำแหน่ง...' : 'ถ่ายรูปบันทึกเวลา 📸'}
                         </button>
                     </div>
                 </div>
@@ -391,9 +393,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         </div>
         <div className="absolute top-8 left-0 right-0 flex justify-center gap-3">
             <button onClick={() => setStep('info')} className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-black border border-white/20 hover:bg-black/60 transition-all">ยกเลิก</button>
-            <div className="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
-                พิกัด: {currentDistance !== null ? `${Math.round(currentDistance)} ม.` : 'ตรวจแล้ว'} ❄️
-            </div>
+            {!isBypassMode && (
+                <div className="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
+                    พิกัด: {currentDistance !== null ? `${Math.round(currentDistance)} ม.` : 'ตรวจแล้ว'} ❄️
+                </div>
+            )}
         </div>
       </div>
     );
