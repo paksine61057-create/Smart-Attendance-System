@@ -46,7 +46,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   useEffect(() => {
     const init = async () => {
-        await syncSettingsFromCloud();
+        try {
+            await syncSettingsFromCloud();
+        } catch (e) {}
         const s = getSettings();
         setIsBypassMode(!!s.bypassLocation);
         
@@ -66,9 +68,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   }, [staffIdInput]);
 
   const validateLocation = async () => {
-    // หากเปิดโหมด Bypass ให้ถือว่าพิกัดข้ามไปเลย ไม่ต้องเรียกขอสิทธิ์ GPS
+    // ในโหมด Bypass จะไม่เรียกใช้งาน Geolocation API เลยเพื่อความรวดเร็ว
     if (isBypassMode) {
         setLocationStatus('found');
+        setLastLocation({ lat: 0, lng: 0 });
+        setCurrentDistance(0);
         return { lat: 0, lng: 0 };
     }
 
@@ -88,7 +92,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         s.officeLocation.lat, s.officeLocation.lng
       );
       
-      setLastLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+      const locData = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setLastLocation(locData);
       setCurrentDistance(dist);
       setCurrentAccuracy(pos.coords.accuracy);
 
@@ -98,9 +103,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       if (isRestrictedType && adjustedDist > s.maxDistanceMeters) {
           setLocationStatus('error');
           setLocationError(
-            <div className="space-y-3">
+            <div className="space-y-3 text-left">
                 <p className="font-black text-rose-300">อยู่นอกเขตโรงเรียน!</p>
-                <div className="bg-black/20 p-3 rounded-2xl space-y-1 text-left border border-white/10">
+                <div className="bg-black/20 p-3 rounded-2xl space-y-1 border border-white/10">
                     <p className="text-[10px] text-white/40 uppercase">ข้อมูลการตรวจสอบ:</p>
                     <p className="text-sm">ห่างจากจุดหมาย: <span className="text-rose-400 font-black">{Math.round(dist).toLocaleString()} เมตร</span></p>
                     <p className="text-xs">ค่าความแม่นยำ GPS: +/- {Math.round(pos.coords.accuracy)} ม.</p>
@@ -111,7 +116,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       }
 
       setLocationStatus('found');
-      return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      return locData;
     } catch (err: any) {
       setLocationStatus('error');
       setLocationError(err.message || "ไม่สามารถดึงข้อมูลพิกัดได้");
@@ -121,7 +126,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   const startCameraStep = async () => {
     if (isBypassMode) {
-        // หากเป็นโหมด Bypass ให้ไปหน้ากล้องทันที
+        setLocationStatus('found');
         setStep('camera');
     } else {
         const loc = await validateLocation();
@@ -137,13 +142,20 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       setIsCameraLoading(true);
       const startCamera = async () => {
         try {
-          stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+          stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+              facingMode: 'user',
+              width: { ideal: 640 },
+              height: { ideal: 480 }
+            } 
+          });
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
             videoRef.current.onloadedmetadata = () => setIsCameraLoading(false);
           }
         } catch (err) {
-          setLocationError("ไม่สามารถเปิดกล้องได้");
+          console.error("Camera error:", err);
+          setLocationError("ไม่สามารถเปิดกล้องได้ โปรดอนุญาตสิทธิ์กล้องในเบราว์เซอร์");
           setIsCameraLoading(false);
           setStep('info');
         }
@@ -154,42 +166,41 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   }, [step]);
 
   const capturePhoto = useCallback(async () => {
-    if (videoRef.current && canvasRef.current && currentUser) {
-      const context = canvasRef.current.getContext('2d');
-      const video = videoRef.current;
-      if (context && video.videoWidth) {
-        const TARGET_WIDTH = 160; 
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    
+    if (video && canvas && currentUser && video.videoWidth > 0) {
+      const context = canvas.getContext('2d');
+      if (context) {
+        // กำหนดขนาดรูปถ่ายให้มีขนาดที่เหมาะสม (Thumbnail size for database)
+        const TARGET_WIDTH = 320; 
         const scale = TARGET_WIDTH / video.videoWidth;
-        canvasRef.current.width = TARGET_WIDTH;
-        canvasRef.current.height = video.videoHeight * scale;
+        canvas.width = TARGET_WIDTH;
+        canvas.height = video.videoHeight * scale;
         
         const filter = CAMERA_FILTERS.find(f => f.id === activeFilterId);
         context.filter = filter?.css || 'none';
-        context.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
-        const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.3); 
+        const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
         setStep('verifying');
         
+        // วิเคราะห์ภาพด้วย Gemini AI
         const aiResult = await analyzeCheckInImage(imageBase64);
         
         const now = new Date();
         let status: any = 'Normal';
         
+        // ตรวจสอบสถานะการมาสาย/กลับก่อน
         if (attendanceType === 'arrival') {
-            const limit = new Date(); limit.setHours(8, 1, 0, 0);
-            status = now >= limit ? 'Late' : 'On Time';
+            const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 1, 0, 0);
+            status = now.getTime() >= limit.getTime() ? 'Late' : 'On Time';
         } else if (attendanceType === 'departure') {
-            const limit = new Date(); limit.setHours(16, 0, 0, 0);
-            status = now < limit ? 'Early Leave' : 'Normal';
+            const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0, 0);
+            status = now.getTime() < limit.getTime() ? 'Early Leave' : 'Normal';
         } else if (attendanceType === 'authorized_late') {
             status = 'Authorized Late';
-        } else if (attendanceType === 'duty') {
-            status = 'Duty';
-        } else if (attendanceType === 'sick_leave') {
-            status = 'Sick Leave';
-        } else if (attendanceType === 'personal_leave') {
-            status = 'Personal Leave';
-        } else {
+        } else if (['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(attendanceType)) {
             status = attendanceType.replace('_', ' ').split(' ').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
         }
 
@@ -211,7 +222,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         await saveRecord(record);
         setStep('result');
         localStorage.setItem('school_checkin_saved_staff_id', currentUser.id);
-        setTimeout(() => onSuccess(), 2500);
+        setTimeout(() => onSuccess(), 2000);
       }
     }
   }, [currentUser, attendanceType, reason, lastLocation, currentDistance, activeFilterId, onSuccess]);
@@ -242,8 +253,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
             )}
             
             <div className="mt-8 space-y-6">
-              <div className="space-y-2">
-                 <label className="block text-[10px] font-black text-amber-200 uppercase tracking-widest text-left ml-2">รหัสบุคลากร (Staff ID)</label>
+              <div className="space-y-2 text-left">
+                 <label className="block text-[10px] font-black text-amber-200 uppercase tracking-widest ml-2">รหัสบุคลากร (Staff ID)</label>
                  <div className="relative">
                     <input type="text" value={staffIdInput} onChange={(e) => setStaffIdInput(e.target.value.toUpperCase())}
                         className={`w-full px-4 py-5 rounded-3xl focus:ring-8 outline-none transition-all font-black text-2xl text-center tracking-[0.3em] shadow-2xl bg-white
@@ -267,7 +278,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                     
                     <div className="space-y-6">
                         <div className="space-y-4">
-                           <p className="text-[9px] font-black text-white/50 uppercase tracking-widest text-left ml-2">เลือกประเภทการลงเวลา (ลงชื่อได้ทุกที่)</p>
+                           <p className="text-[9px] font-black text-white/50 uppercase tracking-widest text-left ml-2">เลือกประเภทการลงเวลา</p>
                            <div className="space-y-3">
                                <div className="grid grid-cols-2 gap-4">
                                    <button onClick={() => setAttendanceType('arrival')} className={`p-6 rounded-[2rem] border-4 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${attendanceType === 'arrival' ? 'bg-white border-emerald-400 text-emerald-800 scale-105 shadow-2xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
@@ -283,7 +294,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                                    <span className="text-2xl">🕒</span>
                                    <div className="text-left">
                                       <span className="font-black text-base block">ขออนุญาตเข้าสาย</span>
-                                      <span className="text-[9px] font-bold opacity-70 uppercase tracking-tighter">(กรณีได้รับอนุญาตจากผู้อำนวยการแล้ว)</span>
+                                      <span className="text-[9px] font-bold opacity-70 uppercase tracking-tighter">(กรณีได้รับอนุญาตจากผู้บริหารแล้ว)</span>
                                    </div>
                                </button>
                            </div>
@@ -308,46 +319,48 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         </div>
 
                         {(isSpecialType || (attendanceType === 'departure' && new Date().getHours() < 16) || (attendanceType === 'arrival' && new Date().getHours() >= 8)) && (
-                            <div className="animate-in fade-in zoom-in">
-                                <label className="block text-[9px] font-black text-amber-200 uppercase tracking-widest text-left ml-2 mb-2">โปรดระบุเหตุผล / รายละเอียด</label>
+                            <div className="animate-in fade-in zoom-in text-left">
+                                <label className="block text-[9px] font-black text-amber-200 uppercase tracking-widest ml-2 mb-2">โปรดระบุเหตุผล / รายละเอียด</label>
                                 <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="w-full p-4 bg-white border-4 border-amber-200 rounded-2xl outline-none text-stone-800 font-bold shadow-lg focus:ring-4 focus:ring-amber-400/30 transition-all" placeholder="พิมพ์เหตุผลที่นี่..." rows={2} />
                             </div>
                         )}
 
                         <div className="mt-4 p-4 bg-black/30 rounded-2xl border border-white/10 backdrop-blur-md">
-                           {isBypassMode && (
+                           {isBypassMode ? (
                                <div className="flex items-center justify-center gap-2 text-blue-300 text-[10px] font-black uppercase bg-blue-900/40 p-3 rounded-xl border border-blue-500/30">
                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                                    โหมดลงเวลาพิเศษ: ถ่ายภาพเพื่อยืนยันตัวตน 📸
                                </div>
-                           )}
-                           
-                           {!isBypassMode && locationStatus === 'checking' && (
-                               <div className="flex items-center justify-center gap-3 text-white text-xs font-bold animate-pulse">
-                                   <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
-                                   กำลังรอสัญญาณ GPS ที่แม่นยำ...
-                               </div>
-                           )}
-                           {!isBypassMode && locationStatus === 'found' && (
-                               <div className="flex items-center justify-between">
-                                   <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-black uppercase">
-                                       <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                                       พิกัดถูกต้อง
-                                   </div>
-                                   {currentDistance !== null && (
-                                       <span className="text-white/60 text-[10px] font-bold tracking-widest">
-                                           ห่าง {Math.round(currentDistance)} ม. (+/- {currentAccuracy ? Math.round(currentAccuracy) : 0})
-                                       </span>
-                                   )}
-                               </div>
-                           )}
-                           {!isBypassMode && locationStatus === 'error' && (
-                               <div className="text-rose-200 text-xs font-black text-center space-y-4">
-                                   <div className="bg-rose-900/40 p-5 rounded-2xl border border-rose-400/30 text-left leading-relaxed">
-                                       {locationError}
-                                   </div>
-                                   <button onClick={validateLocation} className="text-[10px] bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-full border border-white/20 transition-all uppercase tracking-widest font-black">ลองตรวจสอบพิกัดใหม่อีกครั้ง 🔄</button>
-                               </div>
+                           ) : (
+                               <>
+                                {locationStatus === 'checking' && (
+                                    <div className="flex items-center justify-center gap-3 text-white text-xs font-bold animate-pulse">
+                                        <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
+                                        กำลังรอสัญญาณ GPS ที่แม่นยำ...
+                                    </div>
+                                )}
+                                {locationStatus === 'found' && (
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-emerald-400 text-[10px] font-black uppercase">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+                                            พิกัดถูกต้อง
+                                        </div>
+                                        {currentDistance !== null && (
+                                            <span className="text-white/60 text-[10px] font-bold tracking-widest">
+                                                ห่าง {Math.round(currentDistance)} ม. (+/- {currentAccuracy ? Math.round(currentAccuracy) : 0})
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                                {locationStatus === 'error' && (
+                                    <div className="text-rose-200 text-xs font-black text-center space-y-4">
+                                        <div className="bg-rose-900/40 p-5 rounded-2xl border border-rose-400/30 text-left leading-relaxed">
+                                            {locationError}
+                                        </div>
+                                        <button onClick={validateLocation} className="text-[10px] bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-full border border-white/20 transition-all uppercase tracking-widest font-black">ลองตรวจสอบพิกัดใหม่อีกครั้ง 🔄</button>
+                                    </div>
+                                )}
+                               </>
                            )}
                         </div>
                         
@@ -372,10 +385,26 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   if (step === 'camera') {
     return (
       <div className="max-w-md mx-auto bg-stone-900 rounded-[3rem] overflow-hidden shadow-2xl relative border-[12px] border-white ring-4 ring-rose-100">
-        <video ref={videoRef} autoPlay playsInline className="w-full h-[650px] object-cover" style={{ filter: CAMERA_FILTERS.find(f => f.id === activeFilterId)?.css || 'none' }} />
+        <div className="relative w-full h-[650px] bg-stone-800">
+            {isCameraLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-white z-10 bg-stone-900">
+                    <div className="w-12 h-12 border-4 border-t-rose-500 border-white/20 rounded-full animate-spin mb-4" />
+                    <p className="font-bold text-xs uppercase tracking-widest">กำลังเปิดกล้อง...</p>
+                </div>
+            )}
+            <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                muted
+                className="w-full h-full object-cover" 
+                style={{ filter: CAMERA_FILTERS.find(f => f.id === activeFilterId)?.css || 'none' }} 
+            />
+        </div>
         <canvas ref={canvasRef} className="hidden" />
-        <div className="absolute inset-x-0 bottom-0 p-10 bg-gradient-to-t from-black flex flex-col items-center">
-          <div className="flex gap-4 overflow-x-auto pb-8 w-full justify-center">
+        
+        <div className="absolute inset-x-0 bottom-0 p-10 bg-gradient-to-t from-black flex flex-col items-center z-20">
+          <div className="flex gap-4 overflow-x-auto pb-8 w-full justify-center scrollbar-hide">
             {CAMERA_FILTERS.map(f => (
                 <button key={f.id} onClick={() => setActiveFilterId(f.id)} className={`flex flex-col items-center min-w-[60px] transition-all ${activeFilterId === f.id ? 'scale-110 opacity-100' : 'opacity-60'}`}>
                     <div className="w-10 h-10 rounded-full border-2 border-white shadow-lg" style={{ backgroundColor: f.color }} />
@@ -383,20 +412,24 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                 </button>
             ))}
           </div>
-          <button onClick={capturePhoto} className="w-20 h-20 rounded-full bg-white/20 border-4 border-white/40 backdrop-blur-md flex items-center justify-center active:scale-90 transition-all shadow-2xl">
+          <button 
+            onClick={capturePhoto} 
+            disabled={isCameraLoading}
+            className="w-20 h-20 rounded-full bg-white/20 border-4 border-white/40 backdrop-blur-md flex items-center justify-center active:scale-90 transition-all shadow-2xl disabled:opacity-50"
+          >
              <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-inner"><div className="w-6 h-6 rounded-full bg-rose-600 animate-pulse" /></div>
           </button>
         </div>
-        <div className="absolute top-8 left-0 right-0 flex justify-center gap-3">
+        
+        <div className="absolute top-8 left-0 right-0 flex justify-center gap-3 z-20">
             <button onClick={() => setStep('info')} className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-black border border-white/20 hover:bg-black/60 transition-all">ยกเลิก</button>
-            {!isBypassMode && (
-                <div className="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
-                    พิกัด: {currentDistance !== null ? `${Math.round(currentDistance)} ม.` : 'ตรวจแล้ว'} ❄️
-                </div>
-            )}
-            {isBypassMode && (
+            {isBypassMode ? (
                 <div className="bg-blue-600/60 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
-                    โหมดบันทึกภาพ 📸
+                    โหมดบันทึกภาพพิเศษ 📸
+                </div>
+            ) : (
+                <div className="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
+                    ห่าง {currentDistance !== null ? Math.round(currentDistance) : '-'} ม. ❄️
                 </div>
             )}
         </div>
@@ -406,7 +439,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   if (step === 'verifying') return (
     <div className="max-w-md mx-auto p-20 bg-white/10 backdrop-blur-xl rounded-[3rem] text-white text-center flex flex-col items-center justify-center border-4 border-white/20 shadow-2xl">
-        <div className="w-24 h-24 border-8 border-t-amber-400 rounded-full animate-spin mb-8" />
+        <div className="w-24 h-24 border-8 border-t-amber-400 border-white/20 rounded-full animate-spin mb-8" />
         <h3 className="text-3xl font-black text-amber-200">บันทึกข้อมูล...</h3>
         <p className="font-bold opacity-60 mt-2 uppercase tracking-widest text-xs">AI กำลังวิเคราะห์ภาพถ่ายของคุณ ❄️</p>
     </div>
