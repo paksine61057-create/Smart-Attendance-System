@@ -38,19 +38,23 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [activeFilterId, setActiveFilterId] = useState('normal');
   const [todayHoliday, setTodayHoliday] = useState<string | null>(null);
   const [isBypassMode, setIsBypassMode] = useState(false);
+  const [isSyncingSettings, setIsSyncingSettings] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const isRestrictedType = ['arrival', 'departure', 'authorized_late'].includes(attendanceType);
 
+  // โหลดข้อมูลครั้งแรก
   useEffect(() => {
     const init = async () => {
+        setIsSyncingSettings(true);
         try {
             await syncSettingsFromCloud();
         } catch (e) {}
         const s = getSettings();
         setIsBypassMode(!!s.bypassLocation);
+        setIsSyncingSettings(false);
         
         const holiday = getHoliday(new Date());
         setTodayHoliday(holiday);
@@ -67,9 +71,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     } else setCurrentUser(null);
   }, [staffIdInput]);
 
-  const validateLocation = async () => {
-    // ในโหมด Bypass จะไม่เรียกใช้งาน Geolocation API เลยเพื่อความรวดเร็ว
-    if (isBypassMode) {
+  const validateLocation = async (bypassVal: boolean) => {
+    // ใช้ค่า bypassVal ที่ส่งเข้ามาเพื่อความแม่นยำล่าสุด
+    if (bypassVal) {
         setLocationStatus('found');
         setLastLocation({ lat: 0, lng: 0 });
         setCurrentDistance(0);
@@ -125,11 +129,28 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   };
 
   const startCameraStep = async () => {
-    if (isBypassMode) {
+    setIsSyncingSettings(true);
+    setLocationStatus('checking');
+    
+    try {
+        // บังคับซิงค์จาก Cloud ก่อนเริ่มทุกครั้ง เพื่อรับโหมด Bypass ล่าสุดจากแอดมิน
+        await syncSettingsFromCloud();
+    } catch (e) {
+        console.warn("Failed to re-sync settings, using local cached version.");
+    }
+    
+    const s = getSettings();
+    const currentBypass = !!s.bypassLocation;
+    setIsBypassMode(currentBypass);
+    setIsSyncingSettings(false);
+
+    if (currentBypass) {
         setLocationStatus('found');
+        setLastLocation({ lat: 0, lng: 0 });
+        setCurrentDistance(0);
         setStep('camera');
     } else {
-        const loc = await validateLocation();
+        const loc = await validateLocation(false);
         if (loc) {
             setStep('camera');
         }
@@ -172,7 +193,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     if (video && canvas && currentUser && video.videoWidth > 0) {
       const context = canvas.getContext('2d');
       if (context) {
-        // กำหนดขนาดรูปถ่ายให้มีขนาดที่เหมาะสม (Thumbnail size for database)
         const TARGET_WIDTH = 320; 
         const scale = TARGET_WIDTH / video.videoWidth;
         canvas.width = TARGET_WIDTH;
@@ -185,13 +205,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
         setStep('verifying');
         
-        // วิเคราะห์ภาพด้วย Gemini AI
         const aiResult = await analyzeCheckInImage(imageBase64);
         
         const now = new Date();
         let status: any = 'Normal';
         
-        // ตรวจสอบสถานะการมาสาย/กลับก่อน
         if (attendanceType === 'arrival') {
             const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 1, 0, 0);
             status = now.getTime() >= limit.getTime() ? 'Late' : 'On Time';
@@ -326,7 +344,12 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         )}
 
                         <div className="mt-4 p-4 bg-black/30 rounded-2xl border border-white/10 backdrop-blur-md">
-                           {isBypassMode ? (
+                           {isSyncingSettings ? (
+                               <div className="flex items-center justify-center gap-3 text-amber-200 text-xs font-bold animate-pulse">
+                                   <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
+                                   กำลังซิงค์การตั้งค่าล่าสุด...
+                               </div>
+                           ) : isBypassMode ? (
                                <div className="flex items-center justify-center gap-2 text-blue-300 text-[10px] font-black uppercase bg-blue-900/40 p-3 rounded-xl border border-blue-500/30">
                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
                                    โหมดลงเวลาพิเศษ: ถ่ายภาพเพื่อยืนยันตัวตน 📸
@@ -357,7 +380,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                                         <div className="bg-rose-900/40 p-5 rounded-2xl border border-rose-400/30 text-left leading-relaxed">
                                             {locationError}
                                         </div>
-                                        <button onClick={validateLocation} className="text-[10px] bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-full border border-white/20 transition-all uppercase tracking-widest font-black">ลองตรวจสอบพิกัดใหม่อีกครั้ง 🔄</button>
+                                        <button onClick={() => validateLocation(false)} className="text-[10px] bg-white/10 hover:bg-white/20 px-6 py-2.5 rounded-full border border-white/20 transition-all uppercase tracking-widest font-black">ลองตรวจสอบพิกัดใหม่อีกครั้ง 🔄</button>
                                     </div>
                                 )}
                                </>
@@ -366,11 +389,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         
                         <button 
                             onClick={startCameraStep}
-                            disabled={!isBypassMode && locationStatus === 'checking'}
+                            disabled={isSyncingSettings || (!isBypassMode && locationStatus === 'checking')}
                             className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3
-                            ${!isBypassMode && locationStatus === 'error' && isRestrictedType ? 'bg-slate-500 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive'}`}
+                            ${isSyncingSettings ? 'bg-slate-500 opacity-50 cursor-wait' : (!isBypassMode && locationStatus === 'error' && isRestrictedType) ? 'bg-slate-500 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive'}`}
                         >
-                            {(!isBypassMode && locationStatus === 'checking') ? 'กำลังค้นหาตำแหน่ง...' : 'ถ่ายรูปบันทึกเวลา 📸'}
+                            {isSyncingSettings ? 'กำลังเตรียมระบบ...' : (!isBypassMode && locationStatus === 'checking') ? 'กำลังค้นหาตำแหน่ง...' : 'ถ่ายรูปบันทึกเวลา 📸'}
                         </button>
                     </div>
                 </div>
