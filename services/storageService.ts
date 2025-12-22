@@ -79,7 +79,29 @@ export const getRecords = (): CheckInRecord[] => {
 export const clearRecords = () => localStorage.removeItem(RECORDS_KEY);
 
 export const saveSettings = async (settings: AppSettings) => {
+  // บันทึกลงเครื่องก่อน
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  
+  // ส่งขึ้น Cloud เพื่อให้เครื่องอื่นซิงค์ตาม
+  const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+  if (targetUrl) {
+    try {
+      const payload = {
+        action: 'updateSettings',
+        officeLocation: settings.officeLocation,
+        maxDistanceMeters: settings.maxDistanceMeters,
+        bypassLocation: !!settings.bypassLocation
+      };
+      await fetch(targetUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+    } catch (e) {
+      console.error("Failed to push settings to cloud", e);
+    }
+  }
 };
 
 export const getSettings = (): AppSettings & { lockLocation?: boolean } => {
@@ -93,7 +115,7 @@ export const getSettings = (): AppSettings & { lockLocation?: boolean } => {
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
     const s = getSettings();
     
-    // ถ้าตั้งค่า Lock พิกัดไว้ จะไม่ดึงพิกัดจาก Cloud มาทับ
+    // หากเครื่องนี้ล็อคพิกัดไว้เอง (Manual Override) จะไม่ดึงค่าจาก Cloud
     if (s.lockLocation) return false;
 
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
@@ -101,11 +123,14 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
     try {
         const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`);
         const cloud = await response.json();
-        if (cloud && cloud.officeLocation && cloud.officeLocation.lat !== 0) {
+        if (cloud) {
             const updatedSettings = { 
               ...s, 
-              officeLocation: cloud.officeLocation, 
-              maxDistanceMeters: cloud.maxDistanceMeters || s.maxDistanceMeters 
+              // อัปเดตพิกัดถ้ามีค่า
+              officeLocation: (cloud.officeLocation && cloud.officeLocation.lat !== 0) ? cloud.officeLocation : s.officeLocation, 
+              maxDistanceMeters: cloud.maxDistanceMeters !== undefined ? cloud.maxDistanceMeters : s.maxDistanceMeters,
+              // อัปเดต Bypass Mode จากแอดมิน (สำคัญมาก)
+              bypassLocation: cloud.bypassLocation !== undefined ? !!cloud.bypassLocation : s.bypassLocation
             };
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
             return true;
