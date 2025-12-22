@@ -73,7 +73,13 @@ export const saveRecord = async (record: CheckInRecord) => {
 
 export const getRecords = (): CheckInRecord[] => {
   const data = localStorage.getItem(RECORDS_KEY);
-  return data ? JSON.parse(data) : [];
+  if (!data) return [];
+  try {
+    const list = JSON.parse(data);
+    return Array.isArray(list) ? list : [];
+  } catch (e) {
+    return [];
+  }
 };
 
 export const clearRecords = () => localStorage.removeItem(RECORDS_KEY);
@@ -144,35 +150,35 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 };
 
                 let ts = Date.now();
-                const rawTs = getVal(['timestamp', 'id', 'Timestamp']);
-                if (rawTs && !isNaN(Number(rawTs)) && Number(rawTs) > 0) ts = Number(rawTs);
+                const rawTs = getVal(['timestamp', 'Timestamp', 'id']);
+                if (rawTs) {
+                    const parsed = Number(rawTs);
+                    if (!isNaN(parsed) && parsed > 1000000000) ts = parsed;
+                }
                 
-                // ค้นหาสถานะ (รองรับคอลัมน์ Status หรือ สถานะ)
-                const rawStatus = String(getVal(['status', 'สถานะ']) || "Normal").trim();
-                let status: any = rawStatus;
-                // Mapping ภาษาไทยกลับเป็นระบบ
-                if (rawStatus === 'มาตรงเวลา' || rawStatus === 'On Time') status = 'On Time';
-                else if (rawStatus === 'มาสาย' || rawStatus === 'Late') status = 'Late';
-                else if (rawStatus === 'ไปราชการ' || rawStatus === 'Duty') status = 'Duty';
-                else if (rawStatus === 'ลาป่วย' || rawStatus === 'Sick Leave') status = 'Sick Leave';
-                else if (rawStatus === 'ลากิจ' || rawStatus === 'Personal Leave') status = 'Personal Leave';
-                else if (rawStatus === 'ลาอื่นๆ' || rawStatus === 'Other Leave') status = 'Other Leave';
-                else if (rawStatus === 'อนุญาตสาย' || rawStatus === 'Authorized Late') status = 'Authorized Late';
-                else if (rawStatus === 'กลับก่อน' || rawStatus === 'Early Leave') status = 'Early Leave';
-
-                // ค้นหาประเภท
-                const rawType = String(getVal(['type', 'ประเภท']) || 'arrival').trim();
+                const rawType = String(getVal(['type', 'ประเภท', 'Type']) || '').toLowerCase();
+                const rawStatus = String(getVal(['status', 'สถานะ', 'Status']) || '').toLowerCase();
+                const combined = (rawType + " " + rawStatus);
+                
                 let type: AttendanceType = 'arrival';
-                if (rawType === 'กลับบ้าน' || rawType === 'departure' || rawType === 'Departure') type = 'departure';
-                else if (rawType === 'ไปราชการ' || rawType === 'duty' || rawType === 'Duty') type = 'duty';
-                else if (rawType === 'ลาป่วย' || rawType === 'sick_leave' || rawType === 'Sick Leave') type = 'sick_leave';
-                else if (rawType === 'ลากิจ' || rawType === 'personal_leave' || rawType === 'Personal Leave') type = 'personal_leave';
-                else if (rawType === 'ลาอื่นๆ' || rawType === 'other_leave' || rawType === 'Other Leave') type = 'other_leave';
-                else if (rawType === 'อนุญาตสาย' || rawType === 'authorized_late' || rawType === 'Authorized Late') type = 'authorized_late';
+                if (['กลับบ้าน', 'departure', 'เลิกงาน', 'ออก'].some(k => combined.includes(k))) type = 'departure';
+                else if (['ไปราชการ', 'duty', 'ราชการ'].some(k => combined.includes(k))) type = 'duty';
+                else if (['ลาป่วย', 'sick'].some(k => combined.includes(k))) type = 'sick_leave';
+                else if (['ลากิจ', 'personal'].some(k => combined.includes(k))) type = 'personal_leave';
+                else if (['ลาอื่นๆ', 'other'].some(k => combined.includes(k))) type = 'other_leave';
+                else if (['อนุญาตสาย', 'authorized'].some(k => combined.includes(k))) type = 'authorized_late';
+
+                let status: any = 'Normal';
+                if (['ตรงเวลา', 'on time'].some(k => combined.includes(k))) status = 'On Time';
+                else if (['สาย', 'late'].some(k => combined.includes(k))) status = 'Late';
+                else if (['กลับก่อน', 'early'].some(k => combined.includes(k))) status = 'Early Leave';
+                else if (type === 'departure') status = 'Normal';
+                else if (['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(type)) status = type.replace('_', ' ').split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+                else status = 'On Time';
 
                 return {
-                    id: String(getVal(['id', 'idพนักงาน', 'StaffID', 'Staff ID']) || ts),
-                    staffId: String(getVal(['staffId', 'staffid', 'idพนักงาน', 'StaffID', 'Staff ID']) || ""),
+                    id: String(getVal(['id', 'Staff ID', 'idพนักงาน']) || ts),
+                    staffId: String(getVal(['staffId', 'StaffID', 'Staff ID', 'idพนักงาน']) || ""),
                     name: String(getVal(['name', 'ชื่อ', 'ชื่อนามสกุล', 'Name']) || "ไม่ระบุชื่อ"),
                     role: String(getVal(['role', 'ตำแหน่ง', 'Role']) || ""),
                     timestamp: ts,
@@ -181,8 +187,9 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     reason: String(getVal(['reason', 'เหตุผล', 'Reason']) || ""),
                     location: { lat: 0, lng: 0 },
                     distanceFromBase: 0,
-                    aiVerification: String(getVal(['aiVerification', 'ai', 'การตรวจสอบ', 'AIVerification']) || ""),
-                    imageUrl: String(getVal(['imageUrl', 'image', 'รูปภาพ', 'url', 'Image']) || "")
+                    aiVerification: String(getVal(['aiVerification', 'ai', 'การตรวจสอบ']) || ""),
+                    imageUrl: String(getVal(['imageUrl', 'image', 'รูปภาพ', 'Photo', 'File Upload', 'ภาพถ่าย']) || ""),
+                    syncedToSheets: true
                 };
             });
         }
