@@ -118,7 +118,6 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
     if (!targetUrl) return false;
     
     try {
-        // เพิ่ม cache: 'no-store' เพื่อบังคับให้ดึงค่าใหม่จาก Server เสมอ
         const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`, {
           cache: 'no-store',
           headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
@@ -132,7 +131,6 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
               bypassLocation: cloud.bypassLocation !== undefined ? !!cloud.bypassLocation : s.bypassLocation
             };
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
-            // ส่ง Event แจ้งเตือนหน้าจอว่ามีการอัปเดตการตั้งค่า
             window.dispatchEvent(new Event('settings_updated'));
             return true;
         }
@@ -190,8 +188,9 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     return null;
                 };
                 let ts = Date.now();
-                const rawTs = getVal(['timestamp', 'Timestamp']);
+                const rawTs = getVal(['id', 'timestamp', 'Timestamp']);
                 if (rawTs && !isNaN(Number(rawTs))) ts = Number(rawTs);
+                
                 return {
                     id: String(getVal(['id', 'Timestamp']) || ts),
                     staffId: getVal(['staffId', 'staffid', 'Staff ID']) || "",
@@ -204,7 +203,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     location: { lat: 0, lng: 0 },
                     distanceFromBase: Number(getVal(['distance', 'Distance (m)']) || 0),
                     aiVerification: getVal(['aiVerification', 'AI Verification']) || "",
-                    imageUrl: String(getVal(['imageUrl', 'imageBase64']) || "")
+                    imageUrl: String(getVal(['imageUrl', 'imageBase64', 'Image']) || "")
                 };
             });
         }
