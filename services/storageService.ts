@@ -79,10 +79,8 @@ export const getRecords = (): CheckInRecord[] => {
 export const clearRecords = () => localStorage.removeItem(RECORDS_KEY);
 
 export const saveSettings = async (settings: AppSettings) => {
-  // บันทึกลงเครื่องก่อน
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   
-  // ส่งขึ้น Cloud เพื่อให้เครื่องอื่นซิงค์ตาม
   const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
   if (targetUrl) {
     try {
@@ -114,28 +112,31 @@ export const getSettings = (): AppSettings & { lockLocation?: boolean } => {
 
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
     const s = getSettings();
-    
-    // หากเครื่องนี้ล็อคพิกัดไว้เอง (Manual Override) จะไม่ดึงค่าจาก Cloud
     if (s.lockLocation) return false;
 
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     if (!targetUrl) return false;
+    
     try {
-        const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`);
+        // เพิ่ม cache: 'no-store' เพื่อบังคับให้ดึงค่าใหม่จาก Server เสมอ
+        const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`, {
+          cache: 'no-store',
+          headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' }
+        });
         const cloud = await response.json();
         if (cloud) {
             const updatedSettings = { 
               ...s, 
-              // อัปเดตพิกัดถ้ามีค่า
               officeLocation: (cloud.officeLocation && cloud.officeLocation.lat !== 0) ? cloud.officeLocation : s.officeLocation, 
               maxDistanceMeters: cloud.maxDistanceMeters !== undefined ? cloud.maxDistanceMeters : s.maxDistanceMeters,
-              // อัปเดต Bypass Mode จากแอดมิน (สำคัญมาก)
               bypassLocation: cloud.bypassLocation !== undefined ? !!cloud.bypassLocation : s.bypassLocation
             };
             localStorage.setItem(SETTINGS_KEY, JSON.stringify(updatedSettings));
+            // ส่ง Event แจ้งเตือนหน้าจอว่ามีการอัปเดตการตั้งค่า
+            window.dispatchEvent(new Event('settings_updated'));
             return true;
         }
-    } catch (e) { /* ignore */ }
+    } catch (e) { }
     return false;
 }
 
@@ -175,7 +176,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     const s = getSettings();
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     try {
-        const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
+        const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`, { cache: 'no-store' });
         const data = await response.json();
         if (Array.isArray(data)) {
             return data.map((r: any) => {

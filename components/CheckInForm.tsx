@@ -45,15 +45,20 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   const isRestrictedType = ['arrival', 'departure', 'authorized_late'].includes(attendanceType);
 
-  // โหลดข้อมูลครั้งแรก
+  // ฟังก์ชันอัปเดตสถานะ Bypass จาก Local Storage
+  const refreshBypassState = useCallback(() => {
+    const s = getSettings();
+    setIsBypassMode(!!s.bypassLocation);
+  }, []);
+
+  // โหลดข้อมูลครั้งแรกและฟัง Event การอัปเดต
   useEffect(() => {
     const init = async () => {
         setIsSyncingSettings(true);
         try {
             await syncSettingsFromCloud();
         } catch (e) {}
-        const s = getSettings();
-        setIsBypassMode(!!s.bypassLocation);
+        refreshBypassState();
         setIsSyncingSettings(false);
         
         const holiday = getHoliday(new Date());
@@ -62,7 +67,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         if (savedId) setStaffIdInput(savedId);
     };
     init();
-  }, []);
+
+    // ฟัง Event เมื่อ Background Sync ทำงานสำเร็จใน App.tsx
+    window.addEventListener('settings_updated', refreshBypassState);
+    return () => window.removeEventListener('settings_updated', refreshBypassState);
+  }, [refreshBypassState]);
 
   useEffect(() => {
     if (staffIdInput.length >= 5) {
@@ -71,9 +80,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     } else setCurrentUser(null);
   }, [staffIdInput]);
 
-  const validateLocation = async (bypassVal: boolean) => {
-    // ใช้ค่า bypassVal ที่ส่งเข้ามาเพื่อความแม่นยำล่าสุด
-    if (bypassVal) {
+  const validateLocation = async (forceBypass: boolean) => {
+    if (forceBypass) {
         setLocationStatus('found');
         setLastLocation({ lat: 0, lng: 0 });
         setCurrentDistance(0);
@@ -132,12 +140,10 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     setIsSyncingSettings(true);
     setLocationStatus('checking');
     
+    // ดึงค่าล่าสุดอีกครั้งก่อนเข้ากล้อง
     try {
-        // บังคับซิงค์จาก Cloud ก่อนเริ่มทุกครั้ง เพื่อรับโหมด Bypass ล่าสุดจากแอดมิน
         await syncSettingsFromCloud();
-    } catch (e) {
-        console.warn("Failed to re-sync settings, using local cached version.");
-    }
+    } catch (e) { }
     
     const s = getSettings();
     const currentBypass = !!s.bypassLocation;
@@ -350,9 +356,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                                    กำลังซิงค์การตั้งค่าล่าสุด...
                                </div>
                            ) : isBypassMode ? (
-                               <div className="flex items-center justify-center gap-2 text-blue-300 text-[10px] font-black uppercase bg-blue-900/40 p-3 rounded-xl border border-blue-500/30">
+                               <div className="flex items-center justify-center gap-2 text-blue-300 text-[10px] font-black uppercase bg-blue-900/40 p-3 rounded-xl border border-blue-500/30 animate-in zoom-in">
                                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                                   โหมดลงเวลาพิเศษ: ถ่ายภาพเพื่อยืนยันตัวตน 📸
+                                   แอดมินเปิดโหมดพิเศษ: ถ่ายภาพได้ทันที 📸
                                </div>
                            ) : (
                                <>

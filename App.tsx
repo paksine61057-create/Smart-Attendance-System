@@ -13,7 +13,7 @@ function App() {
   const [loginError, setLoginError] = useState('');
   const [isReady, setIsReady] = useState(false);
 
-  // Sync settings on load
+  // Sync settings on load and setup periodic sync
   useEffect(() => {
     const initConfig = async () => {
         try {
@@ -25,6 +25,13 @@ function App() {
         }
     };
     initConfig();
+
+    // Background Sync ทุก 30 วินาที เพื่อรับคำสั่ง Bypass จากแอดมิน
+    const interval = setInterval(() => {
+      syncSettingsFromCloud();
+    }, 30000);
+
+    return () => clearInterval(interval);
   }, []);
 
   const handleAdminLogin = (e: React.FormEvent) => {
