@@ -31,7 +31,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [reason, setReason] = useState(''); 
   const [locationError, setLocationError] = useState('');
   const [currentDistance, setCurrentDistance] = useState<number | null>(null);
-  const [isValidating, setIsValidating] = useState(false);
   const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState('normal');
   const [todayHoliday, setTodayHoliday] = useState<string | null>(null);
@@ -81,32 +80,15 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   const validateLocation = async () => {
     const s = getSettings();
-    const anywhereTypes: AttendanceType[] = ['duty', 'sick_leave', 'personal_leave', 'other_leave'];
-    
-    if (anywhereTypes.includes(attendanceType)) {
-        try {
-            const pos = await getCurrentPosition();
-            return { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        } catch { return { lat: 0, lng: 0 }; }
-    }
-
-    if (!s?.officeLocation) {
-      setLocationError("ระบบยังไม่ได้ตั้งค่าพิกัดจุดเช็คอิน");
-      return false;
-    }
-
     try {
       const pos = await getCurrentPosition();
-      const dist = getDistanceFromLatLonInMeters(pos.coords.latitude, pos.coords.longitude, s.officeLocation.lat, s.officeLocation.lng);
+      const dist = s?.officeLocation ? getDistanceFromLatLonInMeters(pos.coords.latitude, pos.coords.longitude, s.officeLocation.lat, s.officeLocation.lng) : 0;
       setCurrentDistance(dist);
-      if (dist > s.maxDistanceMeters) {
-        setLocationError(`ห่างเกินระยะที่กำหนด ${Math.round(dist)} ม. (จำกัด ${s.maxDistanceMeters} ม.)`);
-        return false;
-      }
       return { lat: pos.coords.latitude, lng: pos.coords.longitude };
     } catch {
-      setLocationError("ไม่สามารถระบุพิกัด GPS ได้");
-      return false;
+      // If GPS fails, return 0,0 and proceed anyway
+      setCurrentDistance(0);
+      return { lat: 0, lng: 0 };
     }
   };
 
@@ -115,7 +97,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const context = canvasRef.current.getContext('2d');
       const video = videoRef.current;
       if (context && video.videoWidth) {
-        // Reduced size further to fit Google Sheets cell limits (50k chars)
         const TARGET_WIDTH = 160; 
         const scale = TARGET_WIDTH / video.videoWidth;
         canvasRef.current.width = TARGET_WIDTH;
@@ -125,18 +106,12 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         context.filter = filter?.css || 'none';
         context.drawImage(video, 0, 0, canvasRef.current.width, canvasRef.current.height);
         
-        // Lower quality (0.3) to ensure base64 string length < 50,000
         const imageBase64 = canvasRef.current.toDataURL('image/jpeg', 0.3); 
         setStep('verifying');
         
+        // Parallel tasks: Analyze image and get location (doesn't block if location fails)
         const [aiResult, loc] = await Promise.all([analyzeCheckInImage(imageBase64), validateLocation()]);
         
-        const anywhereTypes: AttendanceType[] = ['duty', 'sick_leave', 'personal_leave', 'other_leave'];
-        if (!loc && !anywhereTypes.includes(attendanceType)) {
-            setStep('camera'); 
-            return;
-        }
-
         const now = new Date();
         let status: any = 'Normal';
         
@@ -231,11 +206,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                     </div>
                     
                     <div className="space-y-6">
-                        {/* Group 1: Normal Operation - Improved Layout for older staff */}
                         <div className="space-y-4">
-                           <p className="text-[9px] font-black text-white/50 uppercase tracking-widest text-left ml-2">การปฏิบัติงานปกติ (ตรวจสอบพิกัดโรงเรียน)</p>
+                           <p className="text-[9px] font-black text-white/50 uppercase tracking-widest text-left ml-2">เลือกประเภทการลงเวลา (ลงชื่อได้ทุกที่)</p>
                            <div className="space-y-3">
-                               {/* Row 1: Main actions side-by-side for maximum size */}
                                <div className="grid grid-cols-2 gap-4">
                                    <button onClick={() => setAttendanceType('arrival')} className={`p-6 rounded-[2rem] border-4 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${attendanceType === 'arrival' ? 'bg-white border-emerald-400 text-emerald-800 scale-105 shadow-2xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
                                        <span className="text-2xl">🌅</span>
@@ -246,7 +219,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                                        <span className="font-black text-base">กลับบ้าน</span>
                                    </button>
                                </div>
-                               {/* Row 2: Authorized late on its own row for clarity */}
                                <button onClick={() => setAttendanceType('authorized_late')} className={`w-full p-5 rounded-[2rem] border-4 transition-all duration-300 flex items-center justify-center gap-4 ${attendanceType === 'authorized_late' ? 'bg-white border-amber-400 text-amber-800 scale-105 shadow-2xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
                                    <span className="text-2xl">🕒</span>
                                    <div className="text-left">
@@ -257,9 +229,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                            </div>
                         </div>
 
-                        {/* Group 2: Leave & Duty */}
                         <div className="space-y-3 pt-2">
-                           <p className="text-[9px] font-black text-white/50 uppercase tracking-widest text-left ml-2">ลา / ไปราชการ (ลงเวลาที่ไหนก็ได้)</p>
+                           <p className="text-[9px] font-black text-white/50 uppercase tracking-widest text-left ml-2">ลา / ไปราชการ</p>
                            <div className="grid grid-cols-3 gap-3">
                                <button onClick={() => setAttendanceType('duty')} className={`p-4 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${attendanceType === 'duty' ? 'bg-white border-blue-400 text-blue-800 scale-105 shadow-xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
                                    <span className="text-lg">🏛️</span>
@@ -276,7 +247,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                            </div>
                         </div>
 
-                        {/* Reason Textarea - Shown for special types or late/early conditions */}
                         {(isSpecialType || (attendanceType === 'departure' && new Date().getHours() < 16) || (attendanceType === 'arrival' && new Date().getHours() >= 8)) && (
                             <div className="animate-in fade-in zoom-in">
                                 <label className="block text-[9px] font-black text-amber-200 uppercase tracking-widest text-left ml-2 mb-2">โปรดระบุเหตุผล / รายละเอียด</label>
@@ -286,8 +256,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
                         {locationError && <p className="text-rose-200 text-xs font-black animate-bounce bg-rose-900/40 p-3 rounded-xl border border-rose-400/30">📍 {locationError}</p>}
                         
-                        <button onClick={() => { setLocationError(''); setIsValidating(true); validateLocation().then(l => { setIsValidating(false); if(l) setStep('camera'); }); }} disabled={isValidating} className="w-full py-5 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all animate-pulse-ring-festive mt-4">
-                            {isValidating ? 'กำลังค้นหาพิกัด... ❄️' : 'ถ่ายรูปหน้าสวยๆ เพื่อบันทึก 📸'}
+                        <button onClick={() => { setLocationError(''); setStep('camera'); }} className="w-full py-5 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all animate-pulse-ring-festive mt-4">
+                            ถ่ายรูปหน้าสวยๆ เพื่อบันทึก 📸
                         </button>
                     </div>
                 </div>
@@ -319,7 +289,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         </div>
         <div className="absolute top-8 left-0 right-0 flex justify-center">
             <div className="bg-black/40 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
-                {['duty', 'sick_leave', 'personal_leave'].includes(attendanceType) ? 'พิกัดนอกสถานที่ OK 📍' : `ระยะห่าง: ${currentDistance ? Math.round(currentDistance) : '...'} เมตร ❄️`}
+                พร้อมบันทึกภาพ ❄️
             </div>
         </div>
       </div>
@@ -329,7 +299,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   if (step === 'verifying') return (
     <div className="max-w-md mx-auto p-20 bg-white/10 backdrop-blur-xl rounded-[3rem] text-white text-center flex flex-col items-center justify-center border-4 border-white/20 shadow-2xl">
         <div className="w-24 h-24 border-8 border-t-amber-400 rounded-full animate-spin mb-8" />
-        <h3 className="text-3xl font-black text-amber-200">ตรวจสอบใบหน้า...</h3>
+        <h3 className="text-3xl font-black text-amber-200">บันทึกข้อมูล...</h3>
         <p className="font-bold opacity-60 mt-2 uppercase tracking-widest text-xs">AI กำลังวิเคราะห์ภาพถ่ายของคุณ ❄️</p>
     </div>
   );

@@ -106,12 +106,23 @@
       /* Print Styles */
       @media print {
         .no-print { display: none !important; }
-        body { background: white !important; }
+        body { background: white !important; margin: 0 !important; padding: 0 !important; }
         #root, main { padding: 0 !important; margin: 0 !important; }
         .snowflake { display: none !important; }
         @page {
-          size: A4;
+          size: A4 portrait;
           margin: 0;
+        }
+        .print-page-a4 {
+          margin: 0 !important;
+          padding: 8mm !important;
+          width: 210mm !important;
+          height: 297mm !important;
+          box-shadow: none !important;
+          border: none !important;
+          page-break-after: avoid !important;
+          overflow: hidden !important;
+          box-sizing: border-box !important;
         }
       }
     </style>
