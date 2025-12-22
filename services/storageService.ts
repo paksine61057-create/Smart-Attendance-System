@@ -84,8 +84,9 @@ export const saveSettings = async (settings: AppSettings) => {
 
 export const getSettings = (): AppSettings & { lockLocation?: boolean } => {
   const data = localStorage.getItem(SETTINGS_KEY);
-  let s = data ? JSON.parse(data) : { officeLocation: null, maxDistanceMeters: 100, googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL, lockLocation: false };
+  let s = data ? JSON.parse(data) : { officeLocation: null, maxDistanceMeters: 100, googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL, lockLocation: false, bypassLocation: false };
   if (!s.googleSheetUrl || s.googleSheetUrl === "") s.googleSheetUrl = DEFAULT_GOOGLE_SHEET_URL;
+  if (s.bypassLocation === undefined) s.bypassLocation = false;
   return s;
 };
 

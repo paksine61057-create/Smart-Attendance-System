@@ -37,6 +37,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState('normal');
   const [todayHoliday, setTodayHoliday] = useState<string | null>(null);
+  const [isBypassMode, setIsBypassMode] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -46,6 +47,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   useEffect(() => {
     const init = async () => {
         await syncSettingsFromCloud();
+        const s = getSettings();
+        setIsBypassMode(!!s.bypassLocation);
+        
         const holiday = getHoliday(new Date());
         setTodayHoliday(holiday);
         const savedId = localStorage.getItem('school_checkin_saved_staff_id');
@@ -85,7 +89,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const buffer = pos.coords.accuracy / 2;
       const adjustedDist = Math.max(0, dist - buffer);
 
-      if (isRestrictedType && adjustedDist > s.maxDistanceMeters) {
+      // ตรวจสอบระยะทาง แต่ถ้าเปิด Bypass Mode จะปล่อยผ่านทุุกกรณี
+      if (isRestrictedType && adjustedDist > s.maxDistanceMeters && !s.bypassLocation) {
           setLocationStatus('error');
           setLocationError(
             <div className="space-y-3">
@@ -108,7 +113,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       setLocationStatus('found');
       return { lat: pos.coords.latitude, lng: pos.coords.longitude };
     } catch (err: any) {
-      if (isRestrictedType) {
+      // แม้จะ Error GPS แต่ถ้าเปิด Bypass ก็ยังให้ผ่านไปถ่ายรูปได้
+      if (isRestrictedType && !s.bypassLocation) {
           setLocationStatus('error');
           setLocationError(err.message || "ไม่สามารถดึงข้อมูลพิกัดได้");
           return null;
@@ -122,7 +128,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   const startCameraStep = async () => {
     const loc = await validateLocation();
-    if (loc) {
+    if (loc || isBypassMode) {
         setStep('camera');
     }
   };
@@ -311,6 +317,13 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         )}
 
                         <div className="mt-4 p-4 bg-black/30 rounded-2xl border border-white/10 backdrop-blur-md">
+                           {isBypassMode && (
+                               <div className="flex items-center justify-center gap-2 text-blue-300 text-[10px] font-black uppercase mb-3 bg-blue-900/40 p-2 rounded-xl border border-blue-500/30">
+                                   <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                                   Bypass Mode: ปิดการตรวจสอบพิกัดโดยแอดมิน
+                               </div>
+                           )}
+                           
                            {locationStatus === 'checking' && (
                                <div className="flex items-center justify-center gap-3 text-white text-xs font-bold animate-pulse">
                                    <div className="w-4 h-4 border-2 border-t-amber-400 rounded-full animate-spin" />
@@ -344,7 +357,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                             onClick={startCameraStep}
                             disabled={locationStatus === 'checking'}
                             className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3
-                            ${locationStatus === 'error' && isRestrictedType ? 'bg-slate-500 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive'}`}
+                            ${locationStatus === 'error' && isRestrictedType && !isBypassMode ? 'bg-slate-500 opacity-50 cursor-not-allowed' : 'bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive'}`}
                         >
                             {locationStatus === 'checking' ? 'กำลังค้นหาตำแหน่ง...' : 'ถ่ายรูปบันทึกเวลา 📸'}
                         </button>

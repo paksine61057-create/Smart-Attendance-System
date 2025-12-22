@@ -93,7 +93,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     setSettingsState(prev => ({ ...prev, googleSheetUrl: e.target.value }));
   };
 
-  // Fix: Added handleClearAllRecords to clear all local records with confirmation
   const handleClearAllRecords = () => {
     if (window.confirm('คุณแน่ใจหรือไม่ว่าต้องการล้างข้อมูลทั้งหมดในเครื่อง? (ข้อมูลบน Cloud จะไม่หาย)')) {
       clearRecords();
@@ -102,7 +101,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     }
   };
 
-  // Fix: Added handleAddStaff to validate and save a new staff member
   const handleAddStaff = () => {
     setStaffError('');
     if (!newStaff.id.trim() || !newStaff.name.trim() || !newStaff.role.trim()) {
@@ -120,7 +118,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     }
   };
 
-  // Fix: Added handleRemoveStaff to delete a staff member with confirmation
   const handleRemoveStaff = (id: string) => {
     if (window.confirm('คุณต้องการลบรายชื่อบุคลากรนี้ออกจากระบบใช่หรือไม่?')) {
       removeStaff(id);
@@ -128,7 +125,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     }
   };
 
-  // Fix: Added handleAddHoliday to validate and save a new holiday period
   const handleAddHoliday = () => {
     if (!newHolidayStartDate || !newHolidayName) {
       alert('กรุณาระบุวันที่เริ่มต้นและชื่อรายการวันหยุด');
@@ -144,7 +140,6 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
     setIsError(false);
   };
 
-  // Fix: Added handleRemoveHoliday to delete a holiday entry with confirmation
   const handleRemoveHoliday = (id: string) => {
     if (window.confirm('ต้องการลบรายการวันหยุดนี้ใช่หรือไม่?')) {
       removeSpecialHoliday(id);
@@ -206,17 +201,32 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                     </div>
                 </div>
 
-                <div className="flex items-center gap-3 mb-6 p-4 bg-blue-50 rounded-2xl border border-blue-100">
-                    <input 
-                      type="checkbox" 
-                      id="lockLoc" 
-                      checked={settings.lockLocation} 
-                      onChange={(e) => setSettingsState(prev => ({ ...prev, lockLocation: e.target.checked }))}
-                      className="w-5 h-5 rounded accent-blue-600"
-                    />
-                    <label htmlFor="lockLoc" className="text-xs font-black text-blue-800 cursor-pointer">
-                        🔒 ล็อกพิกัด (ห้ามพิกัดจาก Cloud มาทับค่าที่ตั้งไว้นี้)
-                    </label>
+                <div className="space-y-3 mb-6">
+                    <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-2xl border border-blue-100">
+                        <input 
+                          type="checkbox" 
+                          id="lockLoc" 
+                          checked={settings.lockLocation} 
+                          onChange={(e) => setSettingsState(prev => ({ ...prev, lockLocation: e.target.checked }))}
+                          className="w-5 h-5 rounded accent-blue-600"
+                        />
+                        <label htmlFor="lockLoc" className="text-xs font-black text-blue-800 cursor-pointer">
+                            🔒 ล็อกพิกัด (ห้ามพิกัดจาก Cloud มาทับค่าที่ตั้งไว้นี้)
+                        </label>
+                    </div>
+
+                    <div className="flex items-center gap-3 p-4 bg-rose-50 rounded-2xl border border-rose-100">
+                        <input 
+                          type="checkbox" 
+                          id="bypassLoc" 
+                          checked={settings.bypassLocation} 
+                          onChange={(e) => setSettingsState(prev => ({ ...prev, bypassLocation: e.target.checked }))}
+                          className="w-5 h-5 rounded accent-rose-600"
+                        />
+                        <label htmlFor="bypassLoc" className="text-xs font-black text-rose-800 cursor-pointer">
+                            🚀 ปิดระบบตรวจสอบพิกัด (อนุญาตให้ลงชื่อได้ทุกที่ชั่วคราว)
+                        </label>
+                    </div>
                 </div>
 
                 <div className="space-y-3">
