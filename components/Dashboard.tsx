@@ -186,7 +186,6 @@ const Dashboard: React.FC = () => {
     const [year, month] = selectedDate.split('-').map(Number);
     const now = new Date();
     
-    // กำหนดวันสุดท้ายที่จะนับ (ถ้าเป็นเดือนปัจจุบันให้นับถึงแค่วันนี้)
     const lastDayToCount = (year === now.getFullYear() && (month - 1) === now.getMonth()) 
         ? now.getDate() 
         : new Date(year, month, 0).getDate();
@@ -195,11 +194,9 @@ const Dashboard: React.FC = () => {
     for (let d = 1; d <= lastDayToCount; d++) {
       const dateObj = new Date(year, month - 1, d);
       
-      // กรองเฉพาะวันที่ >= 11 ธันวาคม 2025 เป็นต้นไปตามโจทย์
       if (dateObj.getTime() < CUTOFF_TIMESTAMP) continue;
       
       const dayOfWeek = dateObj.getDay();
-      // ไม่นับวันเสาร์-อาทิตย์ และวันหยุดพิเศษ
       if (dayOfWeek !== 0 && dayOfWeek !== 6 && !getHoliday(dateObj)) {
         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         workingDays.push(dateStr);
@@ -215,13 +212,9 @@ const Dashboard: React.FC = () => {
     return staffList.map((staff, index) => {
       const staffRecords = monthlyRecords.filter(r => r.staffId === staff.id);
       
-      // สถิติมาสาย
       const lateRecords = staffRecords.filter(r => r.status === 'Late');
       const lateDates = lateRecords.map(r => new Date(r.timestamp).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })).join(', ');
       
-      // สถิติไม่ลงเวลา
-      // เงื่อนไข: ในวันทำงานปกตินั้น คนนี้ "ไม่มี" เรคคอร์ดที่ระบุว่า มาทำงาน, ไปราชการ หรือ ลา ทุกประเภท
-      // (Admin Assist จะถูกรวมอยู่ในประเภทเหล่านี้อยู่แล้ว จึงจะไม่ถูกนับเป็นขาดหากแอดมินลงเวลาให้)
       let absentCount = 0;
       workingDays.forEach(wDate => {
         const hasArrivalOrLeaveRecord = staffRecords.some(r => {
@@ -268,7 +261,6 @@ const Dashboard: React.FC = () => {
         }
     });
 
-    // ตั้งค่าฟอนต์และระยะห่างแบบบีบอัดมากเพื่อให้พอใน 1 หน้า
     doc.setFontSize(9.0);
     doc.text('โรงเรียนประจักษ์ศิลปาคม', 105, 6, { align: 'center' });
     doc.setFontSize(7.5);
@@ -321,9 +313,17 @@ const Dashboard: React.FC = () => {
     const [year, month, day] = selectedDate.split('-').map(Number);
     const now = new Date();
     const timestamp = new Date(year, month - 1, day, now.getHours(), now.getMinutes()).getTime();
+    
+    // Mapping internal status to readable string
+    let statusLabel: any = 'Other Leave';
+    if (type === 'duty') statusLabel = 'Duty';
+    else if (type === 'sick_leave') statusLabel = 'Sick Leave';
+    else if (type === 'personal_leave') statusLabel = 'Personal Leave';
+    else if (type === 'authorized_late') statusLabel = 'Authorized Late';
+
     const record: CheckInRecord = {
       id: crypto.randomUUID(), staffId: staff.id, name: staff.name, role: staff.role, timestamp, type,
-      status: type === 'duty' ? 'Duty' : (type === 'sick_leave' ? 'Sick Leave' : (type === 'personal_leave' ? 'Personal Leave' : 'Other Leave')),
+      status: statusLabel,
       reason: `Admin recorded: ${type.replace('_', ' ')}`, location: { lat: 0, lng: 0 }, distanceFromBase: 0, aiVerification: 'Admin Direct Authorized'
     };
     await saveRecord(record); await syncData();
@@ -517,10 +517,11 @@ const Dashboard: React.FC = () => {
                           <div key={s.id} className="p-5 bg-white rounded-3xl border border-stone-100 shadow-sm transition-all hover:shadow-md">
                               <div className="font-bold text-stone-700 text-xs">{s.name}</div>
                               <div className="text-[10px] text-stone-400 font-bold mt-1 uppercase mb-4">{s.id} • {s.role}</div>
-                              <div className="grid grid-cols-3 gap-1.5">
+                              <div className="grid grid-cols-2 gap-2">
                                   <button onClick={() => handleQuickLeave(s, 'personal_leave')} className="py-2 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-xl text-[9px] font-black transition-colors border border-amber-100">ลากิจ</button>
                                   <button onClick={() => handleQuickLeave(s, 'sick_leave')} className="py-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-xl text-[9px] font-black transition-colors border border-rose-100">ลาป่วย</button>
-                                  <button onClick={() => handleQuickLeave(s, 'duty')} className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black transition-colors border border-blue-100">ราชการ</button>
+                                  <button onClick={() => handleQuickLeave(s, 'duty')} className="py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[9px] font-black transition-colors border border-blue-100">ไปราชการ</button>
+                                  <button onClick={() => handleQuickLeave(s, 'authorized_late')} className="py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-[9px] font-black transition-colors border border-indigo-100">อนุญาตสาย</button>
                               </div>
                           </div>
                       ))}
