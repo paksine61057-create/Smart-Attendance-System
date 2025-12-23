@@ -12,7 +12,6 @@ const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzUoPM
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
-    // ส่ง Base64 ไปประมวลผลที่ Server (GAS)
     const cleanImageBase64 = record.imageUrl || "";
 
     const payload = {
@@ -39,7 +38,7 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
 
     const response = await fetch(url, {
       method: 'POST',
-      mode: 'no-cors', // สำคัญ: เพื่อเลี่ยงปัญหา CORS กับ Google Apps Script
+      mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
@@ -102,7 +101,6 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
         JSON.parse(text);
         return true;
     } catch (e) { 
-      console.warn("Sync settings failed (CORS or format)", e);
       return false; 
     }
 }
@@ -138,20 +136,47 @@ export const deleteRecord = async (record: CheckInRecord) => {
   return true;
 };
 
-// ฟังก์ชันช่วยแปลงวันที่ภาษาไทยจาก Google Sheet กลับเป็น Timestamp
 const parseThaiDateTimeToTimestamp = (dateStr: string, timeStr: string): number => {
     try {
         if (!dateStr || !timeStr) return 0;
-        // คาดหวังรูปแบบ "วว/ดด/ปปปป" (พ.ศ.)
-        const [d, m, y] = dateStr.split('/').map(Number);
-        // คาดหวังรูปแบบ "ชม:นท:วท"
-        const [h, min, s] = timeStr.replace('.', ':').split(':').map(Number);
-        if (isNaN(d) || isNaN(m) || isNaN(y)) return 0;
-        // พ.ศ. -> ค.ศ.
-        return new Date(y - 543, m - 1, d, h || 0, min || 0, s || 0).getTime();
+        const [d, m, yBE] = dateStr.split('/').map(Number);
+        const timeClean = timeStr.replace('.', ':');
+        const [h, min, s] = timeClean.split(':').map(Number);
+        if (isNaN(d) || isNaN(m) || isNaN(yBE)) return 0;
+        const yCE = yBE - 543;
+        return new Date(yCE, m - 1, d, h || 0, min || 0, s || 0).getTime();
     } catch (e) {
         return 0;
     }
+};
+
+/**
+ * ฟังก์ชันช่วยแปลงลิงก์ Google Drive ให้เป็น Direct Image Link
+ */
+const formatDriveImageUrl = (url: string): string => {
+  if (!url || typeof url !== 'string') return url;
+  
+  // ตรวจสอบว่าเป็นลิงก์ Google Drive หรือไม่
+  if (url.includes('drive.google.com')) {
+    let fileId = '';
+    
+    // พยายามดึง ID จากรูปแบบ /file/d/FILE_ID/...
+    const dMatch = url.match(/\/d\/([^/]+)/);
+    if (dMatch) fileId = dMatch[1];
+    
+    // พยายามดึง ID จากรูปแบบ ?id=FILE_ID
+    if (!fileId) {
+      const idMatch = url.match(/[?&]id=([^&]+)/);
+      if (idMatch) fileId = idMatch[1];
+    }
+    
+    // ถ้าเจอ File ID ให้แปลงเป็น Thumbnail URL (รองรับการแสดงผลใน img tag ได้ดีที่สุด)
+    if (fileId) {
+      return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+    }
+  }
+  
+  return url;
 };
 
 export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
@@ -167,7 +192,6 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 const typeStr = String(r.type || r.Type || '');
                 let type: AttendanceType = 'arrival';
                 
-                // ขยาย Keyword ในการตรวจจับประเภทการลงเวลาให้ครอบคลุมกรณีแอดมินพิมพ์เอง
                 if (typeStr.includes('กลับ') || typeStr.includes('เลิก') || typeStr.includes('ออก')) {
                     type = 'departure';
                 } else if (typeStr.includes('ราชการ')) {
@@ -182,7 +206,6 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     type = 'arrival';
                 }
 
-                // จัดการ Timestamp ในกรณีที่แอดมินแก้ไข Sheet โดยตรง
                 let ts = Number(r.timestamp || r.Timestamp);
                 if (isNaN(ts) || ts === 0) {
                     const dateVal = r.date || r.Date || '';
@@ -190,10 +213,15 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     ts = parseThaiDateTimeToTimestamp(dateVal, timeVal);
                 }
 
-                // จัดการ URL รูปภาพ
                 let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || "";
-                if (rawImg && typeof rawImg === 'string' && rawImg.length > 50) {
-                    if (!rawImg.startsWith('http') && !rawImg.startsWith('data:image')) {
+                
+                // จัดการประเภทของรูปภาพ (Base64 vs URLs)
+                if (rawImg && typeof rawImg === 'string') {
+                    if (rawImg.startsWith('http')) {
+                        // ถ้าเป็น URL ให้ตรวจสอบและแปลงกรณีเป็น Drive Link
+                        rawImg = formatDriveImageUrl(rawImg);
+                    } else if (rawImg.length > 50 && !rawImg.startsWith('data:image')) {
+                        // ถ้าเป็น Base64 ที่ไม่มี Header
                         rawImg = `data:image/jpeg;base64,${rawImg}`;
                     }
                 }
@@ -213,7 +241,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     imageUrl: rawImg,
                     syncedToSheets: true
                 };
-            }).filter(rec => rec.timestamp > 0); // กรองเฉพาะรายการที่มีเวลาสมเหตุสมผล
+            }).filter(rec => rec.timestamp > 0);
         }
     } catch (e) { 
       console.error("Fetch global records error", e); 
