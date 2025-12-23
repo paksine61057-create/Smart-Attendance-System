@@ -98,9 +98,14 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     try {
         const response = await fetch(targetUrl);
-        await response.json();
+        // เช็คว่า response กลับมาเป็น JSON หรือไม่
+        const text = await response.text();
+        JSON.parse(text);
         return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+      console.warn("Sync settings failed (CORS or format)", e);
+      return false; 
+    }
 }
 
 export const syncUnsyncedRecords = async () => {
@@ -110,7 +115,9 @@ export const syncUnsyncedRecords = async () => {
     const settings = getSettings();
     const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     for (const record of unsynced) {
-        if (await sendToGoogleSheets(record, targetUrl)) record.syncedToSheets = true;
+        if (await sendToGoogleSheets(record, targetUrl)) {
+          record.syncedToSheets = true;
+        }
     }
     localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
 };
@@ -121,11 +128,13 @@ export const deleteRecord = async (record: CheckInRecord) => {
   const settings = getSettings();
   const targetUrl = settings.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
   if (targetUrl) {
-    await fetch(targetUrl, {
-      method: 'POST',
-      mode: 'no-cors',
-      body: JSON.stringify({ action: 'deleteRecord', id: record.timestamp })
-    });
+    try {
+      await fetch(targetUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({ action: 'deleteRecord', id: record.timestamp })
+      });
+    } catch (e) { console.error("Delete on cloud failed", e); }
   }
   return true;
 };
@@ -135,10 +144,12 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     try {
         const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
+        if (!response.ok) throw new Error("Server responded with error");
+        
         const data = await response.json();
         if (Array.isArray(data)) {
             return data.map((r: any) => {
-                const typeStr = String(r.type || '');
+                const typeStr = String(r.type || r.Type || '');
                 let type: AttendanceType = 'arrival';
                 if (typeStr.includes('กลับบ้าน')) type = 'departure';
                 else if (typeStr.includes('ราชการ')) type = 'duty';
@@ -146,30 +157,36 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (typeStr.includes('กิจ')) type = 'personal_leave';
                 else if (typeStr.includes('อนุญาตสาย')) type = 'authorized_late';
 
-                let rawImg = r.imageUrl || r.imageurl || r.imageBase64 || r.imagebase64 || "";
-                if (rawImg && typeof rawImg === 'string' && rawImg.length > 30) {
+                // จัดการ URL รูปภาพ (ImageUrl จาก Sheet)
+                let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || "";
+                
+                // ถ้าเป็นลิงก์ Drive หรือลิงก์ภายนอก ให้ใช้ได้เลย
+                // ถ้าเป็น Base64 ที่ไม่มี Prefix ให้เติม Prefix
+                if (rawImg && typeof rawImg === 'string' && rawImg.length > 50) {
                     if (!rawImg.startsWith('http') && !rawImg.startsWith('data:image')) {
                         rawImg = `data:image/jpeg;base64,${rawImg}`;
                     }
                 }
 
                 return {
-                    id: String(r.timestamp), 
-                    staffId: String(r.staffId || r.staffid || ""),
-                    name: String(r.name || ""),
-                    role: String(r.role || ""),
-                    timestamp: Number(r.timestamp),
+                    id: String(r.timestamp || r.Timestamp || Date.now() + Math.random()), 
+                    staffId: String(r.staffId || r.staffid || r["Staff ID"] || ""),
+                    name: String(r.name || r.Name || ""),
+                    role: String(r.role || r.Role || ""),
+                    timestamp: Number(r.timestamp || r.Timestamp),
                     type: type,
-                    status: (r.status || 'Normal') as any,
-                    reason: String(r.reason || ""),
+                    status: (r.status || r.Status || 'Normal') as any,
+                    reason: String(r.reason || r.Reason || ""),
                     location: { lat: 0, lng: 0 },
-                    distanceFromBase: Number(r.distancefrombase) || 0,
-                    aiVerification: String(r.aiverification || ""),
+                    distanceFromBase: Number(r.distancefrombase || r["Distance (m)"]) || 0,
+                    aiVerification: String(r.aiverification || r["AI Verification"] || ""),
                     imageUrl: rawImg,
                     syncedToSheets: true
                 };
             });
         }
-    } catch (e) { console.error("Fetch error", e); }
+    } catch (e) { 
+      console.error("Fetch global records error", e); 
+    }
     return [];
 };
