@@ -98,7 +98,6 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     try {
         const response = await fetch(targetUrl);
-        // เช็คว่า response กลับมาเป็น JSON หรือไม่
         const text = await response.text();
         JSON.parse(text);
         return true;
@@ -139,6 +138,22 @@ export const deleteRecord = async (record: CheckInRecord) => {
   return true;
 };
 
+// ฟังก์ชันช่วยแปลงวันที่ภาษาไทยจาก Google Sheet กลับเป็น Timestamp
+const parseThaiDateTimeToTimestamp = (dateStr: string, timeStr: string): number => {
+    try {
+        if (!dateStr || !timeStr) return 0;
+        // คาดหวังรูปแบบ "วว/ดด/ปปปป" (พ.ศ.)
+        const [d, m, y] = dateStr.split('/').map(Number);
+        // คาดหวังรูปแบบ "ชม:นท:วท"
+        const [h, min, s] = timeStr.replace('.', ':').split(':').map(Number);
+        if (isNaN(d) || isNaN(m) || isNaN(y)) return 0;
+        // พ.ศ. -> ค.ศ.
+        return new Date(y - 543, m - 1, d, h || 0, min || 0, s || 0).getTime();
+    } catch (e) {
+        return 0;
+    }
+};
+
 export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     const s = getSettings();
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
@@ -151,17 +166,32 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
             return data.map((r: any) => {
                 const typeStr = String(r.type || r.Type || '');
                 let type: AttendanceType = 'arrival';
-                if (typeStr.includes('กลับบ้าน')) type = 'departure';
-                else if (typeStr.includes('ราชการ')) type = 'duty';
-                else if (typeStr.includes('ป่วย')) type = 'sick_leave';
-                else if (typeStr.includes('กิจ')) type = 'personal_leave';
-                else if (typeStr.includes('อนุญาตสาย')) type = 'authorized_late';
-
-                // จัดการ URL รูปภาพ (ImageUrl จาก Sheet)
-                let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || "";
                 
-                // ถ้าเป็นลิงก์ Drive หรือลิงก์ภายนอก ให้ใช้ได้เลย
-                // ถ้าเป็น Base64 ที่ไม่มี Prefix ให้เติม Prefix
+                // ขยาย Keyword ในการตรวจจับประเภทการลงเวลาให้ครอบคลุมกรณีแอดมินพิมพ์เอง
+                if (typeStr.includes('กลับ') || typeStr.includes('เลิก') || typeStr.includes('ออก')) {
+                    type = 'departure';
+                } else if (typeStr.includes('ราชการ')) {
+                    type = 'duty';
+                } else if (typeStr.includes('ป่วย')) {
+                    type = 'sick_leave';
+                } else if (typeStr.includes('กิจ')) {
+                    type = 'personal_leave';
+                } else if (typeStr.includes('อนุญาต') || typeStr.includes('สาย')) {
+                    type = 'authorized_late';
+                } else if (typeStr.includes('มา') || typeStr.includes('ทำงาน') || typeStr.includes('เข้า')) {
+                    type = 'arrival';
+                }
+
+                // จัดการ Timestamp ในกรณีที่แอดมินแก้ไข Sheet โดยตรง
+                let ts = Number(r.timestamp || r.Timestamp);
+                if (isNaN(ts) || ts === 0) {
+                    const dateVal = r.date || r.Date || '';
+                    const timeVal = r.time || r.Time || '';
+                    ts = parseThaiDateTimeToTimestamp(dateVal, timeVal);
+                }
+
+                // จัดการ URL รูปภาพ
+                let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || "";
                 if (rawImg && typeof rawImg === 'string' && rawImg.length > 50) {
                     if (!rawImg.startsWith('http') && !rawImg.startsWith('data:image')) {
                         rawImg = `data:image/jpeg;base64,${rawImg}`;
@@ -169,11 +199,11 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 }
 
                 return {
-                    id: String(r.timestamp || r.Timestamp || Date.now() + Math.random()), 
+                    id: String(ts || Date.now() + Math.random()), 
                     staffId: String(r.staffId || r.staffid || r["Staff ID"] || ""),
                     name: String(r.name || r.Name || ""),
                     role: String(r.role || r.Role || ""),
-                    timestamp: Number(r.timestamp || r.Timestamp),
+                    timestamp: ts,
                     type: type,
                     status: (r.status || r.Status || 'Normal') as any,
                     reason: String(r.reason || r.Reason || ""),
@@ -183,7 +213,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     imageUrl: rawImg,
                     syncedToSheets: true
                 };
-            });
+            }).filter(rec => rec.timestamp > 0); // กรองเฉพาะรายการที่มีเวลาสมเหตุสมผล
         }
     } catch (e) { 
       console.error("Fetch global records error", e); 

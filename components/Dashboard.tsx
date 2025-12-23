@@ -12,20 +12,26 @@ const SCHOOL_LOGO_URL = 'https://img5.pic.in.th/file/secure-sv1/5bc66fd0-c76e-41
 /**
  * วันที่เริ่มต้นนับสถิติ: 11 ธันวาคม 2568 (ค.ศ. 2025)
  */
-const STATS_START_DATE = new Date(2025, 11, 11); 
+const STATS_START_DATE = new Date(2025, 11, 11, 0, 0, 0); 
+
+const getLocalDateString = (d: Date) => {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 
 const Dashboard: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabType>('today');
   const [allRecords, setAllRecords] = useState<CheckInRecord[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().toISOString().substring(0, 7)); // YYYY-MM
+  
+  const todayStr = useMemo(() => getLocalDateString(new Date()), []);
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
+  const [selectedMonth, setSelectedMonth] = useState<string>(new Date().getFullYear() + '-' + String(new Date().getMonth() + 1).padStart(2, '0')); 
   
   // --- Admin Manual Check-in States ---
   const [manualStaffId, setManualStaffId] = useState('');
   const [manualType, setManualType] = useState<AttendanceType>('arrival');
-  const [manualDate, setManualDate] = useState(new Date().toISOString().split('T')[0]);
-  const [manualTime, setManualTime] = useState(new Date().toLocaleTimeString('th-TH', { hour12: false, hour: '2-digit', minute: '2-digit' }).replace(':', '.').split('.')[0] + ':' + new Date().getMinutes().toString().padStart(2, '0'));
+  const [manualDate, setManualDate] = useState(todayStr);
+  const [manualTime, setManualTime] = useState(new Date().toLocaleTimeString('th-TH', { hour12: false, hour: '2-digit', minute: '2-digit' }));
   const [manualReason, setManualReason] = useState('');
   const [isSavingManual, setIsSavingManual] = useState(false);
 
@@ -42,13 +48,14 @@ const Dashboard: React.FC = () => {
       const mergedMap = new Map<string, CheckInRecord>();
       
       const getSig = (r: CheckInRecord) => {
-        const d = new Date(r.timestamp);
-        return `${String(r.staffId || '').toUpperCase()}_${r.type}_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+        // เปลี่ยนมาใช้ Timestamp เป็นส่วนหนึ่งของ Signature เพื่อป้องกันการเขียนทับข้อมูลในวันเดียวกันแต่คนละเวลา
+        return `${String(r.staffId || '').toUpperCase()}_${r.type}_${r.timestamp}`;
       };
       
       cloud.forEach(r => mergedMap.set(getSig(r), r));
       local.forEach(l => {
         const sig = getSig(l);
+        // หากมีรูปภาพหรือเป็นรายการใหม่ ให้ใช้ข้อมูลจาก Local (กรณี Offline)
         if (!mergedMap.has(sig) || (l.imageUrl && l.imageUrl.length > (mergedMap.get(sig)?.imageUrl?.length || 0))) {
           mergedMap.set(sig, l);
         }
@@ -69,8 +76,7 @@ const Dashboard: React.FC = () => {
   const filteredToday = useMemo(() => {
     return allRecords.filter(r => {
       const d = new Date(r.timestamp);
-      const dateString = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      return dateString === selectedDate;
+      return getLocalDateString(d) === selectedDate;
     }).sort((a, b) => b.timestamp - a.timestamp);
   }, [allRecords, selectedDate]);
 
@@ -87,19 +93,19 @@ const Dashboard: React.FC = () => {
       let presentCount = 0;
 
       for (let day = 1; day <= lastDay; day++) {
-        const checkDate = new Date(year, month - 1, day);
+        const checkDate = new Date(year, month - 1, day, 0, 0, 0);
         const holiday = getHoliday(checkDate);
         if (holiday) continue; 
-        if (checkDate < STATS_START_DATE) continue;
+        if (checkDate.getTime() < STATS_START_DATE.getTime()) continue;
+        
         const now = new Date();
-        const todayAtStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        if (checkDate > todayAtStart) continue;
+        const todayAtStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+        if (checkDate.getTime() > todayAtStart.getTime()) continue;
 
         const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
         const dayRecs = allRecords.filter(r => {
           const d = new Date(r.timestamp);
-          const rDate = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          return rDate === dateStr && r.staffId?.toUpperCase() === staff.id.toUpperCase();
+          return getLocalDateString(d) === dateStr && r.staffId?.toUpperCase() === staff.id.toUpperCase();
         });
 
         const arrival = dayRecs.filter(r => ATTENDANCE_START_TYPES.includes(r.type))
@@ -322,14 +328,14 @@ const Dashboard: React.FC = () => {
                   <p className="text-rose-600 font-black mt-1">ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                </div>
                <div className="overflow-x-auto">
-                 <table className="w-full border-collapse border border-stone-800 text-[13px]">
+                 <table className="w-full border-collapse border border-stone-800 text-[13px] table-fixed">
                     <thead>
                        <tr className="bg-white text-stone-800 border-b-2 border-stone-800">
-                          <th className="border border-stone-800 p-3 w-12 text-center font-black">ที่</th>
-                          <th className="border border-stone-800 p-3 text-left font-black">ชื่อ - นามสกุล</th>
-                          <th className="border border-stone-800 p-3 text-center font-black">ตำแหน่ง</th>
-                          <th className="border border-stone-800 p-3 text-center font-black">เวลามา</th>
-                          <th className="border border-stone-800 p-3 text-center font-black">เวลากลับ</th>
+                          <th className="border border-stone-800 p-3 w-[50px] text-center font-black">ที่</th>
+                          <th className="border border-stone-800 p-3 text-left font-black w-[220px]">ชื่อ - นามสกุล</th>
+                          <th className="border border-stone-800 p-3 text-center font-black w-[180px]">ตำแหน่ง</th>
+                          <th className="border border-stone-800 p-3 text-center font-black w-[100px]">เวลามา</th>
+                          <th className="border border-stone-800 p-3 text-center font-black w-[100px]">เวลากลับ</th>
                           <th className="border border-stone-800 p-3 text-left font-black">หมายเหตุ</th>
                        </tr>
                     </thead>
@@ -337,15 +343,15 @@ const Dashboard: React.FC = () => {
                        {officialDailyData.map(d => (
                           <tr key={d.no} className="hover:bg-stone-50">
                              <td className="border border-stone-300 p-2 text-center text-stone-500 font-bold">{d.no}</td>
-                             <td className="border border-stone-300 p-2">
+                             <td className="border border-stone-300 p-2 whitespace-nowrap overflow-hidden text-ellipsis">
                                 <div className="font-bold text-stone-800">{d.name}</div>
                              </td>
-                             <td className="border border-stone-300 p-2 text-center">
+                             <td className="border border-stone-300 p-2 text-center whitespace-nowrap overflow-hidden text-ellipsis">
                                 <div className="text-[10px] text-stone-500 font-bold uppercase tracking-tighter">{d.role}</div>
                              </td>
                              <td className={`border border-stone-300 p-2 text-center font-mono font-bold ${d.arrival !== '-' ? 'text-emerald-700' : 'text-stone-300'}`}>{d.arrival}</td>
                              <td className={`border border-stone-300 p-2 text-center font-mono font-bold ${d.departure !== '-' ? 'text-blue-700' : 'text-stone-300'}`}>{d.departure}</td>
-                             <td className="border border-stone-300 p-2 text-[11px] italic text-rose-600 font-bold leading-tight">{d.remark}</td>
+                             <td className="border border-stone-300 p-2 text-[11px] italic text-rose-600 font-bold leading-tight break-words">{d.remark}</td>
                           </tr>
                        ))}
                     </tbody>
@@ -382,31 +388,31 @@ const Dashboard: React.FC = () => {
              </div>
              
              <div className="overflow-x-auto">
-                <table className="w-full border-collapse border border-stone-800 text-[12px]">
+                <table className="w-full border-collapse border border-stone-800 text-[12px] table-fixed">
                   <thead>
                     <tr className="bg-white text-stone-800 border-b-2 border-stone-800">
-                      <th className="border border-stone-800 p-3 w-10 text-center font-black">ที่</th>
-                      <th className="border border-stone-800 p-3 text-left font-black">ชื่อ-นามสกุล</th>
-                      <th className="border border-stone-800 p-3 text-center font-black">ตำแหน่ง</th>
-                      <th className="border border-stone-800 p-3 text-center font-black">มาสาย (ครั้ง)</th>
+                      <th className="border border-stone-800 p-3 w-[40px] text-center font-black">ที่</th>
+                      <th className="border border-stone-800 p-3 text-left font-black w-[200px]">ชื่อ-นามสกุล</th>
+                      <th className="border border-stone-800 p-3 text-center font-black w-[150px]">ตำแหน่ง</th>
+                      <th className="border border-stone-800 p-3 text-center font-black w-[80px]">มาสาย (ครั้ง)</th>
                       <th className="border border-stone-800 p-3 text-center min-w-[110px] font-black">วันที่มาสาย</th>
-                      <th className="border border-stone-800 p-3 text-center font-black">ไม่ลงเวลา (ครั้ง)</th>
+                      <th className="border border-stone-800 p-3 text-center font-black w-[80px]">ไม่ลงเวลา (ครั้ง)</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-stone-200">
                     {monthlyStats.map(s => (
                       <tr key={s.id} className="hover:bg-stone-50 transition-colors">
                         <td className="border border-stone-300 p-2 text-center font-bold text-stone-400">{s.no}</td>
-                        <td className="border border-stone-300 p-2 text-left">
+                        <td className="border border-stone-300 p-2 text-left whitespace-nowrap overflow-hidden text-ellipsis">
                            <div className="font-bold text-stone-800">{s.name}</div>
                         </td>
-                        <td className="border border-stone-300 p-2 text-center">
+                        <td className="border border-stone-300 p-2 text-center whitespace-nowrap overflow-hidden text-ellipsis">
                            <div className="text-[9px] text-stone-400 font-bold uppercase tracking-tighter">{s.role}</div>
                         </td>
                         <td className="border border-stone-300 p-2 text-center font-mono font-black text-rose-600">
                           {s.lateCount > 0 ? s.lateCount : '-'}
                         </td>
-                        <td className="border border-stone-300 p-2 text-center text-stone-600 font-bold text-[10px] leading-tight whitespace-normal break-words max-w-[180px]">
+                        <td className="border border-stone-300 p-2 text-center text-stone-600 font-bold text-[10px] leading-tight break-words">
                            {s.lateDates}
                         </td>
                         <td className="border border-stone-300 p-2 text-center font-mono font-bold text-stone-500">
@@ -449,7 +455,7 @@ const Dashboard: React.FC = () => {
            <div className="p-4 md:p-10 bg-white border-2 border-stone-100 rounded-[3rem] shadow-inner max-w-2xl mx-auto">
               <div className="text-center mb-10">
                  <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4 text-rose-600">
-                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121(2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
+                   <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
                  </div>
                  <h2 className="text-2xl font-black text-stone-800 tracking-tight">ลงเวลาแทนบุคลากร</h2>
                  <p className="text-stone-500 font-bold text-xs uppercase tracking-widest mt-1">Manual Attendance Entry ❄️</p>
