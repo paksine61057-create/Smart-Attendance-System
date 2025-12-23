@@ -102,7 +102,6 @@ const Dashboard: React.FC = () => {
   }, [allRecords, selectedDate]);
 
   const dailyAnalysis = useMemo(() => {
-    // แก้ไข: รวมทุกประเภทการลงเวลา (รวมลา) เข้าไปในเซตผู้ที่มาปฏิบัติหน้าที่/ลงเวลาแล้ว
     const presentIds = new Set(filteredToday.filter(r => ATTENDANCE_START_TYPES.includes(r.type)).map(r => r.staffId?.toUpperCase()));
     const absentStaff = staffList.filter(s => !presentIds.has(s.id.toUpperCase()));
     
@@ -187,16 +186,12 @@ const Dashboard: React.FC = () => {
       for (let d = 1; d <= daysInMonth; d++) {
         const checkDate = new Date(year, month - 1, d);
         
-        // เงื่อนไข 1: นับสถิติตั้งแต่วันที่ 11 ธ.ค. 2568 เป็นต้นมา
         if (checkDate < STATS_START_DATE) continue;
-        // เงื่อนไข 2: ไม่นับวันที่ยังมาไม่ถึง
         if (checkDate > todayDate) continue;
 
         const holiday = getHoliday(checkDate);
-        // เงื่อนไข 3: นับสถิติเฉพาะวันปกติ ไม่นับวันหยุด
         if (!holiday) {
           const dayRecords = staffRecords.filter(r => new Date(r.timestamp).getDate() === d);
-          // แก้ไข: ใช้ ATTENDANCE_START_TYPES เพื่อรวมการลาทุกประเภทเข้าไปในสถิติว่าลงเวลาแล้ว
           const arrivalRecord = dayRecords.find(r => ATTENDANCE_START_TYPES.includes(r.type));
 
           if (!arrivalRecord) {
@@ -222,10 +217,19 @@ const Dashboard: React.FC = () => {
 
   const officialDailyData = useMemo(() => {
     return staffList.map((staff, idx) => {
+      // ดึงข้อมูลรายการทั้งหมดของวันนี้สำหรับบุคคลนี้
       const dayRecs = filteredToday.filter(r => r.staffId?.toUpperCase() === staff.id.toUpperCase());
-      // แก้ไข: ใช้ ATTENDANCE_START_TYPES สำหรับดึงข้อมูลเวลามาปฏิบัติงาน
-      const arrival = dayRecs.find(r => ATTENDANCE_START_TYPES.includes(r.type));
-      const departure = dayRecs.find(r => r.type === 'departure');
+      
+      // เรียงจากเก่าไปใหม่ เพื่อหา 'เวลามา' ครั้งแรกสุด
+      const earliestFirst = [...dayRecs].sort((a, b) => a.timestamp - b.timestamp);
+      // เรียงจากใหม่ไปเก่า เพื่อหา 'เวลากลับ' ครั้งล่าสุด
+      const latestFirst = [...dayRecs].sort((a, b) => b.timestamp - a.timestamp);
+
+      // หา 'เวลามา': ดึงรายการที่อยู่ในกลุ่มเริ่มงาน ครั้งที่เช้าที่สุด
+      const arrival = earliestFirst.find(r => ATTENDANCE_START_TYPES.includes(r.type));
+      
+      // หา 'เวลากลับ': ดึงรายการที่ระบุว่า 'กลับบ้าน' ครั้งที่ล่าสุดที่สุด
+      const departure = latestFirst.find(r => r.type === 'departure');
       
       let remark = '';
       if (arrival?.status === 'Late' || arrival?.status === 'Early Leave' || arrival?.type === 'duty' || arrival?.type.includes('leave')) {
