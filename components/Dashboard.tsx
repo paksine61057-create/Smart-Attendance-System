@@ -44,14 +44,15 @@ const Dashboard: React.FC = () => {
       const local = getRecords();
       const mergedMap = new Map<string, CheckInRecord>();
       
+      // ใช้ Signature ที่รวม Timestamp เพื่อความแม่นยำสูงสุดในการแยกรายการ
       const getSig = (r: CheckInRecord) => {
-        const dStr = getLocalDateString(new Date(r.timestamp));
-        return `${String(r.staffId || '').toUpperCase()}_${r.type}_${dStr}`;
+        return `${String(r.staffId || '').toUpperCase()}_${r.type}_${r.timestamp}`;
       };
       
       cloud.forEach(r => mergedMap.set(getSig(r), r));
       local.forEach(l => {
         const sig = getSig(l);
+        // เลือกข้อมูลที่มีรูปภาพ หรือข้อมูลที่ใหม่กว่า/ยาวกว่ากรณีเกิดการซ้ำซ้อน
         if (!mergedMap.has(sig) || (l.imageUrl && l.imageUrl.length > (mergedMap.get(sig)?.imageUrl?.length || 0))) {
           mergedMap.set(sig, l);
         }
@@ -350,7 +351,7 @@ const Dashboard: React.FC = () => {
                                  </div>
                                )}
                             </td>
-                            <td className="p-5 font-bold text-stone-700 whitespace-nowrap min-w-[200px]">{r.name}</td>
+                            <td className="p-5 font-bold text-stone-700 whitespace-nowrap min-w-[180px]">{r.name}</td>
                             <td className="p-5">
                               <span className={`px-4 py-1.5 rounded-full text-[10px] font-black shadow-sm ${r.status === 'Late' ? 'bg-rose-100 text-rose-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                 {getStatusLabel(r.status)}
@@ -379,8 +380,8 @@ const Dashboard: React.FC = () => {
                       <table className="w-full text-left">
                         <thead>
                           <tr className="bg-stone-50 text-[10px] font-black uppercase text-stone-400 border-b">
-                            <th className="p-5 w-[250px]">ชื่อ-นามสกุล</th>
-                            <th className="p-5 w-[180px]">ตำแหน่ง</th>
+                            <th className="p-5 w-[220px]">ชื่อ-นามสกุล</th>
+                            <th className="p-5 w-[150px]">ตำแหน่ง</th>
                             <th className="p-5">บันทึกสถานะพิเศษโดยแอดมิน</th>
                           </tr>
                         </thead>

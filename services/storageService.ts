@@ -151,31 +151,30 @@ const parseThaiDateTimeToTimestamp = (dateStr: string, timeStr: string): number 
 };
 
 /**
- * ฟังก์ชันช่วยแปลงลิงก์ Google Drive ให้เป็น Direct Image Link
+ * ฟังก์ชันช่วยแปลงลิงก์ Google Drive ให้เป็น Direct Image Link (Thumbnail)
+ * รองรับทั้งรูปแบบ /d/ และรูปแบบ uc?id=...
  */
 const formatDriveImageUrl = (url: string): string => {
-  if (!url || typeof url !== 'string') return url;
+  if (!url || typeof url !== 'string' || url === '-' || url.startsWith('Image Error')) return '';
   
-  // ตรวจสอบว่าเป็นลิงก์ Google Drive หรือไม่
   if (url.includes('drive.google.com')) {
     let fileId = '';
     
-    // พยายามดึง ID จากรูปแบบ /file/d/FILE_ID/...
-    const dMatch = url.match(/\/d\/([^/]+)/);
-    if (dMatch) fileId = dMatch[1];
-    
-    // พยายามดึง ID จากรูปแบบ ?id=FILE_ID
-    if (!fileId) {
-      const idMatch = url.match(/[?&]id=([^&]+)/);
+    // 1. ตรวจสอบรูปแบบ /d/FILE_ID
+    const dMatch = url.match(/\/d\/([^/&#?]+)/);
+    if (dMatch) {
+      fileId = dMatch[1];
+    } else {
+      // 2. ตรวจสอบรูปแบบ ?id=FILE_ID หรือ &id=FILE_ID (รวมถึงลิงก์แบบ uc?export=view&id=...)
+      const idMatch = url.match(/[?&]id=([^&#?]+)/);
       if (idMatch) fileId = idMatch[1];
     }
     
-    // ถ้าเจอ File ID ให้แปลงเป็น Thumbnail URL (รองรับการแสดงผลใน img tag ได้ดีที่สุด)
     if (fileId) {
+      // ใช้ thumbnail API เพื่อการแสดงผลที่เสถียรที่สุดในเบราว์เซอร์
       return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
     }
   }
-  
   return url;
 };
 
@@ -213,17 +212,17 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     ts = parseThaiDateTimeToTimestamp(dateVal, timeVal);
                 }
 
-                let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || "";
+                // พยายามดึงฟิลด์รูปภาพจากทุกคีย์ที่เป็นไปได้ (GAS ส่ง imageUrl มาให้)
+                let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || r["ImageUrl"] || "";
                 
-                // จัดการประเภทของรูปภาพ (Base64 vs URLs)
                 if (rawImg && typeof rawImg === 'string') {
                     if (rawImg.startsWith('http')) {
-                        // ถ้าเป็น URL ให้ตรวจสอบและแปลงกรณีเป็น Drive Link
                         rawImg = formatDriveImageUrl(rawImg);
                     } else if (rawImg.length > 50 && !rawImg.startsWith('data:image')) {
-                        // ถ้าเป็น Base64 ที่ไม่มี Header
                         rawImg = `data:image/jpeg;base64,${rawImg}`;
                     }
+                } else {
+                    rawImg = "";
                 }
 
                 return {
