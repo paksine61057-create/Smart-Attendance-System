@@ -73,7 +73,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
             videoRef.current.onloadedmetadata = () => setIsCameraLoading(false);
           }
         } catch (err) {
-          console.error("Camera error:", err);
           alert("ไม่สามารถเปิดกล้องได้ โปรดอนุญาตสิทธิ์กล้องในเบราว์เซอร์");
           setIsCameraLoading(false);
           setStep('info');
@@ -91,7 +90,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     if (video && canvas && currentUser && video.videoWidth > 0) {
       const context = canvas.getContext('2d');
       if (context) {
-        // ถ่ายภาพ
         const TARGET_WIDTH = 320; 
         const scale = TARGET_WIDTH / video.videoWidth;
         canvas.width = TARGET_WIDTH;
@@ -111,26 +109,28 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         let distance = 0;
 
         try {
+            // ดึงพิกัดที่แม่นยำที่สุด
             const pos = await getAccuratePosition();
             currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
             
-            // ตรวจสอบพิกัดถ้าเปิดโหมด GPS
-            if (settings.locationMode === 'gps' && (attendanceType === 'arrival' || attendanceType === 'departure')) {
+            // ตรวจสอบพิกัดถ้าเปิดโหมด GPS (เช็คทุกลักษณะที่ต้องมาโรงเรียน)
+            const needsLocation = ['arrival', 'departure', 'authorized_late'].includes(attendanceType);
+            
+            if (settings.locationMode === 'gps' && needsLocation) {
               distance = getDistanceFromLatLonInMeters(
                 currentPos.lat, currentPos.lng,
                 settings.officeLocation.lat, settings.officeLocation.lng
               );
               
               if (distance > settings.maxDistanceMeters) {
-                alert(`❌ อยู่นอกพื้นที่โรงเรียน!\nระยะห่างของคุณ: ${Math.round(distance)} เมตร\nระยะที่อนุญาต: ${settings.maxDistanceMeters} เมตร\nกรุณาลงเวลาภายในพื้นที่โรงเรียนเท่านั้น`);
+                alert(`❌ อยู่นอกพื้นที่โรงเรียน!\nระยะห่างของคุณ: ${Math.round(distance)} เมตร\nระยะที่อนุญาต: ${settings.maxDistanceMeters} เมตร\n\nโปรดบันทึกเวลาภายในพื้นที่โรงเรียนเท่านั้น`);
                 setStep('camera');
                 return;
               }
             }
         } catch (e: any) {
-            console.error("GPS Error:", e);
             if (settings.locationMode === 'gps') {
-              alert("❌ ไม่สามารถระบุพิกัดได้!\nโปรดเปิด GPS และอนุญาตสิทธิ์การเข้าถึงตำแหน่งก่อนลงเวลา");
+              alert("❌ ไม่สามารถระบุพิกัดได้!\nโปรดตรวจสอบว่าเปิด GPS และอนุญาตสิทธิ์ให้เบราว์เซอร์เข้าถึงตำแหน่งแล้ว");
               setStep('camera');
               return;
             }

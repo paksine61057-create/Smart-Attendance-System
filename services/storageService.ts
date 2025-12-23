@@ -4,9 +4,6 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-/** 
- * วาง Web App URL ของคุณที่นี่ (URL ที่ได้จากการ Deploy Google Apps Script)
- */
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzUoPM2lDmpMbCwfryM1EuiZDQnFPuF4paqayK5XWL0nNF_MYGmPcOS7AEjDTNEaM1q/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
@@ -31,14 +28,14 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Status": record.status,
       "Reason": record.reason || '-',
       "Location": "บันทึกผ่านระบบ AI Web App",
-      "lat": record.location.lat, // ส่งพิกัดจริงไปยัง GAS
-      "lng": record.location.lng, // ส่งพิกัดจริงไปยัง GAS
+      "lat": record.location.lat,
+      "lng": record.location.lng,
       "Distance (m)": record.distanceFromBase || 0,
       "AI Verification": record.aiVerification || '-',
       "imageBase64": cleanImageBase64
     };
 
-    const response = await fetch(url, {
+    await fetch(url, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -85,6 +82,25 @@ export const getRecords = (): CheckInRecord[] => {
 
 export const saveSettings = async (settings: AppSettings) => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  
+  // ส่งการตั้งค่าไปบันทึกบน Cloud ทันที เพื่อให้พิกัดใน Script Properties อัปเดตตาม
+  if (settings.googleSheetUrl) {
+    try {
+      await fetch(settings.googleSheetUrl, {
+        method: 'POST',
+        mode: 'no-cors',
+        body: JSON.stringify({
+          action: 'saveSettings',
+          lat: settings.officeLocation.lat,
+          lng: settings.officeLocation.lng,
+          maxDistance: settings.maxDistanceMeters,
+          locationMode: settings.locationMode // ส่งโหมดไปด้วย
+        })
+      });
+    } catch (e) {
+      console.error("Failed to push settings to cloud", e);
+    }
+  }
 };
 
 export const getSettings = (): AppSettings => {
@@ -115,11 +131,13 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
            const cloudSettings = await response.json();
            if (cloudSettings.officeLocation) {
               const current = getSettings();
-              saveSettings({
+              // อัปเดตค่าจาก Cloud โดยยังคง URL เดิมไว้
+              localStorage.setItem(SETTINGS_KEY, JSON.stringify({
                 ...current,
                 officeLocation: cloudSettings.officeLocation,
-                maxDistanceMeters: cloudSettings.maxDistanceMeters || current.maxDistanceMeters
-              });
+                maxDistanceMeters: cloudSettings.maxDistanceMeters || current.maxDistanceMeters,
+                locationMode: cloudSettings.locationMode || current.locationMode
+              }));
            }
         }
         return true;
@@ -165,6 +183,7 @@ const parseThaiDateTimeToTimestamp = (dateStr: string, timeStr: string): number 
         const [d, m, yBE] = dateStr.split('/').map(Number);
         const timeClean = timeStr.replace('.', ':');
         const [h, min, s] = timeClean.split(':').map(Number);
+        // Fix: Changed 'iNaN' to 'isNaN'
         if (isNaN(d) || isNaN(m) || isNaN(yBE)) return 0;
         const yCE = yBE - 543;
         return new Date(yCE, m - 1, d, h || 0, min || 0, s || 0).getTime();
@@ -173,30 +192,18 @@ const parseThaiDateTimeToTimestamp = (dateStr: string, timeStr: string): number 
     }
 };
 
-/**
- * ฟังก์ชันช่วยแปลงลิงก์ Google Drive ให้เป็น Direct Image Link (Thumbnail)
- * แก้ไขให้รองรับลิงก์รูปแบบ uc?id=... ของ GAS ได้ดียิ่งขึ้น
- */
 const formatDriveImageUrl = (url: string): string => {
   if (!url || typeof url !== 'string' || url === '-' || url.startsWith('Image Error')) return '';
-  
   if (url.includes('drive.google.com')) {
     let fileId = '';
-    
-    // 1. ตรวจสอบรูปแบบ /d/FILE_ID
     const dMatch = url.match(/\/d\/([^/&#?]+)/);
     if (dMatch) {
       fileId = dMatch[1];
     } else {
-      // 2. ตรวจสอบรูปแบบ id=FILE_ID (รองรับรูปแบบ uc?export=view&id=...)
       const idMatch = url.match(/[?&]id=([^&#?]+)/);
       if (idMatch) fileId = idMatch[1];
     }
-    
-    if (fileId) {
-      // ใช้ thumbnail API เพื่อข้ามหน้ายืนยันความปลอดภัยของ Google Drive
-      return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
-    }
+    if (fileId) return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
   }
   return url;
 };
@@ -207,50 +214,30 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     try {
         const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
         if (!response.ok) throw new Error("Server responded with error");
-        
         const data = await response.json();
         if (Array.isArray(data)) {
             return data.map((r: any) => {
                 const typeStr = String(r.type || r.Type || '');
                 let type: AttendanceType = 'arrival';
-                
-                if (typeStr.includes('กลับ') || typeStr.includes('เลิก') || typeStr.includes('ออก')) {
-                    type = 'departure';
-                } else if (typeStr.includes('ราชการ')) {
-                    type = 'duty';
-                } else if (typeStr.includes('ป่วย')) {
-                    type = 'sick_leave';
-                } else if (typeStr.includes('กิจ')) {
-                    type = 'personal_leave';
-                } else if (typeStr.includes('อนุญาต') || typeStr.includes('สาย')) {
-                    type = 'authorized_late';
-                } else if (typeStr.includes('มา') || typeStr.includes('ทำงาน') || typeStr.includes('เข้า')) {
-                    type = 'arrival';
-                }
+                if (typeStr.includes('กลับ')) type = 'departure';
+                else if (typeStr.includes('ราชการ')) type = 'duty';
+                else if (typeStr.includes('ป่วย')) type = 'sick_leave';
+                else if (typeStr.includes('กิจ')) type = 'personal_leave';
+                else if (typeStr.includes('อนุญาต')) type = 'authorized_late';
 
                 let ts = Number(r.timestamp || r.Timestamp);
                 if (isNaN(ts) || ts === 0) {
-                    const dateVal = r.date || r.Date || '';
-                    const timeVal = r.time || r.Time || '';
-                    ts = parseThaiDateTimeToTimestamp(dateVal, timeVal);
+                    ts = parseThaiDateTimeToTimestamp(r.date || r.Date || '', r.time || r.Time || '');
                 }
 
-                // พยายามดึงฟิลด์รูปภาพจากทุกคีย์ที่เป็นไปได้ (GAS Map: "Image" -> "imageUrl")
-                let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || r["ImageUrl"] || "";
-                
-                if (rawImg && typeof rawImg === 'string') {
-                    if (rawImg.startsWith('http')) {
-                        rawImg = formatDriveImageUrl(rawImg);
-                    } else if (rawImg.length > 50 && !rawImg.startsWith('data:image')) {
-                        rawImg = `data:image/jpeg;base64,${rawImg}`;
-                    }
-                } else {
-                    rawImg = "";
+                let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || "";
+                if (rawImg && typeof rawImg === 'string' && rawImg.startsWith('http')) {
+                    rawImg = formatDriveImageUrl(rawImg);
                 }
 
                 return {
-                    id: String(ts || Date.now() + Math.random()), 
-                    staffId: String(r.staffId || r.staffid || r["Staff ID"] || ""),
+                    id: String(ts || Date.now()), 
+                    staffId: String(r.staffId || r["Staff ID"] || ""),
                     name: String(r.name || r.Name || ""),
                     role: String(r.role || r.Role || ""),
                     timestamp: ts,
@@ -265,8 +252,6 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 };
             }).filter(rec => rec.timestamp > 0);
         }
-    } catch (e) { 
-      console.error("Fetch global records error", e); 
-    }
+    } catch (e) { console.error(e); }
     return [];
 };
