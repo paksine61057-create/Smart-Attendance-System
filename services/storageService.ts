@@ -81,9 +81,10 @@ export const getRecords = (): CheckInRecord[] => {
 };
 
 export const saveSettings = async (settings: AppSettings) => {
+  // 1. บันทึกในเครื่องก่อน
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   
-  // สำคัญ: ส่งค่าที่แอดมินตั้งไปเก็บที่ Cloud ทันที เพื่อให้พิกัดบน Server อัปเดตตาม
+  // 2. บันทึกไปที่ Cloud (Google Script) ทันที เพื่อให้ทุกเครื่อง Sync ไปใช้ค่าเดียวกัน
   if (settings.googleSheetUrl) {
     try {
       await fetch(settings.googleSheetUrl, {
@@ -94,9 +95,11 @@ export const saveSettings = async (settings: AppSettings) => {
           lat: settings.officeLocation.lat,
           lng: settings.officeLocation.lng,
           maxDistance: settings.maxDistanceMeters,
-          locationMode: settings.locationMode 
+          locationMode: settings.locationMode,
+          googleSheetUrl: settings.googleSheetUrl // ส่ง URL ใหม่ไปด้วยเพื่อให้เครื่องอื่นอัปเดตตาม
         })
       });
+      console.log("Settings pushed to cloud successfully");
     } catch (e) {
       console.error("Failed to push settings to cloud", e);
     }
@@ -125,23 +128,43 @@ export const getSettings = (): AppSettings => {
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
     const s = getSettings();
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-    try {
-        const response = await fetch(`${targetUrl}?action=getSettings`);
-        if (response.ok) {
-           const cloudSettings = await response.json();
-           if (cloudSettings.officeLocation) {
-              const current = getSettings();
-              // เขียนค่าใหม่ลง LocalStorage เพื่อให้โหมด GPS/Online และพิกัด ตรงกันทั้งระบบ
-              localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+    
+    const applyCloudSettings = (cloudSettings: any) => {
+        if (cloudSettings && cloudSettings.officeLocation) {
+            const current = getSettings();
+            // อัปเดตข้อมูลการตั้งค่า รวมถึง googleSheetUrl เพื่อให้เครื่องลูกเปลี่ยนลิ้งตามแอดมินโดยอัตโนมัติ
+            const newSettings = {
                 ...current,
                 officeLocation: cloudSettings.officeLocation,
                 maxDistanceMeters: cloudSettings.maxDistanceMeters || current.maxDistanceMeters,
-                locationMode: cloudSettings.locationMode || current.locationMode
-              }));
-           }
+                locationMode: cloudSettings.locationMode || current.locationMode,
+                googleSheetUrl: cloudSettings.googleSheetUrl || current.googleSheetUrl 
+            };
+            localStorage.setItem(SETTINGS_KEY, JSON.stringify(newSettings));
+            return true;
+        }
+        return false;
+    };
+
+    try {
+        const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`);
+        if (response.ok) {
+           const cloudSettings = await response.json();
+           applyCloudSettings(cloudSettings);
         }
         return true;
     } catch (e) { 
+      // หากลิ้งปัจจุบันใช้งานไม่ได้ (เช่น แอดมินเปลี่ยนเลข Deployment ใหม่) 
+      // ให้ลองดึงจาก Default URL เพื่อหาลิ้งใหม่ที่แอดมินอาจจะอัปเดตไว้ในระบบหลัก
+      if (targetUrl !== DEFAULT_GOOGLE_SHEET_URL) {
+          try {
+              const fallbackResp = await fetch(`${DEFAULT_GOOGLE_SHEET_URL}?action=getSettings&t=${Date.now()}`);
+              if (fallbackResp.ok) {
+                  const fallbackSettings = await fallbackResp.json();
+                  applyCloudSettings(fallbackSettings);
+              }
+          } catch (err) {}
+      }
       return false; 
     }
 }
@@ -183,7 +206,6 @@ const parseThaiDateTimeToTimestamp = (dateStr: string, timeStr: string): number 
         const [d, m, yBE] = dateStr.split('/').map(Number);
         const timeClean = timeStr.replace('.', ':');
         const [h, min, s] = timeClean.split(':').map(Number);
-        // Fix: typo iNaN -> isNaN
         if (isNaN(d) || isNaN(m) || isNaN(yBE)) return 0;
         const yCE = yBE - 543;
         return new Date(yCE, m - 1, d, h || 0, min || 0, s || 0).getTime();
@@ -197,9 +219,8 @@ const formatDriveImageUrl = (url: string): string => {
   if (url.includes('drive.google.com')) {
     let fileId = '';
     const dMatch = url.match(/\/d\/([^/&#?]+)/);
-    if (dMatch) {
-      fileId = dMatch[1];
-    } else {
+    if (dMatch) fileId = dMatch[1];
+    else {
       const idMatch = url.match(/[?&]id=([^&#?]+)/);
       if (idMatch) fileId = idMatch[1];
     }

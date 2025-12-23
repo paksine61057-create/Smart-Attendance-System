@@ -1,4 +1,5 @@
 
+// Added React to the import to resolve namespace error
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AppSettings, GeoLocation, CheckInRecord, AttendanceType, Staff } from '../types';
 import { saveRecord, getSettings } from '../services/storageService';
@@ -33,6 +34,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [activeFilterId, setActiveFilterId] = useState('normal');
   const [todayHoliday, setTodayHoliday] = useState<string | null>(null);
   const [gpsLoadingMsg, setGpsLoadingMsg] = useState('');
+  const [isLocating, setIsLocating] = useState(false);
+
+  // ข้อมูลพิกัดที่ดึงมาเตรียมไว้
+  const [preFetchedLocation, setPreFetchedLocation] = useState<GeoLocation>({ lat: 0, lng: 0 });
+  const [preFetchedDistance, setPreFetchedDistance] = useState(0);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -51,8 +57,45 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     } else setCurrentUser(null);
   }, [staffIdInput]);
 
-  const startCameraStep = () => {
-    setStep('camera');
+  // ฟังก์ชันเริ่มขั้นตอนถ่ายรูป (ตรวจสอบพิกัดก่อน)
+  const startCameraStep = async () => {
+    const settings = getSettings();
+    const needsLocationCheck = ['arrival', 'departure', 'authorized_late'].includes(attendanceType);
+    
+    // หากเป็นโหมดออนไลน์ หรือประเภทงานที่ไม่ต้องการพิกัด ให้ข้ามไปหน้ากล้องทันที
+    if (settings.locationMode === 'online' || !needsLocationCheck) {
+        setStep('camera');
+        return;
+    }
+
+    // หากเป็นโหมด GPS ให้เริ่มการดึงตำแหน่ง
+    setIsLocating(true);
+    
+    try {
+      // ดึงพิกัดที่แม่นยำที่สุดก่อนเปิดกล้อง
+      const pos = await getAccuratePosition();
+      const currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      
+      const distance = getDistanceFromLatLonInMeters(
+        currentPos.lat, currentPos.lng,
+        settings.officeLocation.lat, settings.officeLocation.lng
+      );
+      
+      if (distance > settings.maxDistanceMeters) {
+        alert(`❌ อยู่นอกพื้นที่โรงเรียน!\nระยะห่างของคุณ: ${Math.round(distance)} เมตร\nระยะที่อนุญาต: ${settings.maxDistanceMeters} เมตร\n\nโปรดบันทึกเวลาภายในพื้นที่โรงเรียนเท่านั้น`);
+        setIsLocating(false);
+        return;
+      }
+
+      // เก็บค่าไว้ใช้ตอนบันทึกจริง
+      setPreFetchedLocation(currentPos);
+      setPreFetchedDistance(Math.round(distance));
+      setStep('camera');
+    } catch (e: any) {
+      alert("❌ ไม่สามารถระบุพิกัดได้!\nโปรดตรวจสอบว่าเปิด GPS และอนุญาตสิทธิ์ตำแหน่งแล้ว");
+    } finally {
+      setIsLocating(false);
+    }
   };
 
   useEffect(() => {
@@ -102,41 +145,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
         
         setStep('verifying');
-        const settings = getSettings();
-
-        setGpsLoadingMsg('กำลังตรวจสอบพิกัด GPS...');
-        let currentPos: GeoLocation = { lat: 0, lng: 0 };
-        let distance = 0;
-
-        try {
-            // ดึงพิกัดที่แม่นยำที่สุด
-            const pos = await getAccuratePosition();
-            currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-            
-            // ตรวจสอบพิกัดถ้าเปิดโหมด GPS (เช็คทุกลักษณะที่ต้องมาโรงเรียน)
-            const needsLocation = ['arrival', 'departure', 'authorized_late'].includes(attendanceType);
-            
-            if (settings.locationMode === 'gps' && needsLocation) {
-              distance = getDistanceFromLatLonInMeters(
-                currentPos.lat, currentPos.lng,
-                settings.officeLocation.lat, settings.officeLocation.lng
-              );
-              
-              if (distance > settings.maxDistanceMeters) {
-                alert(`❌ อยู่นอกพื้นที่โรงเรียน!\nระยะห่างของคุณ: ${Math.round(distance)} เมตร\nระยะที่อนุญาต: ${settings.maxDistanceMeters} เมตร\n\nโปรดบันทึกเวลาภายในพื้นที่โรงเรียนเท่านั้น`);
-                setStep('camera');
-                return;
-              }
-            }
-        } catch (e: any) {
-            if (settings.locationMode === 'gps') {
-              alert("❌ ไม่สามารถระบุพิกัดได้!\nโปรดตรวจสอบว่าเปิด GPS และอนุญาตสิทธิ์ให้เบราว์เซอร์เข้าถึงตำแหน่งแล้ว");
-              setStep('camera');
-              return;
-            }
-        }
-
         setGpsLoadingMsg('กำลังวิเคราะห์ใบหน้าด้วย AI...');
+
         const aiResult = await analyzeCheckInImage(imageBase64);
         
         const now = new Date();
@@ -161,8 +171,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
           role: currentUser.role,
           type: attendanceType, 
           timestamp: now.getTime(), 
-          location: currentPos, 
-          distanceFromBase: Math.round(distance), 
+          location: preFetchedLocation, 
+          distanceFromBase: preFetchedDistance, 
           status, 
           imageUrl: imageBase64, 
           aiVerification: aiResult,
@@ -175,7 +185,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         setTimeout(() => onSuccess(), 2000);
       }
     }
-  }, [currentUser, attendanceType, reason, activeFilterId, onSuccess]);
+  }, [currentUser, attendanceType, reason, activeFilterId, onSuccess, preFetchedLocation, preFetchedDistance]);
 
   if (step === 'info') {
     const isSpecialType = ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(attendanceType);
@@ -284,9 +294,15 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         
                         <button 
                             onClick={startCameraStep}
-                            className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive`}
+                            disabled={isLocating}
+                            className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive disabled:opacity-80`}
                         >
-                            ถ่ายรูปบันทึกเวลา 📸
+                            {isLocating ? (
+                              <div className="flex items-center gap-2">
+                                <div className="w-5 h-5 border-3 border-t-white border-white/20 rounded-full animate-spin" />
+                                กำลังตรวจสอบตำแหน่ง...
+                              </div>
+                            ) : 'ถ่ายรูปบันทึกเวลา 📸'}
                         </button>
                     </div>
                 </div>
@@ -340,7 +356,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         <div className="absolute top-8 left-0 right-0 flex justify-center gap-3 z-20">
             <button onClick={() => setStep('info')} className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-black border border-white/20 hover:bg-black/60 transition-all">ยกเลิก</button>
             <div className="bg-blue-600/60 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
-                โหมดระบุตำแหน่ง GPS 📍
+                พิกัดตรวจสอบแล้ว 📍
             </div>
         </div>
       </div>
