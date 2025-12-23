@@ -4,6 +4,7 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
+// ลิ้งค์เซิร์ฟเวอร์หลัก (อัปเดตลิ้งค์ใหม่ที่นี่ได้เลย)
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzUoPM2lDmpMbCwfryM1EuiZDQnFPuF4paqayK5XWL0nNF_MYGmPcOS7AEjDTNEaM1q/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
@@ -81,10 +82,8 @@ export const getRecords = (): CheckInRecord[] => {
 };
 
 export const saveSettings = async (settings: AppSettings) => {
-  // 1. บันทึกในเครื่องก่อน
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   
-  // 2. บันทึกไปที่ Cloud (Google Script) ทันที เพื่อให้ทุกเครื่อง Sync ไปใช้ค่าเดียวกัน
   if (settings.googleSheetUrl) {
     try {
       await fetch(settings.googleSheetUrl, {
@@ -96,10 +95,9 @@ export const saveSettings = async (settings: AppSettings) => {
           lng: settings.officeLocation.lng,
           maxDistance: settings.maxDistanceMeters,
           locationMode: settings.locationMode,
-          googleSheetUrl: settings.googleSheetUrl // ส่ง URL ใหม่ไปด้วยเพื่อให้เครื่องอื่นอัปเดตตาม
+          googleSheetUrl: settings.googleSheetUrl
         })
       });
-      console.log("Settings pushed to cloud successfully");
     } catch (e) {
       console.error("Failed to push settings to cloud", e);
     }
@@ -126,13 +124,12 @@ export const getSettings = (): AppSettings => {
 };
 
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
-    const s = getSettings();
-    const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-    
+    const currentLocalSettings = getSettings();
+    const storedUrl = currentLocalSettings.googleSheetUrl;
+
     const applyCloudSettings = (cloudSettings: any) => {
         if (cloudSettings && cloudSettings.officeLocation) {
             const current = getSettings();
-            // อัปเดตข้อมูลการตั้งค่า รวมถึง googleSheetUrl เพื่อให้เครื่องลูกเปลี่ยนลิ้งตามแอดมินโดยอัตโนมัติ
             const newSettings = {
                 ...current,
                 officeLocation: cloudSettings.officeLocation,
@@ -146,6 +143,25 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
         return false;
     };
 
+    // กลไก Force Update: ตรวจสอบว่าลิ้งค์ในเครื่องไม่ตรงกับ DEFAULT ในโค้ดหรือไม่
+    // หากไม่ตรง แสดงว่าแอดมินเพิ่งอัปเดตโค้ดใหม่ ให้ลองดึงจากลิ้งค์ใหม่ในโค้ดก่อน
+    if (storedUrl && storedUrl !== DEFAULT_GOOGLE_SHEET_URL) {
+        try {
+            const forceResp = await fetch(`${DEFAULT_GOOGLE_SHEET_URL}?action=getSettings&t=${Date.now()}`);
+            if (forceResp.ok) {
+                const cloudSettings = await forceResp.json();
+                if (applyCloudSettings(cloudSettings)) {
+                    console.log("Forced update to new server link successful");
+                    return true;
+                }
+            }
+        } catch (e) {
+            console.warn("Failed force update, trying current stored URL");
+        }
+    }
+
+    // กรณีปกติ: ลองดึงจากลิ้งค์ที่มีอยู่เดิม
+    const targetUrl = storedUrl || DEFAULT_GOOGLE_SHEET_URL;
     try {
         const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`);
         if (response.ok) {
@@ -154,8 +170,7 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
         }
         return true;
     } catch (e) { 
-      // หากลิ้งปัจจุบันใช้งานไม่ได้ (เช่น แอดมินเปลี่ยนเลข Deployment ใหม่) 
-      // ให้ลองดึงจาก Default URL เพื่อหาลิ้งใหม่ที่แอดมินอาจจะอัปเดตไว้ในระบบหลัก
+      // Fallback สุดท้ายถ้าลิ้งค์ที่มีใช้ไม่ได้ ให้ดึงจาก DEFAULT
       if (targetUrl !== DEFAULT_GOOGLE_SHEET_URL) {
           try {
               const fallbackResp = await fetch(`${DEFAULT_GOOGLE_SHEET_URL}?action=getSettings&t=${Date.now()}`);
