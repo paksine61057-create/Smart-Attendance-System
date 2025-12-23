@@ -83,7 +83,7 @@ export const getRecords = (): CheckInRecord[] => {
 export const saveSettings = async (settings: AppSettings) => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   
-  // ส่งการตั้งค่าไปบันทึกบน Cloud ทันที เพื่อให้พิกัดใน Script Properties อัปเดตตาม
+  // สำคัญ: ส่งค่าที่แอดมินตั้งไปเก็บที่ Cloud ทันที เพื่อให้พิกัดบน Server อัปเดตตาม
   if (settings.googleSheetUrl) {
     try {
       await fetch(settings.googleSheetUrl, {
@@ -94,7 +94,7 @@ export const saveSettings = async (settings: AppSettings) => {
           lat: settings.officeLocation.lat,
           lng: settings.officeLocation.lng,
           maxDistance: settings.maxDistanceMeters,
-          locationMode: settings.locationMode // ส่งโหมดไปด้วย
+          locationMode: settings.locationMode 
         })
       });
     } catch (e) {
@@ -131,7 +131,7 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
            const cloudSettings = await response.json();
            if (cloudSettings.officeLocation) {
               const current = getSettings();
-              // อัปเดตค่าจาก Cloud โดยยังคง URL เดิมไว้
+              // เขียนค่าใหม่ลง LocalStorage เพื่อให้โหมด GPS/Online และพิกัด ตรงกันทั้งระบบ
               localStorage.setItem(SETTINGS_KEY, JSON.stringify({
                 ...current,
                 officeLocation: cloudSettings.officeLocation,
@@ -183,7 +183,7 @@ const parseThaiDateTimeToTimestamp = (dateStr: string, timeStr: string): number 
         const [d, m, yBE] = dateStr.split('/').map(Number);
         const timeClean = timeStr.replace('.', ':');
         const [h, min, s] = timeClean.split(':').map(Number);
-        // Fix: Changed 'iNaN' to 'isNaN'
+        // Fix: typo iNaN -> isNaN
         if (isNaN(d) || isNaN(m) || isNaN(yBE)) return 0;
         const yCE = yBE - 543;
         return new Date(yCE, m - 1, d, h || 0, min || 0, s || 0).getTime();
