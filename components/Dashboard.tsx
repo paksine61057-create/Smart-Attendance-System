@@ -387,9 +387,9 @@ const Dashboard: React.FC = () => {
                     <tr className="bg-white text-stone-800 border-b-2 border-stone-800">
                       <th className="border border-stone-800 p-3 w-10 text-center font-black">ที่</th>
                       <th className="border border-stone-800 p-3 text-left font-black">ชื่อ-นามสกุล</th>
-                      <th className="border border-stone-800 p-3 text-left font-black">ตำแหน่ง</th>
+                      <th className="border border-stone-800 p-3 text-center font-black">ตำแหน่ง</th>
                       <th className="border border-stone-800 p-3 text-center font-black">มาสาย (ครั้ง)</th>
-                      <th className="border border-stone-800 p-3 text-left min-w-[110px] font-black">วันที่มาสาย</th>
+                      <th className="border border-stone-800 p-3 text-center min-w-[110px] font-black">วันที่มาสาย</th>
                       <th className="border border-stone-800 p-3 text-center font-black">ไม่ลงเวลา (ครั้ง)</th>
                     </tr>
                   </thead>
@@ -397,16 +397,16 @@ const Dashboard: React.FC = () => {
                     {monthlyStats.map(s => (
                       <tr key={s.id} className="hover:bg-stone-50 transition-colors">
                         <td className="border border-stone-300 p-2 text-center font-bold text-stone-400">{s.no}</td>
-                        <td className="border border-stone-300 p-2">
+                        <td className="border border-stone-300 p-2 text-left">
                            <div className="font-bold text-stone-800">{s.name}</div>
                         </td>
-                        <td className="border border-stone-300 p-2">
+                        <td className="border border-stone-300 p-2 text-center">
                            <div className="text-[9px] text-stone-400 font-bold uppercase tracking-tighter">{s.role}</div>
                         </td>
                         <td className="border border-stone-300 p-2 text-center font-mono font-black text-rose-600">
                           {s.lateCount > 0 ? s.lateCount : '-'}
                         </td>
-                        <td className="border border-stone-300 p-2 text-stone-600 font-bold text-[10px] leading-tight whitespace-normal break-words max-w-[180px]">
+                        <td className="border border-stone-300 p-2 text-center text-stone-600 font-bold text-[10px] leading-tight whitespace-normal break-words max-w-[180px]">
                            {s.lateDates}
                         </td>
                         <td className="border border-stone-300 p-2 text-center font-mono font-bold text-stone-500">
