@@ -5,14 +5,15 @@ const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
 /** 
- * วาง Web App URL ของคุณที่นี่เป็นค่าเริ่มต้น
+ * วาง Web App URL ของคุณที่นี่ (URL ที่ได้จากการ Deploy Google Apps Script)
  */
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzUoPM2lDmpMbCwfryM1EuiZDQnFPuF4paqayK5XWL0nNF_MYGmPcOS7AEjDTNEaM1q/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
-    const cleanImageBase64 = (record.imageUrl || "").replace(/^data:image\/\w+;base64,/, "");
+    // ส่ง Base64 ไปประมวลผลที่ Server (GAS)
+    const cleanImageBase64 = record.imageUrl || "";
 
     const payload = {
       "action": "insertRecord",
@@ -36,9 +37,9 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "imageBase64": cleanImageBase64
     };
 
-    await fetch(url, {
+    const response = await fetch(url, {
       method: 'POST',
-      mode: 'no-cors',
+      mode: 'no-cors', // สำคัญ: เพื่อเลี่ยงปัญหา CORS กับ Google Apps Script
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
@@ -145,15 +146,9 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 else if (typeStr.includes('กิจ')) type = 'personal_leave';
                 else if (typeStr.includes('อนุญาตสาย')) type = 'authorized_late';
 
-                // แก้ไข: ปรับปรุงการดึงรูปภาพให้ฉลาดขึ้น
                 let rawImg = r.imageUrl || r.imageurl || r.imageBase64 || r.imagebase64 || "";
                 if (rawImg && typeof rawImg === 'string' && rawImg.length > 30) {
-                    // ถ้าข้อมูลเป็น URL (ส่งมาจาก Google Drive) ไม่ต้องเติม Prefix
-                    if (rawImg.startsWith('http')) {
-                        // คงเดิม
-                    } 
-                    // ถ้าเป็น Base64 แต่ไม่มี Prefix ให้เติมเข้าไป
-                    else if (!rawImg.startsWith('data:image')) {
+                    if (!rawImg.startsWith('http') && !rawImg.startsWith('data:image')) {
                         rawImg = `data:image/jpeg;base64,${rawImg}`;
                     }
                 }
