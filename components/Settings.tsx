@@ -4,6 +4,7 @@ import { AppSettings, Staff, SpecialHoliday } from '../types';
 import { getSettings, saveSettings, clearRecords } from '../services/storageService';
 import { getAllStaff, addStaff, removeStaff } from '../services/staffService';
 import { getSpecialHolidays, addSpecialHolidayRange, removeSpecialHoliday } from '../services/holidayService';
+import { getAccuratePosition } from '../services/geoService';
 
 interface SettingsProps {
   onClose: () => void;
@@ -14,6 +15,7 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
   const [settings, setSettingsState] = useState<AppSettings>(getSettings());
   const [msg, setMsg] = useState('');
   const [isError, setIsError] = useState(false);
+  const [isGpsLoading, setIsGpsLoading] = useState(false);
 
   const [staffList, setStaffList] = useState<Staff[]>([]);
   const [newStaff, setNewStaff] = useState<Staff>({ id: '', name: '', role: '' });
@@ -38,6 +40,28 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
       clearRecords();
       setMsg('ล้างข้อมูลในเครื่องทั้งหมดเรียบร้อยแล้ว');
       setIsError(false);
+    }
+  };
+
+  const handleGrabCurrentLocation = async () => {
+    setIsGpsLoading(true);
+    setMsg('กำลังค้นหาพิกัดที่แม่นยำ...');
+    setIsError(false);
+    try {
+      const pos = await getAccuratePosition();
+      setSettingsState(prev => ({
+        ...prev,
+        officeLocation: {
+          lat: pos.coords.latitude,
+          lng: pos.coords.longitude
+        }
+      }));
+      setMsg('ดึงพิกัดปัจจุบันสำเร็จแล้ว 📍');
+    } catch (err: any) {
+      setMsg(err.message || 'ไม่สามารถดึงพิกัดได้');
+      setIsError(true);
+    } finally {
+      setIsGpsLoading(false);
     }
   };
 
@@ -129,9 +153,68 @@ const Settings: React.FC<SettingsProps> = ({ onClose }) => {
                     <span className="w-2 h-2 rounded-full bg-rose-500"></span>
                     โหมดการลงเวลา
                 </h3>
-                <p className="text-xs font-bold text-stone-500 bg-stone-100 p-4 rounded-2xl border border-stone-200 italic leading-relaxed">
-                    🚀 ระบบอยู่ในโหมด "ลงเวลาออนไลน์" บุคลากรสามารถลงเวลาได้จากทุกที่โดยไม่ต้องตรวจสอบพิกัด GPS
-                </p>
+                
+                <div className="flex gap-2 mb-4 p-1 bg-stone-100 rounded-2xl border border-stone-200">
+                  <button 
+                    onClick={() => setSettingsState(prev => ({...prev, locationMode: 'online'}))}
+                    className={`flex-1 py-3 px-4 rounded-xl font-black text-xs transition-all ${settings.locationMode === 'online' ? 'bg-white shadow-md text-rose-600' : 'text-stone-400 hover:text-stone-600'}`}
+                  >
+                    🚀 ออนไลน์ (ไม่เช็คพิกัด)
+                  </button>
+                  <button 
+                    onClick={() => setSettingsState(prev => ({...prev, locationMode: 'gps'}))}
+                    className={`flex-1 py-3 px-4 rounded-xl font-black text-xs transition-all ${settings.locationMode === 'gps' ? 'bg-white shadow-md text-rose-600' : 'text-stone-400 hover:text-stone-600'}`}
+                  >
+                    📍 ตรวจสอบพิกัด (GPS)
+                  </button>
+                </div>
+
+                {settings.locationMode === 'gps' && (
+                  <div className="space-y-4 animate-in slide-in-from-top-4 duration-300">
+                     <div className="grid grid-cols-2 gap-3">
+                        <div>
+                           <label className="text-[9px] font-black text-stone-400 uppercase mb-1 block">ละติจูด (Lat)</label>
+                           <input 
+                              type="number" step="any" 
+                              value={settings.officeLocation.lat} 
+                              onChange={e => setSettingsState(prev => ({...prev, officeLocation: {...prev.officeLocation, lat: parseFloat(e.target.value)}}))}
+                              className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs font-bold font-mono" 
+                           />
+                        </div>
+                        <div>
+                           <label className="text-[9px] font-black text-stone-400 uppercase mb-1 block">ลองจิจูด (Lng)</label>
+                           <input 
+                              type="number" step="any" 
+                              value={settings.officeLocation.lng} 
+                              onChange={e => setSettingsState(prev => ({...prev, officeLocation: {...prev.officeLocation, lng: parseFloat(e.target.value)}}))}
+                              className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs font-bold font-mono" 
+                           />
+                        </div>
+                     </div>
+                     <button 
+                        onClick={handleGrabCurrentLocation} 
+                        disabled={isGpsLoading}
+                        className="w-full py-3 bg-rose-50 border-2 border-dashed border-rose-200 text-rose-600 rounded-2xl font-black text-xs flex items-center justify-center gap-2 hover:bg-rose-100 transition-all active:scale-95 disabled:opacity-50"
+                      >
+                        {isGpsLoading ? '⏳ กำลังดึงพิกัด...' : '🎯 ดึงพิกัดปัจจุบันเป็นจุดเช็คอิน'}
+                     </button>
+                     <div>
+                        <label className="text-[9px] font-black text-stone-400 uppercase mb-1 block">รัศมีการลงเวลา (เมตร)</label>
+                        <input 
+                          type="number" 
+                          value={settings.maxDistanceMeters} 
+                          onChange={e => setSettingsState(prev => ({...prev, maxDistanceMeters: parseInt(e.target.value)}))}
+                          className="w-full p-3 bg-stone-50 border border-stone-100 rounded-xl text-xs font-bold font-mono" 
+                        />
+                     </div>
+                  </div>
+                )}
+
+                {settings.locationMode === 'online' && (
+                   <p className="text-[10px] font-bold text-stone-500 bg-stone-50 p-4 rounded-2xl border border-stone-200 italic leading-relaxed">
+                      💡 ในโหมดออนไลน์ บุคลากรสามารถลงเวลาได้จากทุกที่โดยไม่ต้องตรวจสอบพิกัด GPS ว่าอยู่ในโรงเรียนหรือไม่
+                   </p>
+                )}
                 
                 {msg && (
                     <p className={`text-[11px] mt-4 text-center font-black p-3 rounded-xl border animate-in slide-in-from-top-2

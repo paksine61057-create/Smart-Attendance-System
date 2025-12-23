@@ -5,7 +5,7 @@ import { saveRecord, getSettings } from '../services/storageService';
 import { analyzeCheckInImage } from '../services/geminiService';
 import { getStaffById } from '../services/staffService';
 import { getHoliday } from '../services/holidayService';
-import { getAccuratePosition } from '../services/geoService';
+import { getAccuratePosition, getDistanceFromLatLonInMeters } from '../services/geoService';
 
 interface CheckInFormProps {
   onSuccess: () => void;
@@ -104,15 +104,36 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
         
         setStep('verifying');
-        setGpsLoadingMsg('กำลังตรวจสอบพิกัด GPS...');
+        const settings = getSettings();
 
+        setGpsLoadingMsg('กำลังตรวจสอบพิกัด GPS...');
         let currentPos: GeoLocation = { lat: 0, lng: 0 };
+        let distance = 0;
+
         try {
             const pos = await getAccuratePosition();
             currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        } catch (e) {
+            
+            // ตรวจสอบพิกัดถ้าเปิดโหมด GPS
+            if (settings.locationMode === 'gps' && (attendanceType === 'arrival' || attendanceType === 'departure')) {
+              distance = getDistanceFromLatLonInMeters(
+                currentPos.lat, currentPos.lng,
+                settings.officeLocation.lat, settings.officeLocation.lng
+              );
+              
+              if (distance > settings.maxDistanceMeters) {
+                alert(`❌ อยู่นอกพื้นที่โรงเรียน!\nระยะห่างของคุณ: ${Math.round(distance)} เมตร\nระยะที่อนุญาต: ${settings.maxDistanceMeters} เมตร\nกรุณาลงเวลาภายในพื้นที่โรงเรียนเท่านั้น`);
+                setStep('camera');
+                return;
+              }
+            }
+        } catch (e: any) {
             console.error("GPS Error:", e);
-            // หากดึงพิกัดไม่ได้ ยังยอมให้บันทึก (หรือจะ alert แล้ว return; ก็ได้หากต้องการบังคับ GPS)
+            if (settings.locationMode === 'gps') {
+              alert("❌ ไม่สามารถระบุพิกัดได้!\nโปรดเปิด GPS และอนุญาตสิทธิ์การเข้าถึงตำแหน่งก่อนลงเวลา");
+              setStep('camera');
+              return;
+            }
         }
 
         setGpsLoadingMsg('กำลังวิเคราะห์ใบหน้าด้วย AI...');
@@ -140,8 +161,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
           role: currentUser.role,
           type: attendanceType, 
           timestamp: now.getTime(), 
-          location: currentPos, // พิกัดจริงถูกส่งที่นี่
-          distanceFromBase: 0, 
+          location: currentPos, 
+          distanceFromBase: Math.round(distance), 
           status, 
           imageUrl: imageBase64, 
           aiVerification: aiResult,
@@ -257,7 +278,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         <div className="mt-4 p-4 bg-blue-900/40 rounded-2xl border border-blue-500/30 backdrop-blur-md flex items-center justify-center gap-3">
                             <span className="text-blue-300 text-[11px] font-black uppercase tracking-widest flex items-center gap-2 text-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                                ระบบจะดึงพิกัด GPS เพื่อส่งไปยืนยันพื้นที่โรงเรียน 📍
+                                {getSettings().locationMode === 'gps' ? 'ระบบจะตรวจสอบพิกัดโรงเรียนก่อนบันทึกเวลา 📍' : 'ระบบดึงพิกัดเพื่อบันทึกข้อมูลแบบออนไลน์ 🌐'}
                             </span>
                         </div>
                         

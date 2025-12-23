@@ -89,18 +89,39 @@ export const saveSettings = async (settings: AppSettings) => {
 
 export const getSettings = (): AppSettings => {
   const data = localStorage.getItem(SETTINGS_KEY);
-  let s = data ? JSON.parse(data) : { googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL };
-  if (!s.googleSheetUrl) s.googleSheetUrl = DEFAULT_GOOGLE_SHEET_URL;
-  return s;
+  const defaultSettings: AppSettings = {
+    googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL,
+    locationMode: 'online',
+    officeLocation: { lat: 17.345854, lng: 102.834789 },
+    maxDistanceMeters: 50
+  };
+  
+  if (!data) return defaultSettings;
+  
+  try { 
+    const s = JSON.parse(data);
+    return { ...defaultSettings, ...s };
+  } catch (e) { 
+    return defaultSettings; 
+  }
 };
 
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
     const s = getSettings();
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     try {
-        const response = await fetch(targetUrl);
-        const text = await response.text();
-        JSON.parse(text);
+        const response = await fetch(`${targetUrl}?action=getSettings`);
+        if (response.ok) {
+           const cloudSettings = await response.json();
+           if (cloudSettings.officeLocation) {
+              const current = getSettings();
+              saveSettings({
+                ...current,
+                officeLocation: cloudSettings.officeLocation,
+                maxDistanceMeters: cloudSettings.maxDistanceMeters || current.maxDistanceMeters
+              });
+           }
+        }
         return true;
     } catch (e) { 
       return false; 

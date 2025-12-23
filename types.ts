@@ -30,6 +30,9 @@ export interface CheckInRecord {
 
 export interface AppSettings {
   googleSheetUrl?: string; // Google Apps Script Web App URL
+  locationMode: 'online' | 'gps'; 
+  officeLocation: GeoLocation;
+  maxDistanceMeters: number;
 }
 
 export interface DailySummary {
