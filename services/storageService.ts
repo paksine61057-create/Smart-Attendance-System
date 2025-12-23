@@ -31,6 +31,8 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Status": record.status,
       "Reason": record.reason || '-',
       "Location": "บันทึกผ่านระบบ AI Web App",
+      "lat": record.location.lat, // ส่งพิกัดจริงไปยัง GAS
+      "lng": record.location.lng, // ส่งพิกัดจริงไปยัง GAS
       "Distance (m)": record.distanceFromBase || 0,
       "AI Verification": record.aiVerification || '-',
       "imageBase64": cleanImageBase64
@@ -152,7 +154,7 @@ const parseThaiDateTimeToTimestamp = (dateStr: string, timeStr: string): number 
 
 /**
  * ฟังก์ชันช่วยแปลงลิงก์ Google Drive ให้เป็น Direct Image Link (Thumbnail)
- * รองรับทั้งรูปแบบ /d/ และรูปแบบ uc?id=...
+ * แก้ไขให้รองรับลิงก์รูปแบบ uc?id=... ของ GAS ได้ดียิ่งขึ้น
  */
 const formatDriveImageUrl = (url: string): string => {
   if (!url || typeof url !== 'string' || url === '-' || url.startsWith('Image Error')) return '';
@@ -165,13 +167,13 @@ const formatDriveImageUrl = (url: string): string => {
     if (dMatch) {
       fileId = dMatch[1];
     } else {
-      // 2. ตรวจสอบรูปแบบ ?id=FILE_ID หรือ &id=FILE_ID (รวมถึงลิงก์แบบ uc?export=view&id=...)
+      // 2. ตรวจสอบรูปแบบ id=FILE_ID (รองรับรูปแบบ uc?export=view&id=...)
       const idMatch = url.match(/[?&]id=([^&#?]+)/);
       if (idMatch) fileId = idMatch[1];
     }
     
     if (fileId) {
-      // ใช้ thumbnail API เพื่อการแสดงผลที่เสถียรที่สุดในเบราว์เซอร์
+      // ใช้ thumbnail API เพื่อข้ามหน้ายืนยันความปลอดภัยของ Google Drive
       return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
     }
   }
@@ -212,7 +214,7 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     ts = parseThaiDateTimeToTimestamp(dateVal, timeVal);
                 }
 
-                // พยายามดึงฟิลด์รูปภาพจากทุกคีย์ที่เป็นไปได้ (GAS ส่ง imageUrl มาให้)
+                // พยายามดึงฟิลด์รูปภาพจากทุกคีย์ที่เป็นไปได้ (GAS Map: "Image" -> "imageUrl")
                 let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || r["ImageUrl"] || "";
                 
                 if (rawImg && typeof rawImg === 'string') {

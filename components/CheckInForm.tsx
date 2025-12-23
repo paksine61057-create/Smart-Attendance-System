@@ -5,6 +5,7 @@ import { saveRecord, getSettings } from '../services/storageService';
 import { analyzeCheckInImage } from '../services/geminiService';
 import { getStaffById } from '../services/staffService';
 import { getHoliday } from '../services/holidayService';
+import { getAccuratePosition } from '../services/geoService';
 
 interface CheckInFormProps {
   onSuccess: () => void;
@@ -31,6 +32,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [isCameraLoading, setIsCameraLoading] = useState(false);
   const [activeFilterId, setActiveFilterId] = useState('normal');
   const [todayHoliday, setTodayHoliday] = useState<string | null>(null);
+  const [gpsLoadingMsg, setGpsLoadingMsg] = useState('');
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -89,6 +91,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     if (video && canvas && currentUser && video.videoWidth > 0) {
       const context = canvas.getContext('2d');
       if (context) {
+        // ถ่ายภาพ
         const TARGET_WIDTH = 320; 
         const scale = TARGET_WIDTH / video.videoWidth;
         canvas.width = TARGET_WIDTH;
@@ -99,8 +102,20 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         
         const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
-        setStep('verifying');
         
+        setStep('verifying');
+        setGpsLoadingMsg('กำลังตรวจสอบพิกัด GPS...');
+
+        let currentPos: GeoLocation = { lat: 0, lng: 0 };
+        try {
+            const pos = await getAccuratePosition();
+            currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        } catch (e) {
+            console.error("GPS Error:", e);
+            // หากดึงพิกัดไม่ได้ ยังยอมให้บันทึก (หรือจะ alert แล้ว return; ก็ได้หากต้องการบังคับ GPS)
+        }
+
+        setGpsLoadingMsg('กำลังวิเคราะห์ใบหน้าด้วย AI...');
         const aiResult = await analyzeCheckInImage(imageBase64);
         
         const now = new Date();
@@ -125,7 +140,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
           role: currentUser.role,
           type: attendanceType, 
           timestamp: now.getTime(), 
-          location: { lat: 0, lng: 0 },
+          location: currentPos, // พิกัดจริงถูกส่งที่นี่
           distanceFromBase: 0, 
           status, 
           imageUrl: imageBase64, 
@@ -240,9 +255,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                         )}
 
                         <div className="mt-4 p-4 bg-blue-900/40 rounded-2xl border border-blue-500/30 backdrop-blur-md flex items-center justify-center gap-3">
-                            <span className="text-blue-300 text-[11px] font-black uppercase tracking-widest flex items-center gap-2">
+                            <span className="text-blue-300 text-[11px] font-black uppercase tracking-widest flex items-center gap-2 text-center">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                                โหมดลงเวลาออนไลน์: ถ่ายรูปได้ทันที 📸
+                                ระบบจะดึงพิกัด GPS เพื่อส่งไปยืนยันพื้นที่โรงเรียน 📍
                             </span>
                         </div>
                         
@@ -304,7 +319,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         <div className="absolute top-8 left-0 right-0 flex justify-center gap-3 z-20">
             <button onClick={() => setStep('info')} className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-black border border-white/20 hover:bg-black/60 transition-all">ยกเลิก</button>
             <div className="bg-blue-600/60 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
-                โหมดลงเวลาออนไลน์ 🌐
+                โหมดระบุตำแหน่ง GPS 📍
             </div>
         </div>
       </div>
@@ -315,7 +330,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     <div className="max-w-md mx-auto p-20 bg-white/10 backdrop-blur-xl rounded-[3rem] text-white text-center flex flex-col items-center justify-center border-4 border-white/20 shadow-2xl">
         <div className="w-24 h-24 border-8 border-t-amber-400 border-white/20 rounded-full animate-spin mb-8" />
         <h3 className="text-3xl font-black text-amber-200">บันทึกข้อมูล...</h3>
-        <p className="font-bold opacity-60 mt-2 uppercase tracking-widest text-xs">AI กำลังวิเคราะห์ภาพถ่ายของคุณ ❄️</p>
+        <p className="font-bold opacity-60 mt-2 uppercase tracking-widest text-xs">{gpsLoadingMsg || 'กำลังบันทึก ❄️'}</p>
     </div>
   );
   
