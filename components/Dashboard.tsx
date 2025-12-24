@@ -142,7 +142,8 @@ const Dashboard: React.FC = () => {
       
       const isLeaveOrDuty = (r?: CheckInRecord) => {
           if (!r) return false;
-          return ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type);
+          // เอา authorized_late ออกจากกลุ่มนี้เพื่อให้แสดงเวลามาตามจริง
+          return ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type);
       };
 
       const getLeaveLabel = (type: AttendanceType) => {
@@ -152,23 +153,38 @@ const Dashboard: React.FC = () => {
 
       let arrivalVal = '-';
       let departureVal = '-';
-      let remark = arrival?.reason || (arrival?.status === 'Late' ? 'มาสาย' : '');
+      let remark = '';
 
       if (arrival) {
           if (isLeaveOrDuty(arrival)) {
               const label = getLeaveLabel(arrival.type);
               arrivalVal = label;
               departureVal = label;
+              remark = arrival.reason || '';
           } else {
+              // กรณีมาทำงานปกติ หรือ ขอเข้าสาย ให้แสดงเวลา
               arrivalVal = new Date(arrival.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+              
+              if (arrival.type === 'authorized_late') {
+                  remark = 'ขอเข้าสาย';
+                  if (arrival.reason) remark += ` (${arrival.reason})`;
+              } else if (arrival.status === 'Late') {
+                  remark = 'มาสาย';
+                  if (arrival.reason) remark += ` (${arrival.reason})`;
+              } else {
+                  remark = arrival.reason || '';
+              }
           }
       }
 
       if (departure && departureVal === '-') {
           departureVal = new Date(departure.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+          if (departure.status === 'Early Leave' && !remark.includes('เข้าสาย') && !remark.includes('ไปราชการ') && !remark.includes('ลา')) {
+             remark = (remark ? remark + ' ' : '') + 'กลับก่อนเวลา';
+          }
       }
 
-      // ตรวจสอบว่าเป็นแอดมินบันทึกหรือไม่ (จากฟิลด์ aiVerification หรือ reason ที่เรากำหนดไว้)
+      // ตรวจสอบว่าเป็นแอดมินบันทึกหรือไม่
       const isAdminEntry = arrival?.aiVerification?.toLowerCase().includes('admin') || 
                            departure?.aiVerification?.toLowerCase().includes('admin') ||
                            arrival?.reason?.includes('(บันทึกด่วนโดยแอดมิน)') ||
