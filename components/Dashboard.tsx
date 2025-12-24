@@ -142,7 +142,6 @@ const Dashboard: React.FC = () => {
       
       const isLeaveOrDuty = (r?: CheckInRecord) => {
           if (!r) return false;
-          // เอา authorized_late ออกจากกลุ่มนี้เพื่อให้แสดงเวลามาตามจริง
           return ['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(r.type);
       };
 
@@ -153,34 +152,52 @@ const Dashboard: React.FC = () => {
 
       let arrivalVal = '-';
       let departureVal = '-';
-      let remark = '';
+      let remarkParts: string[] = [];
 
       if (arrival) {
           if (isLeaveOrDuty(arrival)) {
               const label = getLeaveLabel(arrival.type);
               arrivalVal = label;
               departureVal = label;
-              remark = arrival.reason || '';
+              if (arrival.reason) remarkParts.push(arrival.reason);
           } else {
-              // กรณีมาทำงานปกติ หรือ ขอเข้าสาย ให้แสดงเวลา
               arrivalVal = new Date(arrival.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
               
               if (arrival.type === 'authorized_late') {
-                  remark = 'ขอเข้าสาย';
-                  if (arrival.reason) remark += ` (${arrival.reason})`;
+                  let txt = 'ขอเข้าสาย';
+                  if (arrival.reason) {
+                      const cleanReason = arrival.reason.replace('(บันทึกด่วนโดยแอดมิน)', '').replace('(โดยผู้ดูแลระบบ)', '').trim();
+                      if (cleanReason) txt += `: ${cleanReason}`;
+                  }
+                  remarkParts.push(txt);
               } else if (arrival.status === 'Late') {
-                  remark = 'มาสาย';
-                  if (arrival.reason) remark += ` (${arrival.reason})`;
-              } else {
-                  remark = arrival.reason || '';
+                  let txt = 'มาสาย';
+                  if (arrival.reason) {
+                      const cleanReason = arrival.reason.replace('(บันทึกด่วนโดยแอดมิน)', '').replace('(โดยผู้ดูแลระบบ)', '').trim();
+                      if (cleanReason) txt += `: ${cleanReason}`;
+                  }
+                  remarkParts.push(txt);
+              } else if (arrival.reason) {
+                  const cleanReason = arrival.reason.replace('(บันทึกด่วนโดยแอดมิน)', '').replace('(โดยผู้ดูแลระบบ)', '').trim();
+                  if (cleanReason) remarkParts.push(cleanReason);
               }
           }
       }
 
-      if (departure && departureVal === '-') {
+      if (departure && !isLeaveOrDuty(arrival)) {
           departureVal = new Date(departure.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-          if (departure.status === 'Early Leave' && !remark.includes('เข้าสาย') && !remark.includes('ไปราชการ') && !remark.includes('ลา')) {
-             remark = (remark ? remark + ' ' : '') + 'กลับก่อนเวลา';
+          if (departure.status === 'Early Leave') {
+             let txt = 'กลับก่อนเวลา';
+             if (departure.reason) {
+                 const cleanReason = departure.reason.replace('(บันทึกด่วนโดยแอดมิน)', '').replace('(โดยผู้ดูแลระบบ)', '').trim();
+                 if (cleanReason) txt += `: ${cleanReason}`;
+             }
+             remarkParts.push(txt);
+          } else if (departure.reason) {
+              const cleanReason = departure.reason.replace('(บันทึกด่วนโดยแอดมิน)', '').replace('(โดยผู้ดูแลระบบ)', '').trim();
+              if (cleanReason && !remarkParts.includes(cleanReason)) {
+                  remarkParts.push(cleanReason);
+              }
           }
       }
 
@@ -190,8 +207,9 @@ const Dashboard: React.FC = () => {
                            arrival?.reason?.includes('(บันทึกด่วนโดยแอดมิน)') ||
                            arrival?.reason?.includes('(โดยผู้ดูแลระบบ)');
 
+      let finalRemark = remarkParts.filter(p => p && p !== '-').join(', ');
       if (isAdminEntry) {
-          remark = (remark ? remark + ' ' : '') + 'แอดมินบันทึก';
+          finalRemark = (finalRemark ? finalRemark + ' ' : '') + '(แอดมินบันทึก)';
       }
 
       return {
@@ -200,7 +218,7 @@ const Dashboard: React.FC = () => {
         role: staff.role,
         arrival: arrivalVal,
         departure: departureVal,
-        remark: remark
+        remark: finalRemark
       };
     });
   }, [staffList, filteredToday]);
