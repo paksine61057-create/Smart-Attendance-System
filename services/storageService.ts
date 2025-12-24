@@ -4,13 +4,16 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-// ลิ้งค์เซิร์ฟเวอร์หลัก (อัปเดตลิ้งค์ใหม่ที่นี่เรียบร้อยแล้ว)
+// ลิ้งค์เซิร์ฟเวอร์หลัก
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzxtqmNg2Xx9EJNQGYNJO9xb-I5XkUiLR3ZIq_q3RCTdDBDAx_aQL9be_A_mynuSWwj/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
-    const cleanImageBase64 = record.imageUrl || "";
+    
+    // ตรวจสอบและทำความสะอาด Base64 (ตัด prefix data:image/jpeg;base64, ออกเพื่อให้เหลือแค่เนื้อไฟล์)
+    const rawImage = record.imageUrl || "";
+    const cleanImageBase64 = rawImage.includes(',') ? rawImage.split(',')[1] : rawImage;
 
     const payload = {
       "action": "insertRecord",
@@ -33,15 +36,17 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "lng": record.location.lng,
       "Distance (m)": record.distanceFromBase || 0,
       "AI Verification": record.aiVerification || '-',
-      "imageBase64": cleanImageBase64
+      "imageBase64": cleanImageBase64 // ส่ง Base64 ที่คลีนแล้ว
     };
 
+    // ส่งข้อมูลแบบ POST โดยใช้ text/plain เพื่อเลี่ยงปัญหา CORS ของ Google Apps Script
     await fetch(url, {
       method: 'POST',
       mode: 'no-cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify(payload)
     });
+    
     return true; 
   } catch (e) {
     console.error("Sync to sheets failed", e);
@@ -143,20 +148,16 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
         return false;
     };
 
-    // กลไก Force Update: หากลิ้งค์ในเครื่องต่างจาก DEFAULT_GOOGLE_SHEET_URL ให้ดึงค่าจาก DEFAULT ทันที
     if (storedUrl && storedUrl !== DEFAULT_GOOGLE_SHEET_URL) {
         try {
             const forceResp = await fetch(`${DEFAULT_GOOGLE_SHEET_URL}?action=getSettings&t=${Date.now()}`);
             if (forceResp.ok) {
                 const cloudSettings = await forceResp.json();
                 if (applyCloudSettings(cloudSettings)) {
-                    console.log("Forced update to new server link successful");
                     return true;
                 }
             }
-        } catch (e) {
-            console.warn("Failed force update, trying current stored URL");
-        }
+        } catch (e) {}
     }
 
     const targetUrl = storedUrl || DEFAULT_GOOGLE_SHEET_URL;
@@ -168,15 +169,6 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
         }
         return true;
     } catch (e) { 
-      if (targetUrl !== DEFAULT_GOOGLE_SHEET_URL) {
-          try {
-              const fallbackResp = await fetch(`${DEFAULT_GOOGLE_SHEET_URL}?action=getSettings&t=${Date.now()}`);
-              if (fallbackResp.ok) {
-                  const fallbackSettings = await fallbackResp.json();
-                  applyCloudSettings(fallbackSettings);
-              }
-          } catch (err) {}
-      }
       return false; 
     }
 }
