@@ -59,6 +59,21 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   // ฟังก์ชันเริ่มขั้นตอนถ่ายรูป (ตรวจสอบพิกัดก่อน)
   const startCameraStep = async () => {
+    // ตรวจสอบการกรอกเหตุผล (Validation)
+    const now = new Date();
+    const h = now.getHours();
+    const m = now.getMinutes();
+    const isSpecialType = ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(attendanceType);
+    
+    // บังคับเหตุผลกรณี: มาสาย (>= 08:01), กลับก่อน (< 16:00), หรือประเภทพิเศษ
+    const isLate = attendanceType === 'arrival' && (h > 8 || (h === 8 && m >= 1));
+    const isEarly = attendanceType === 'departure' && h < 16;
+    
+    if ((isLate || isEarly || isSpecialType) && !reason.trim()) {
+      alert('⚠️ กรุณาระบุเหตุผลก่อนบันทึกเวลา');
+      return;
+    }
+
     const settings = getSettings();
     const needsLocationCheck = ['arrival', 'departure', 'authorized_late'].includes(attendanceType);
     
@@ -278,7 +293,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                            </div>
                         </div>
 
-                        {(isSpecialType || (attendanceType === 'departure' && new Date().getHours() < 16) || (attendanceType === 'arrival' && new Date().getHours() >= 8)) && (
+                        {(isSpecialType || (attendanceType === 'departure' && new Date().getHours() < 16) || (attendanceType === 'arrival' && (new Date().getHours() > 8 || (new Date().getHours() === 8 && new Date().getMinutes() >= 1)))) && (
                             <div className="animate-in fade-in zoom-in text-left">
                                 <label className="block text-[9px] font-black text-amber-200 uppercase tracking-widest ml-2 mb-2">โปรดระบุเหตุผล / รายละเอียด</label>
                                 <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="w-full p-4 bg-white border-4 border-amber-200 rounded-2xl outline-none text-stone-800 font-bold shadow-lg focus:ring-4 focus:ring-amber-400/30 transition-all" placeholder="พิมพ์เหตุผลที่นี่..." rows={2} />
