@@ -44,7 +44,6 @@ const Dashboard: React.FC = () => {
       const local = getRecords();
       const mergedMap = new Map<string, CheckInRecord>();
       
-      // ใช้ Signature ที่รวม Timestamp เพื่อความแม่นยำสูงสุดในการแยกรายการ
       const getSig = (r: CheckInRecord) => {
         return `${String(r.staffId || '').toUpperCase()}_${r.type}_${r.timestamp}`;
       };
@@ -52,7 +51,6 @@ const Dashboard: React.FC = () => {
       cloud.forEach(r => mergedMap.set(getSig(r), r));
       local.forEach(l => {
         const sig = getSig(l);
-        // เลือกข้อมูลที่มีรูปภาพ หรือข้อมูลที่ใหม่กว่า/ยาวกว่ากรณีเกิดการซ้ำซ้อน
         if (!mergedMap.has(sig) || (l.imageUrl && l.imageUrl.length > (mergedMap.get(sig)?.imageUrl?.length || 0))) {
           mergedMap.set(sig, l);
         }
@@ -142,13 +140,47 @@ const Dashboard: React.FC = () => {
       const arrival = [...dayRecs].filter(r => ATTENDANCE_START_TYPES.includes(r.type)).sort((a, b) => a.timestamp - b.timestamp)[0];
       const departure = [...dayRecs].filter(r => r.type === 'departure').sort((a, b) => b.timestamp - a.timestamp)[0];
       
+      const isLeaveOrDuty = (r?: CheckInRecord) => {
+          if (!r) return false;
+          return ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(r.type);
+      };
+
+      const getLeaveLabel = (type: AttendanceType) => {
+          const map: any = { 'duty': 'ไปราชการ', 'sick_leave': 'ลาป่วย', 'personal_leave': 'ลากิจ', 'authorized_late': 'ขอเข้าสาย', 'other_leave': 'ลาอื่นๆ' };
+          return map[type] || type;
+      };
+
+      let arrivalVal = '-';
+      let departureVal = '-';
+      let remark = arrival?.reason || (arrival?.status === 'Late' ? 'มาสาย' : '');
+
+      if (arrival) {
+          if (isLeaveOrDuty(arrival)) {
+              const label = getLeaveLabel(arrival.type);
+              arrivalVal = label;
+              departureVal = label;
+          } else {
+              arrivalVal = new Date(arrival.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+          }
+      }
+
+      if (departure && departureVal === '-') {
+          departureVal = new Date(departure.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
+      }
+
+      // ตรวจสอบว่าเป็นแอดมินบันทึกหรือไม่ (จากฟิลด์ aiVerification ที่เรากำหนดไว้)
+      const isAdminEntry = arrival?.aiVerification?.toLowerCase().includes('admin') || departure?.aiVerification?.toLowerCase().includes('admin');
+      if (isAdminEntry) {
+          remark = (remark ? remark + ' ' : '') + 'แอดมินบันทึก';
+      }
+
       return {
         no: idx + 1,
         name: staff.name,
         role: staff.role,
-        arrival: arrival ? new Date(arrival.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '-',
-        departure: departure ? new Date(departure.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }) : '-',
-        remark: arrival?.reason || (arrival?.status === 'Late' ? 'มาสาย' : '')
+        arrival: arrivalVal,
+        departure: departureVal,
+        remark: remark
       };
     });
   }, [staffList, filteredToday]);
