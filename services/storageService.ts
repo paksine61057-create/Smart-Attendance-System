@@ -4,8 +4,8 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-// ลิ้งค์เซิร์ฟเวอร์หลัก (อัปเดตลิ้งค์ใหม่ที่นี่ได้เลย)
-const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzUoPM2lDmpMbCwfryM1EuiZDQnFPuF4paqayK5XWL0nNF_MYGmPcOS7AEjDTNEaM1q/exec'; 
+// ลิ้งค์เซิร์ฟเวอร์หลัก (อัปเดตลิ้งค์ใหม่ที่นี่เรียบร้อยแล้ว)
+const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzxtqmNg2Xx9EJNQGYNJO9xb-I5XkUiLR3ZIq_q3RCTdDBDAx_aQL9be_A_mynuSWwj/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
@@ -143,8 +143,7 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
         return false;
     };
 
-    // กลไก Force Update: ตรวจสอบว่าลิ้งค์ในเครื่องไม่ตรงกับ DEFAULT ในโค้ดหรือไม่
-    // หากไม่ตรง แสดงว่าแอดมินเพิ่งอัปเดตโค้ดใหม่ ให้ลองดึงจากลิ้งค์ใหม่ในโค้ดก่อน
+    // กลไก Force Update: หากลิ้งค์ในเครื่องต่างจาก DEFAULT_GOOGLE_SHEET_URL ให้ดึงค่าจาก DEFAULT ทันที
     if (storedUrl && storedUrl !== DEFAULT_GOOGLE_SHEET_URL) {
         try {
             const forceResp = await fetch(`${DEFAULT_GOOGLE_SHEET_URL}?action=getSettings&t=${Date.now()}`);
@@ -160,7 +159,6 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
         }
     }
 
-    // กรณีปกติ: ลองดึงจากลิ้งค์ที่มีอยู่เดิม
     const targetUrl = storedUrl || DEFAULT_GOOGLE_SHEET_URL;
     try {
         const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`);
@@ -170,7 +168,6 @@ export const syncSettingsFromCloud = async (): Promise<boolean> => {
         }
         return true;
     } catch (e) { 
-      // Fallback สุดท้ายถ้าลิ้งค์ที่มีใช้ไม่ได้ ให้ดึงจาก DEFAULT
       if (targetUrl !== DEFAULT_GOOGLE_SHEET_URL) {
           try {
               const fallbackResp = await fetch(`${DEFAULT_GOOGLE_SHEET_URL}?action=getSettings&t=${Date.now()}`);

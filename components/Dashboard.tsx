@@ -168,8 +168,12 @@ const Dashboard: React.FC = () => {
           departureVal = new Date(departure.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
       }
 
-      // ตรวจสอบว่าเป็นแอดมินบันทึกหรือไม่ (จากฟิลด์ aiVerification ที่เรากำหนดไว้)
-      const isAdminEntry = arrival?.aiVerification?.toLowerCase().includes('admin') || departure?.aiVerification?.toLowerCase().includes('admin');
+      // ตรวจสอบว่าเป็นแอดมินบันทึกหรือไม่ (จากฟิลด์ aiVerification หรือ reason ที่เรากำหนดไว้)
+      const isAdminEntry = arrival?.aiVerification?.toLowerCase().includes('admin') || 
+                           departure?.aiVerification?.toLowerCase().includes('admin') ||
+                           arrival?.reason?.includes('(บันทึกด่วนโดยแอดมิน)') ||
+                           arrival?.reason?.includes('(โดยผู้ดูแลระบบ)');
+
       if (isAdminEntry) {
           remark = (remark ? remark + ' ' : '') + 'แอดมินบันทึก';
       }
@@ -475,9 +479,9 @@ const Dashboard: React.FC = () => {
                              <td className="border border-stone-300 p-2 text-center whitespace-nowrap overflow-hidden text-ellipsis min-w-[180px]">
                                 <div className="text-[10px] text-stone-500 font-bold uppercase tracking-tighter">{d.role}</div>
                              </td>
-                             <td className={`border border-stone-300 p-2 text-center font-mono font-bold ${d.arrival !== '-' ? 'text-emerald-700' : 'text-stone-300'}`}>{d.arrival}</td>
-                             <td className={`border border-stone-300 p-2 text-center font-mono font-bold ${d.departure !== '-' ? 'text-blue-700' : 'text-stone-300'}`}>{d.departure}</td>
-                             <td className="border border-stone-300 p-2 text-[11px] italic text-rose-600 font-bold leading-tight break-words">{d.remark}</td>
+                             <td className={`border border-stone-300 p-2 text-center font-mono font-bold ${d.arrival !== '-' && !ATTENDANCE_START_TYPES.includes(d.arrival as any) ? 'text-emerald-700' : 'text-rose-600'}`}>{d.arrival}</td>
+                             <td className={`border border-stone-300 p-2 text-center font-mono font-bold ${d.departure !== '-' && !ATTENDANCE_START_TYPES.includes(d.departure as any) ? 'text-blue-700' : 'text-rose-600'}`}>{d.departure}</td>
+                             <td className="border border-stone-300 p-2 text-[11px] italic text-stone-600 font-bold leading-tight break-words">{d.remark}</td>
                           </tr>
                        ))}
                     </tbody>
