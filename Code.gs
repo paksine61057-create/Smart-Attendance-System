@@ -1,6 +1,6 @@
 
 /**
- * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026 (Fixed Image Flow)
+ * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026 (Updated for Drive URL)
  */
  
 const SHEET_NAME = "Attendance"; 
@@ -98,19 +98,20 @@ function doPost(e) {
 
     // บันทึกเวลา (insertRecord)
     if (data.action === "insertRecord" || data.imageBase64) {
-      let finalImageUrl = "No Image Data";
+      let finalImageUrl = "-";
       
-      // 1. จัดการรูปภาพก่อนบันทึกลง Sheet
-      if (data.imageBase64 && data.imageBase64.length > 50) {
+      // 1. จัดการอัปโหลดรูปภาพลง Drive ก่อนบันทึกเข้า Sheet
+      if (data.imageBase64 && data.imageBase64.length > 100) {
         const staffId = data["Staff ID"] || "Unknown";
         const ts = data["Timestamp"] || new Date().getTime();
         const fileName = "ATT_" + staffId + "_" + ts + ".jpg";
         
+        // เรียกใช้ฟังก์ชันจาก ImageService.gs
         const uploadResult = saveBase64ImageToDrive(data.imageBase64, fileName);
         if (uploadResult && uploadResult.indexOf("http") === 0) {
-          finalImageUrl = uploadResult; // เป็น URL แล้ว
+          finalImageUrl = uploadResult; 
         } else {
-          finalImageUrl = uploadResult; // เป็นข้อความ Error
+          finalImageUrl = "Upload Failed: " + uploadResult;
         }
       }
 
@@ -136,7 +137,7 @@ function doPost(e) {
         data["Location"] || "Web App",
         currentDistance,
         data["AI Verification"] || "-",
-        finalImageUrl // บันทึกเฉพาะ URL หรือ Error Message
+        finalImageUrl // บันทึก URL ที่ได้จากขั้นตอนที่ 1
       ]);
 
       return ContentService.createTextOutput("Success");
