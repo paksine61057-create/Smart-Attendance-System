@@ -21,6 +21,22 @@ const CAMERA_FILTERS = [
   { id: 'chic', name: 'เท่', css: 'grayscale(1) contrast(1.2) brightness(1.1)', color: '#1f2937' },
 ];
 
+const ON_TIME_MESSAGES = [
+  { title: "✅ ลงเวลาเรียบร้อย", body: "ขอบคุณที่มาตรงเวลา ความสม่ำเสมอของคุณช่วยให้วันทำงานราบรื่น 🌟" },
+  { title: "⏰ คุณมาทันเวลา เยี่ยมมาก!", body: "เริ่มต้นวันด้วยวินัยเล็ก ๆ ที่สร้างผลลัพธ์ที่ดีในระยะยาว 👍" },
+  { title: "🌱 เริ่มวันใหม่ได้อย่างดี", body: "การมาตรงเวลาคือก้าวแรกของความเป็นมืออาชีพ ขอบคุณที่รักษามาตรฐานนี้ไว้" },
+  { title: "💙 ขอบคุณสำหรับการตรงเวลา", body: "สิ่งเล็ก ๆ นี้สร้างบรรยากาศการทำงานที่ดีให้กับทุกคน" },
+  { title: "⭐ วันนี้คุณเริ่มต้นได้ยอดเยี่ยม", body: "มาตรงเวลา = พร้อมทำงาน = พร้อมสร้างคุณค่า" }
+];
+
+const LATE_MESSAGES = [
+  { title: "🌤️ ลงเวลาเรียบร้อยแล้ว", body: "ไม่เป็นไรนะ วันนี้เริ่มใหม่ได้เสมอ ขอให้เป็นวันที่ดีในการทำงาน 😊" },
+  { title: "💪 ถึงจะช้ากว่านิดหน่อย แต่คุณก็มาแล้ว", body: "ขอบคุณที่ตั้งใจมาทำงาน ขอให้วันนี้ผ่านไปอย่างราบรื่น" },
+  { title: "🌈 ทุกวันคือโอกาสในการปรับปรุง", body: "วันนี้อาจเริ่มช้าหน่อย แต่คุณยังสามารถทำวันนี้ให้ดีที่สุดได้" },
+  { title: "🤍 อย่ากังวลมากเกินไป", body: "ขอให้โฟกัสกับงานตรงหน้า แล้วทำวันนี้ให้มีคุณภาพนะครับ" },
+  { title: "✨ การเริ่มต้นสำคัญเสมอ", body: "ขอบคุณที่มาลงเวลา และขอให้วันนี้เป็นวันที่ดีอีกวันหนึ่ง" }
+];
+
 const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [step, setStep] = useState<'info' | 'camera' | 'verifying' | 'result'>('info');
   const [attendanceType, setAttendanceType] = useState<AttendanceType>(() => {
@@ -36,7 +52,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [gpsLoadingMsg, setGpsLoadingMsg] = useState('');
   const [isLocating, setIsLocating] = useState(false);
 
-  // ข้อมูลพิกัดที่ดึงมาเตรียมไว้
+  // Result metadata for customization
+  const [resultTitle, setResultTitle] = useState('');
+  const [resultBody, setResultBody] = useState('');
+  const [resultTheme, setResultTheme] = useState<'success' | 'warning'>('success');
+
   const [preFetchedLocation, setPreFetchedLocation] = useState<GeoLocation>({ lat: 0, lng: 0 });
   const [preFetchedDistance, setPreFetchedDistance] = useState(0);
 
@@ -57,15 +77,12 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     } else setCurrentUser(null);
   }, [staffIdInput]);
 
-  // ฟังก์ชันเริ่มขั้นตอนถ่ายรูป (ตรวจสอบพิกัดก่อน)
   const startCameraStep = async () => {
-    // ตรวจสอบการกรอกเหตุผล (Validation)
     const now = new Date();
     const h = now.getHours();
     const m = now.getMinutes();
     const isSpecialType = ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(attendanceType);
     
-    // บังคับเหตุผลกรณี: มาสาย (>= 08:01), กลับก่อน (< 16:00), หรือประเภทพิเศษ
     const isLate = attendanceType === 'arrival' && (h > 8 || (h === 8 && m >= 1));
     const isEarly = attendanceType === 'departure' && h < 16;
     
@@ -77,17 +94,14 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     const settings = getSettings();
     const needsLocationCheck = ['arrival', 'departure', 'authorized_late'].includes(attendanceType);
     
-    // หากเป็นโหมดออนไลน์ หรือประเภทงานที่ไม่ต้องการพิกัด ให้ข้ามไปหน้ากล้องทันที
     if (settings.locationMode === 'online' || !needsLocationCheck) {
         setStep('camera');
         return;
     }
 
-    // หากเป็นโหมด GPS ให้เริ่มการดึงตำแหน่ง
     setIsLocating(true);
     
     try {
-      // ดึงพิกัดที่แม่นยำที่สุดก่อนเปิดกล้อง
       const pos = await getAccuratePosition();
       const currentPos = { lat: pos.coords.latitude, lng: pos.coords.longitude };
       
@@ -102,7 +116,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         return;
       }
 
-      // เก็บค่าไว้ใช้ตอนบันทึกจริง
       setPreFetchedLocation(currentPos);
       setPreFetchedDistance(Math.round(distance));
       setStep('camera');
@@ -167,16 +180,36 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         const now = new Date();
         let status: any = 'Normal';
         
+        // Determine status and set random success message
         if (attendanceType === 'arrival') {
             const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 1, 0, 0);
-            status = now.getTime() >= limit.getTime() ? 'Late' : 'On Time';
+            if (now.getTime() >= limit.getTime()) {
+                status = 'Late';
+                const msg = LATE_MESSAGES[Math.floor(Math.random() * LATE_MESSAGES.length)];
+                setResultTitle(msg.title);
+                setResultBody(msg.body);
+                setResultTheme('warning');
+            } else {
+                status = 'On Time';
+                const msg = ON_TIME_MESSAGES[Math.floor(Math.random() * ON_TIME_MESSAGES.length)];
+                setResultTitle(msg.title);
+                setResultBody(msg.body);
+                setResultTheme('success');
+            }
         } else if (attendanceType === 'departure') {
             const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0, 0);
             status = now.getTime() < limit.getTime() ? 'Early Leave' : 'Normal';
-        } else if (attendanceType === 'authorized_late') {
-            status = 'Authorized Late';
-        } else if (['duty', 'sick_leave', 'personal_leave', 'other_leave'].includes(attendanceType)) {
+            // Use standard on-time style for departure unless specific late logic is needed
+            const msg = ON_TIME_MESSAGES[Math.floor(Math.random() * ON_TIME_MESSAGES.length)];
+            setResultTitle(status === 'Early Leave' ? "✅ ลงเวลากลับเรียบร้อย" : msg.title);
+            setResultBody(status === 'Early Leave' ? "เดินทางกลับบ้านโดยสวัสดิภาพนะครับ" : msg.body);
+            setResultTheme('success');
+        } else {
+            // Specialized attendance types
             status = attendanceType.replace('_', ' ').split(' ').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
+            setResultTitle("✅ ลงเวลาสำเร็จ");
+            setResultBody("ระบบได้บันทึกข้อมูลของคุณเรียบร้อยแล้ว");
+            setResultTheme('success');
         }
 
         const record: CheckInRecord = {
@@ -197,7 +230,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         await saveRecord(record);
         setStep('result');
         localStorage.setItem('school_checkin_saved_staff_id', currentUser.id);
-        setTimeout(() => onSuccess(), 2000);
+        setTimeout(() => onSuccess(), 2500);
       }
     }
   }, [currentUser, attendanceType, reason, activeFilterId, onSuccess, preFetchedLocation, preFetchedDistance]);
@@ -387,10 +420,21 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   );
   
   if (step === 'result') return (
-    <div className="max-w-md mx-auto p-20 bg-emerald-500 rounded-[3rem] text-white text-center flex flex-col items-center justify-center shadow-2xl animate-in zoom-in border-8 border-white">
-        <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mb-8 animate-bounce"><svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>
-        <h3 className="text-5xl font-black">สำเร็จแล้ว!</h3>
-        <p className="font-black text-xl mt-4 opacity-90 uppercase tracking-widest underline decoration-wavy">บันทึกข้อมูลเรียบร้อย 🦌</p>
+    <div className={`max-w-md mx-auto p-12 md:p-16 rounded-[3rem] text-white text-center flex flex-col items-center justify-center shadow-2xl animate-in zoom-in border-8 border-white ${resultTheme === 'success' ? 'bg-emerald-500' : 'bg-amber-400'}`}>
+        <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mb-8 animate-bounce">
+            <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12"></polyline>
+            </svg>
+        </div>
+        <h3 className="text-4xl md:text-5xl font-black leading-tight drop-shadow-md">{resultTitle}</h3>
+        <p className="font-bold text-lg md:text-xl mt-6 opacity-95 tracking-tight leading-relaxed max-w-xs">
+            {resultBody}
+        </p>
+        <div className="mt-10 flex items-center gap-2 px-6 py-2 bg-black/10 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">
+           <span>Prachak Attendance System</span>
+           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
+           <span>Success ❄️</span>
+        </div>
     </div>
   );
   
