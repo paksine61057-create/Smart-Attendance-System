@@ -37,6 +37,14 @@ const LATE_MESSAGES = [
   { title: "✨ การเริ่มต้นสำคัญเสมอ", body: "ขอบคุณที่มาลงเวลา และขอให้วันนี้เป็นวันที่ดีอีกวันหนึ่ง" }
 ];
 
+const DEPARTURE_MESSAGES = [
+  { title: "🏠 เดินทางปลอดภัยนะครับ", body: "ลงเวลากลับเรียบร้อย พักผ่อนให้เต็มที่เพื่อเช้าวันใหม่ที่สดใส 🌟" },
+  { title: "🌙 พักให้หายเหนื่อยนะครับ", body: "วันนี้คุณเก่งมาก ขอบคุณที่เหนื่อยมาทั้งวันเพื่อลูกศิษย์ กลับบ้านพักผ่อนนะครับ ❄️" },
+  { title: "🚗 เดินทางโดยสวัสดิภาพ", body: "ขอให้เป็นเย็นวันที่ผ่อนคลาย พรุ่งนี้เจอกันใหม่ด้วยพลังที่เต็มเปี่ยม ✨" },
+  { title: "🛌 อย่าลืมพักผ่อนเยอะๆ", body: "ร่างกายที่ได้พักจะช่วยให้งานพรุ่งนี้ยอดเยี่ยมขึ้น เดินทางปลอดภัยครับ 🎁" },
+  { title: "🌟 จบภารกิจวันนี้แล้ว", body: "ขอให้มีความสุขกับเวลาพักผ่อนที่บ้าน และกลับมาสู้ใหม่ในวันพรุ่งนี้ครับ" }
+];
+
 const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [step, setStep] = useState<'info' | 'camera' | 'verifying' | 'result'>('info');
   const [attendanceType, setAttendanceType] = useState<AttendanceType>(() => {
@@ -167,7 +175,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         canvas.height = video.videoHeight * scale;
         
         // --- การปรับเพื่อไม่ให้รูปบันทึกสลับด้าน (Natural Capture) ---
-        // เคลียร์ Canvas และตั้งค่า Transformation เพื่อกลับด้านรูปภาพให้เป็นธรรมชาติ
         context.save();
         context.translate(canvas.width, 0);
         context.scale(-1, 1);
@@ -175,7 +182,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         const filter = CAMERA_FILTERS.find(f => f.id === activeFilterId);
         context.filter = filter?.css || 'none';
         
-        // วาดภาพจากวิดีโอ (ภาพจะถูกกลับด้านด้วย scale(-1, 1) ทำให้ตัวหนังสืออ่านออกปกติในไฟล์บันทึก)
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         context.restore();
         
@@ -208,10 +214,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         } else if (attendanceType === 'departure') {
             const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0, 0);
             status = now.getTime() < limit.getTime() ? 'Early Leave' : 'Normal';
-            // Use standard on-time style for departure unless specific late logic is needed
-            const msg = ON_TIME_MESSAGES[Math.floor(Math.random() * ON_TIME_MESSAGES.length)];
-            setResultTitle(status === 'Early Leave' ? "✅ ลงเวลากลับเรียบร้อย" : msg.title);
-            setResultBody(status === 'Early Leave' ? "เดินทางกลับบ้านโดยสวัสดิภาพนะครับ" : msg.body);
+            
+            // ใช้ชุดข้อความอวยพรสำหรับการกลับบ้าน
+            const msg = DEPARTURE_MESSAGES[Math.floor(Math.random() * DEPARTURE_MESSAGES.length)];
+            setResultTitle(msg.title);
+            setResultBody(msg.body);
             setResultTheme('success');
         } else {
             // Specialized attendance types
@@ -387,10 +394,9 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                 playsInline 
                 muted
                 className="w-full h-full object-cover" 
-                // --- การปรับเพื่อให้ตอนส่องกล้องไม่สลับด้าน (Natural Preview) ---
                 style={{ 
                   filter: CAMERA_FILTERS.find(f => f.id === activeFilterId)?.css || 'none',
-                  transform: 'scaleX(-1)' // ใส่ scaleX(-1) เพื่อหักล้างการ Mirror ของกล้องหน้าปกติ ให้กลายเป็นภาพธรรมชาติ
+                  transform: 'scaleX(-1)' 
                 }} 
             />
         </div>
