@@ -11,7 +11,7 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
   try {
     const dateObj = new Date(record.timestamp);
     
-    // ตรวจสอบและทำความสะอาด Base64 (ตัด prefix data:image/jpeg;base64, ออกเพื่อให้เหลือแค่เนื้อไฟล์)
+    // ตรวจสอบและทำความสะอาด Base64
     const rawImage = record.imageUrl || "";
     const cleanImageBase64 = rawImage.includes(',') ? rawImage.split(',')[1] : rawImage;
 
@@ -36,10 +36,9 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "lng": record.location.lng,
       "Distance (m)": record.distanceFromBase || 0,
       "AI Verification": record.aiVerification || '-',
-      "imageBase64": cleanImageBase64 // ส่ง Base64 ที่คลีนแล้ว
+      "imageBase64": cleanImageBase64 
     };
 
-    // ส่งข้อมูลแบบ POST โดยใช้ text/plain เพื่อเลี่ยงปัญหา CORS ของ Google Apps Script
     await fetch(url, {
       method: 'POST',
       mode: 'no-cors',
@@ -219,23 +218,26 @@ const parseThaiDateTimeToTimestamp = (dateStr: string, timeStr: string): number 
 };
 
 /**
- * ฟังก์ชันแปลงลิงก์ Google Drive ให้เป็น Direct Image URL
+ * ฟังก์ชันแปลงลิงก์ Google Drive ให้เป็น Direct Image URL (ปรับปรุงให้รองรับหลายรูปแบบ)
  */
 const formatDriveImageUrl = (url: string): string => {
   if (!url || typeof url !== 'string' || url === '-' || url.startsWith('Error')) return '';
   
-  // ตรวจสอบว่ามี ID ของ Google Drive หรือไม่
+  // ตรวจสอบ File ID จากรูปแบบลิงก์ต่างๆ ของ Drive
   let fileId = '';
+  
+  // รูปแบบ /file/d/FILE_ID/view
   const dMatch = url.match(/\/d\/([^/&#?]+)/);
   if (dMatch) {
     fileId = dMatch[1];
   } else {
+    // รูปแบบ ?id=FILE_ID
     const idMatch = url.match(/[?&]id=([^&#?]+)/);
     if (idMatch) fileId = idMatch[1];
   }
 
   if (fileId) {
-    // ใช้ Google Thumbnail CDN ซึ่งรองรับการแสดงผลบนเว็บแอปได้เสถียรที่สุด
+    // คืนค่า Direct URL ผ่าน Google Photos/UserContent CDN เพื่อเลี่ยงปัญหา CORS และการแสดงผล
     return `https://lh3.googleusercontent.com/d/${fileId}=w1000`;
   }
   
@@ -264,11 +266,9 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     ts = parseThaiDateTimeToTimestamp(r.date || r.Date || '', r.time || r.Time || '');
                 }
 
-                // ตรวจสอบชื่อ Key ของรูปภาพให้ครอบคลุม (imageUrl จาก Code.gs)
                 let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || "";
                 
-                // ถ้าเป็นลิงก์ (เริ่มต้นด้วย http) ให้ทำการแปลงเป็นรูปภาพตรง
-                if (typeof rawImg === 'string' && rawImg.startsWith('http')) {
+                if (typeof rawImg === 'string' && (rawImg.startsWith('http') || rawImg.includes('drive.google.com'))) {
                     rawImg = formatDriveImageUrl(rawImg);
                 }
 
