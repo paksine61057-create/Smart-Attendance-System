@@ -23,13 +23,12 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Status": record.status,
       "Reason": record.reason || '-',
       "Location": "บันทึกผ่านระบบ AI Web App",
-      "lat": record.location.lat,
-      "lng": record.location.lng,
+      "Distance (m)": record.distanceFromBase || 0,
       "AI Verification": record.aiVerification || '-',
       "imageBase64": cleanImageBase64 
     };
 
-    await fetch(url, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(payload) });
+    await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
     return true; 
   } catch (e) { return false; }
 };
@@ -60,11 +59,6 @@ export const clearRecords = () => localStorage.removeItem(RECORDS_KEY);
 
 export const saveSettings = async (settings: AppSettings) => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  if (settings.googleSheetUrl) {
-    try {
-      await fetch(settings.googleSheetUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'saveSettings', lat: settings.officeLocation.lat, lng: settings.officeLocation.lng, maxDistance: settings.maxDistanceMeters, locationMode: settings.locationMode }) });
-    } catch (e) {}
-  }
 };
 
 export const getSettings = (): AppSettings => {
@@ -74,19 +68,7 @@ export const getSettings = (): AppSettings => {
 };
 
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
-    const s = getSettings();
-    const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-    try {
-        const response = await fetch(`${targetUrl}?action=getSettings&t=${Date.now()}`);
-        if (response.ok) {
-           const cloud = await response.json();
-           if (cloud && cloud.officeLocation) {
-               const news = { ...getSettings(), officeLocation: cloud.officeLocation, maxDistanceMeters: cloud.maxDistanceMeters || 50, locationMode: cloud.locationMode || 'online' };
-               localStorage.setItem(SETTINGS_KEY, JSON.stringify(news));
-           }
-        }
-        return true;
-    } catch (e) { return false; }
+    return true; // ข้ามการดึงตั้งค่าจาก Cloud เพื่อความเสถียร
 };
 
 export const syncUnsyncedRecords = async () => {
@@ -103,19 +85,7 @@ export const syncUnsyncedRecords = async () => {
 export const deleteRecord = async (record: CheckInRecord) => {
   const records = getRecords().filter(r => r.id !== record.id);
   localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
-  const s = getSettings();
-  if (s.googleSheetUrl) {
-    try { await fetch(s.googleSheetUrl, { method: 'POST', mode: 'no-cors', body: JSON.stringify({ action: 'deleteRecord', id: record.timestamp }) }); } catch (e) {}
-  }
   return true;
-};
-
-const formatDriveImageUrl = (url: string): string => {
-  if (!url || url === '-' || url.startsWith('Error')) return '';
-  const dMatch = url.match(/\/d\/([^/&#?]+)/);
-  const idMatch = url.match(/[?&]id=([^&#?]+)/);
-  const fileId = dMatch ? dMatch[1] : (idMatch ? idMatch[1] : '');
-  return fileId ? `https://lh3.googleusercontent.com/d/${fileId}=w1000` : url;
 };
 
 export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
@@ -123,49 +93,35 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     try {
         const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
-        if (!response.ok) return [];
         const data = await response.json();
         if (Array.isArray(data)) {
             return data.map((r: any) => {
-                // ค้นหาค่าแบบไม่สนตัวพิมพ์เล็ก-ใหญ่
-                const getVal = (keys: string[]) => {
-                    for (let k of keys) {
-                        if (r[k] !== undefined) return r[k];
-                        if (r[k.toLowerCase()] !== undefined) return r[k.toLowerCase()];
-                        const keyNoSpace = k.replace(/\s/g, '');
-                        if (r[keyNoSpace] !== undefined) return r[keyNoSpace];
-                    }
-                    return '';
-                };
-
-                const typeStr = String(getVal(['Type']) || '');
+                const typeStr = String(r["Type"] || "");
                 let type: AttendanceType = 'arrival';
                 if (typeStr.includes('กลับ')) type = 'departure';
                 else if (typeStr.includes('ราชการ')) type = 'duty';
                 else if (typeStr.includes('ป่วย')) type = 'sick_leave';
                 else if (typeStr.includes('กิจ')) type = 'personal_leave';
 
-                const ts = Number(getVal(['Timestamp']));
-                let rawImg = getVal(['Image', 'imageUrl', 'image']);
-                if (typeof rawImg === 'string' && rawImg.includes('drive.google.com')) rawImg = formatDriveImageUrl(rawImg);
-
                 return {
-                    id: String(ts || Math.random()), 
-                    staffId: String(getVal(['Staff ID', 'staffId']) || ""),
-                    name: String(getVal(['Name']) || ""),
-                    role: String(getVal(['Role']) || ""),
-                    timestamp: ts,
+                    id: String(r["Timestamp"] || Math.random()),
+                    staffId: String(r["Staff ID"] || ""),
+                    name: String(r["Name"] || ""),
+                    role: String(r["Role"] || ""),
+                    timestamp: Number(r["Timestamp"]),
                     type: type,
-                    status: (getVal(['Status']) || 'Normal') as any,
-                    reason: String(getVal(['Reason']) || ""),
+                    status: (r["Status"] || 'Normal') as any,
+                    reason: String(r["Reason"] || ""),
                     location: { lat: 0, lng: 0 },
-                    distanceFromBase: Number(getVal(['Distance (m)', 'distancefrombase'])) || 0,
-                    aiVerification: String(getVal(['AI Verification', 'aiverification']) || ""),
-                    imageUrl: rawImg,
+                    distanceFromBase: Number(r["Distance (m)"]) || 0,
+                    aiVerification: String(r["AI Verification"] || ""),
+                    imageUrl: String(r["Image"] || "").includes('http') ? r["Image"] : "",
                     syncedToSheets: true
                 };
             }).filter(rec => rec.timestamp > 0);
         }
-    } catch (e) { console.error(e); }
+    } catch (e) {
+        console.error("Fetch Error:", e);
+    }
     return [];
 };
