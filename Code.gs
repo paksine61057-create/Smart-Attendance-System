@@ -4,6 +4,20 @@
  */
  
 const SHEET_NAME = "Attendance"; 
+const SPREADSHEET_ID = "1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI";
+
+/**
+ * ฟังก์ชันช่วยในการดึง Spreadsheet โดยระบุ ID ที่แน่นอน
+ */
+function getSS() {
+  try {
+    return SpreadsheetApp.openById(SPREADSHEET_ID);
+  } catch (e) {
+    // กรณี ID ผิดพลาด หรือสคริปต์ถูกผูกติดกับไฟล์ (Bound Script) ให้ใช้ getActive เป็นแผนสำรอง
+    console.warn("Could not open by ID, trying getActiveSpreadsheet...");
+    return SpreadsheetApp.getActiveSpreadsheet();
+  }
+}
 
 function calculateDistance(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
@@ -18,7 +32,7 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
 }
 
 function setup() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS();
   let sheet = ss.getSheetByName(SHEET_NAME);
   if (!sheet) { sheet = ss.insertSheet(SHEET_NAME); }
   const headers = ["Timestamp", "Date", "Time", "Staff ID", "Name", "Role", "Type", "Status", "Reason", "Location", "Distance (m)", "AI Verification", "Image"];
@@ -29,7 +43,7 @@ function setup() {
 
 function doGet(e) {
   const action = e.parameter.action;
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const ss = getSS();
   const sheet = ss.getSheetByName(SHEET_NAME);
   const props = PropertiesService.getScriptProperties();
   
@@ -87,7 +101,7 @@ function doPost(e) {
     const rawData = e.postData.contents;
     const data = JSON.parse(rawData);
     
-    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const ss = getSS();
     let sheet = ss.getSheetByName(SHEET_NAME);
     if (!sheet) { setup(); sheet = ss.getSheetByName(SHEET_NAME); }
 
