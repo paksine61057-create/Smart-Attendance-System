@@ -1,14 +1,12 @@
 
 /**
- * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026
- * UPDATE: แก้ไขการบันทึกลิงก์รูปภาพ ป้องกันรหัส Base64 หลุดลงชีต
+ * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026 (Fixed Image Flow)
  */
  
 const SHEET_NAME = "Attendance"; 
 
-// --- MODULAR FUNCTION: คำนวณระยะทางระหว่าง 2 จุด (หน่วย: เมตร) ---
 function calculateDistance(lat1, lon1, lat2, lon2) {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return 999999;
+  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
   const R = 6371000; 
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
@@ -72,12 +70,14 @@ function doGet(e) {
 function doPost(e) {
   try {
     const props = PropertiesService.getScriptProperties();
+    const rawData = e.postData.contents;
+    const data = JSON.parse(rawData);
+    
     const ss = SpreadsheetApp.getActiveSpreadsheet();
     let sheet = ss.getSheetByName(SHEET_NAME);
     if (!sheet) { setup(); sheet = ss.getSheetByName(SHEET_NAME); }
-    
-    const data = JSON.parse(e.postData.contents);
-    
+
+    // บันทึกการตั้งค่า
     if (data.action === "saveSettings") {
       props.setProperty("lat", data.lat.toString());
       props.setProperty("lng", data.lng.toString());
@@ -86,6 +86,7 @@ function doPost(e) {
       return ContentService.createTextOutput("Settings Saved");
     }
     
+    // ลบข้อมูล
     if (data.action === "deleteRecord") {
       const rows = sheet.getDataRange().getValues();
       const targetId = data.id.toString();
@@ -95,56 +96,53 @@ function doPost(e) {
       return ContentService.createTextOutput("Deleted");
     }
 
-    // คำนวณระยะทาง
-    let currentDistance = 0;
-    if (data.lat && data.lng) {
-      const targetLat = parseFloat(props.getProperty("lat") || "17.345854");
-      const targetLng = parseFloat(props.getProperty("lng") || "102.834789");
-      currentDistance = calculateDistance(targetLat, targetLng, data.lat, data.lng);
-      data["Distance (m)"] = Math.round(currentDistance);
-    }
-
-    // --- ส่วนประมวลผลรูปภาพ (ต้องคืนค่าเป็น URL เท่านั้น) ---
-    let finalImageUrl = "No Image";
-    
-    if (data.imageBase64 && data.imageBase64.length > 200) {
-      try {
+    // บันทึกเวลา (insertRecord)
+    if (data.action === "insertRecord" || data.imageBase64) {
+      let finalImageUrl = "No Image Data";
+      
+      // 1. จัดการรูปภาพก่อนบันทึกลง Sheet
+      if (data.imageBase64 && data.imageBase64.length > 50) {
         const staffId = data["Staff ID"] || "Unknown";
         const ts = data["Timestamp"] || new Date().getTime();
-        const fileName = "IMG_" + staffId + "_" + ts + ".jpg";
+        const fileName = "ATT_" + staffId + "_" + ts + ".jpg";
         
-        // เรียกฟังก์ชันจาก ImageService.gs
-        const resultUrl = saveBase64ImageToDrive(data.imageBase64, fileName);
-        
-        // ตรวจสอบว่าผลลัพธ์คือ URL จริงหรือไม่ (ต้องมี http)
-        if (resultUrl && resultUrl.toString().indexOf("http") === 0) {
-          finalImageUrl = resultUrl;
+        const uploadResult = saveBase64ImageToDrive(data.imageBase64, fileName);
+        if (uploadResult && uploadResult.indexOf("http") === 0) {
+          finalImageUrl = uploadResult; // เป็น URL แล้ว
         } else {
-          finalImageUrl = "Error: " + resultUrl;
+          finalImageUrl = uploadResult; // เป็นข้อความ Error
         }
-      } catch (imgErr) {
-        finalImageUrl = "System Error: " + imgErr.toString();
       }
+
+      // 2. คำนวณระยะทาง
+      let currentDistance = 0;
+      if (data.lat && data.lng) {
+        const targetLat = parseFloat(props.getProperty("lat") || "17.345854");
+        const targetLng = parseFloat(props.getProperty("lng") || "102.834789");
+        currentDistance = Math.round(calculateDistance(targetLat, targetLng, data.lat, data.lng));
+      }
+
+      // 3. บันทึกข้อมูลลง Sheet
+      sheet.appendRow([
+        data["Timestamp"],
+        data["Date"],
+        data["Time"],
+        data["Staff ID"],
+        data["Name"],
+        data["Role"],
+        data["Type"],
+        data["Status"],
+        data["Reason"],
+        data["Location"] || "Web App",
+        currentDistance,
+        data["AI Verification"] || "-",
+        finalImageUrl // บันทึกเฉพาะ URL หรือ Error Message
+      ]);
+
+      return ContentService.createTextOutput("Success");
     }
     
-    // บันทึกลงแถว (Column สุดท้ายต้องเป็น finalImageUrl)
-    sheet.appendRow([
-      data["Timestamp"],
-      data["Date"],
-      data["Time"],
-      data["Staff ID"],
-      data["Name"],
-      data["Role"],
-      data["Type"],
-      data["Status"],
-      data["Reason"],
-      data["Location"],
-      data["Distance (m)"] || 0,
-      data["AI Verification"],
-      finalImageUrl // บันทึกลิงก์ (ห้ามบันทึก data.imageBase64 ตรงนี้)
-    ]);
-    
-    return ContentService.createTextOutput("Success");
+    return ContentService.createTextOutput("Invalid Action");
   } catch (err) {
     return ContentService.createTextOutput("Error: " + err.toString());
   }

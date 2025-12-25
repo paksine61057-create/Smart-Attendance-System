@@ -150,6 +150,15 @@ const Dashboard: React.FC = () => {
           return map[type] || type;
       };
 
+      // Helper to clean reasons of admin tags
+      const cleanReasonSnippet = (str?: string) => {
+        if (!str) return '';
+        return str.replace(/\(บันทึกด่วนโดยแอดมิน\)/g, '')
+                  .replace(/\(โดยผู้ดูแลระบบ\)/g, '')
+                  .replace(/\(แอดมินบันทึก\)/g, '')
+                  .trim();
+      };
+
       let arrivalVal = '-';
       let departureVal = '-';
       let remarkParts: string[] = [];
@@ -159,27 +168,24 @@ const Dashboard: React.FC = () => {
               const label = getLeaveLabel(arrival.type);
               arrivalVal = label;
               departureVal = label;
-              if (arrival.reason) remarkParts.push(arrival.reason);
+              const rSnippet = cleanReasonSnippet(arrival.reason);
+              if (rSnippet) remarkParts.push(rSnippet);
           } else {
               arrivalVal = new Date(arrival.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
               
               if (arrival.type === 'authorized_late') {
                   let txt = 'ขอเข้าสาย';
-                  if (arrival.reason) {
-                      const cleanReason = arrival.reason.replace('(บันทึกด่วนโดยแอดมิน)', '').replace('(โดยผู้ดูแลระบบ)', '').trim();
-                      if (cleanReason) txt += `: ${cleanReason}`;
-                  }
+                  const rSnippet = cleanReasonSnippet(arrival.reason);
+                  if (rSnippet) txt += `: ${rSnippet}`;
                   remarkParts.push(txt);
               } else if (arrival.status === 'Late') {
                   let txt = 'มาสาย';
-                  if (arrival.reason) {
-                      const cleanReason = arrival.reason.replace('(บันทึกด่วนโดยแอดมิน)', '').replace('(โดยผู้ดูแลระบบ)', '').trim();
-                      if (cleanReason) txt += `: ${cleanReason}`;
-                  }
+                  const rSnippet = cleanReasonSnippet(arrival.reason);
+                  if (rSnippet) txt += `: ${rSnippet}`;
                   remarkParts.push(txt);
-              } else if (arrival.reason) {
-                  const cleanReason = arrival.reason.replace('(บันทึกด่วนโดยแอดมิน)', '').replace('(โดยผู้ดูแลระบบ)', '').trim();
-                  if (cleanReason) remarkParts.push(cleanReason);
+              } else {
+                  const rSnippet = cleanReasonSnippet(arrival.reason);
+                  if (rSnippet) remarkParts.push(rSnippet);
               }
           }
       }
@@ -188,25 +194,27 @@ const Dashboard: React.FC = () => {
           departureVal = new Date(departure.timestamp).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
           if (departure.status === 'Early Leave') {
              let txt = 'กลับก่อนเวลา';
-             if (departure.reason) {
-                 const cleanReason = departure.reason.replace('(บันทึกด่วนโดยแอดมิน)', '').replace('(โดยผู้ดูแลระบบ)', '').trim();
-                 if (cleanReason) txt += `: ${cleanReason}`;
-             }
+             const rSnippet = cleanReasonSnippet(departure.reason);
+             if (rSnippet) txt += `: ${rSnippet}`;
              remarkParts.push(txt);
-          } else if (departure.reason) {
-              const cleanReason = departure.reason.replace('(บันทึกด่วนโดยแอดมิน)', '').replace('(โดยผู้ดูแลระบบ)', '').trim();
-              if (cleanReason && !remarkParts.includes(cleanReason)) {
-                  remarkParts.push(cleanReason);
+          } else {
+              const rSnippet = cleanReasonSnippet(departure.reason);
+              if (rSnippet && !remarkParts.includes(rSnippet)) {
+                  remarkParts.push(rSnippet);
               }
           }
       }
 
-      const isAdminEntry = arrival?.aiVerification?.toLowerCase().includes('admin') || 
+      const isAdminEntry = (arrival?.aiVerification?.toLowerCase().includes('admin') || 
                            departure?.aiVerification?.toLowerCase().includes('admin') ||
                            arrival?.reason?.includes('(บันทึกด่วนโดยแอดมิน)') ||
-                           arrival?.reason?.includes('(โดยผู้ดูแลระบบ)');
+                           arrival?.reason?.includes('(โดยผู้ดูแลระบบ)') ||
+                           departure?.reason?.includes('(บันทึกด่วนโดยแอดมิน)') ||
+                           departure?.reason?.includes('(โดยผู้ดูแลระบบ)'));
 
       let finalRemark = remarkParts.filter(p => p && p !== '-').join(', ');
+      
+      // Ensure (แอดมินบันทึก) is added exactly once if it's an admin entry
       if (isAdminEntry) {
           finalRemark = (finalRemark ? finalRemark + ' ' : '') + '(แอดมินบันทึก)';
       }
@@ -529,7 +537,7 @@ const Dashboard: React.FC = () => {
                   <div className="flex-1">
                      <p className="text-[10px] font-bold text-stone-500 mb-8">ผู้อำนวยการโรงเรียนประจักษ์ศิลปาคม</p>
                      <p className="font-bold text-stone-800 text-xs">....................................................</p>
-                     <p className="text-[10px] font-bold text-stone-400 mt-1">(....................................................)</p>
+                     <p className="text-[10px) font-bold text-stone-400 mt-1">(....................................................)</p>
                   </div>
                </div>
                <button onClick={() => window.print()} className="mt-8 w-full py-4 bg-stone-900 text-white rounded-2xl font-black text-sm no-print shadow-xl">🖨️ พิมพ์รายงานฉบับนี้</button>

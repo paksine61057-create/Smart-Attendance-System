@@ -1,20 +1,28 @@
 
 /**
- * ImageService: ระบบจัดการรูปภาพอัตโนมัติ
+ * ImageService: ระบบจัดการรูปภาพอัตโนมัติ (Enhanced)
  */
 
 function getOrCreateImageFolder() {
   const FOLDER_NAME = "School_CheckIn_Images";
   const folders = DriveApp.getFoldersByName(FOLDER_NAME);
+  let activeFolder = null;
   
-  if (folders.hasNext()) {
+  while (folders.hasNext()) {
     const folder = folders.next();
-    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return folder;
+    if (!folder.isTrashed()) {
+      activeFolder = folder;
+      break; 
+    }
+  }
+  
+  if (activeFolder) {
+    activeFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return activeFolder;
   } else {
-    const folder = DriveApp.createFolder(FOLDER_NAME);
-    folder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
-    return folder;
+    const newFolder = DriveApp.createFolder(FOLDER_NAME);
+    newFolder.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return newFolder;
   }
 }
 
@@ -23,26 +31,29 @@ function getOrCreateImageFolder() {
  */
 function saveBase64ImageToDrive(base64String, fileName) {
   try {
+    if (!base64String) return "Error: No Image Data";
+    
     const folder = getOrCreateImageFolder();
     
-    // ล้างหัว Base64
-    let content = base64String;
+    // ทำความสะอาด Base64: ตัดส่วนหัว data:image/... และช่องว่างที่อาจติดมา
+    let cleanBase64 = base64String;
     if (base64String.indexOf(",") > -1) {
-      content = base64String.split(",")[1];
+      cleanBase64 = base64String.split(",")[1];
     }
+    cleanBase64 = cleanBase64.replace(/\s/g, ""); // ลบช่องว่างหรือ newline
     
     // แปลงเป็น Byte
-    const decoded = Utilities.base64Decode(content);
+    const decoded = Utilities.base64Decode(cleanBase64);
     const blob = Utilities.newBlob(decoded, "image/jpeg", fileName);
     
     // สร้างไฟล์
     const file = folder.createFile(blob);
     file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     
-    // ส่งลิงก์กลับ
-    return "https://drive.google.com/file/d/" + file.getId() + "/view?usp=sharing";
+    // คืนค่า URL สำหรับดูรูปภาพ
+    return file.getUrl();
     
   } catch (e) {
-    return "Upload Failed: " + e.toString();
+    return "Error: " + e.toString();
   }
 }
