@@ -1,27 +1,30 @@
 
 /**
- * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026 (Fixed Data Sync & Image URL)
+ * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026 (ชุดเชื่อมโยงข้อมูลสมบูรณ์)
+ * Spreadsheet: https://docs.google.com/spreadsheets/d/1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI/
  */
  
 const SHEET_NAME = "Attendance"; 
 const SPREADSHEET_ID = "1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI";
 
 /**
- * ฟังก์ชันช่วยในการดึง Spreadsheet โดยระบุ ID ที่แน่นอน
+ * ฟังก์ชันหลักในการดึง Spreadsheet โดยระบุ ID ที่แน่นอน
  */
 function getSS() {
   try {
     return SpreadsheetApp.openById(SPREADSHEET_ID);
   } catch (e) {
-    // กรณี ID ผิดพลาด หรือสคริปต์ถูกผูกติดกับไฟล์ (Bound Script) ให้ใช้ getActive เป็นแผนสำรอง
-    console.warn("Could not open by ID, trying getActiveSpreadsheet...");
+    console.error("Critical Error: ไม่สามารถเปิดไฟล์ชีตด้วย ID ได้ - " + e.toString());
     return SpreadsheetApp.getActiveSpreadsheet();
   }
 }
 
+/**
+ * คำนวณระยะทางระหว่างจุดพิกัด (Haversine Formula)
+ */
 function calculateDistance(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
-  const R = 6371000; 
+  const R = 6371000; // รัศมีโลกในหน่วยเมตร
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -31,6 +34,9 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
+/**
+ * เตรียมหน้าชีตสำหรับเก็บข้อมูล
+ */
 function setup() {
   const ss = getSS();
   let sheet = ss.getSheetByName(SHEET_NAME);
@@ -41,12 +47,16 @@ function setup() {
   return "Setup Complete";
 }
 
+/**
+ * จัดการคำขอแบบ GET (ดึงข้อมูล/ตั้งค่า)
+ */
 function doGet(e) {
   const action = e.parameter.action;
   const ss = getSS();
-  const sheet = ss.getSheetByName(SHEET_NAME);
+  let sheet = ss.getSheetByName(SHEET_NAME);
   const props = PropertiesService.getScriptProperties();
   
+  // กรณีเรียกตั้งค่าระบบ
   if (action === "getSettings" || !action) {
     return ContentService.createTextOutput(JSON.stringify({
       officeLocation: { 
@@ -58,6 +68,7 @@ function doGet(e) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
   
+  // กรณีดึงรายการบันทึกทั้งหมด
   if (action === "getRecords") {
     if (!sheet) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
     const rows = sheet.getDataRange().getValues();
@@ -77,7 +88,7 @@ function doGet(e) {
         
         let value = rows[i][index];
         
-        // แก้ปัญหาข้อมูลหาย: แปลงค่า Timestamp ให้เป็นตัวเลข Milliseconds เสมอ
+        // แปลง Timestamp ให้เป็นตัวเลขเพื่อความถูกต้องในการส่งผ่าน JSON
         if (key === "timestamp") {
           if (value instanceof Date) {
             value = value.getTime();
@@ -85,16 +96,17 @@ function doGet(e) {
             value = Number(value);
           }
         }
-        
         record[key] = value;
       });
-      // ตรวจสอบว่า record มีข้อมูลจริงก่อนเพิ่ม
       if (record.timestamp) data.push(record);
     }
     return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
+/**
+ * จัดการคำขอแบบ POST (บันทึก/ลบข้อมูล)
+ */
 function doPost(e) {
   try {
     const props = PropertiesService.getScriptProperties();
@@ -105,6 +117,7 @@ function doPost(e) {
     let sheet = ss.getSheetByName(SHEET_NAME);
     if (!sheet) { setup(); sheet = ss.getSheetByName(SHEET_NAME); }
 
+    // บันทึกการตั้งค่าระบบลงใน Script Properties
     if (data.action === "saveSettings") {
       props.setProperty("lat", data.lat.toString());
       props.setProperty("lng", data.lng.toString());
@@ -113,6 +126,7 @@ function doPost(e) {
       return ContentService.createTextOutput("Settings Saved");
     }
     
+    // ลบรายการบันทึก
     if (data.action === "deleteRecord") {
       const rows = sheet.getDataRange().getValues();
       const targetId = data.id.toString();
@@ -122,16 +136,16 @@ function doPost(e) {
       return ContentService.createTextOutput("Deleted");
     }
 
+    // บันทึกรายการลงเวลาใหม่
     if (data.action === "insertRecord" || data.imageBase64) {
       let finalImageUrl = "-";
       
-      // อัปโหลดรูปภาพลง Drive และรับ URL กลับมา
+      // อัปโหลดรูปภาพลง Google Drive (ใช้ฟังก์ชันจาก ImageService.gs)
       if (data.imageBase64 && data.imageBase64.length > 500) {
         const staffId = data["Staff ID"] || "Unknown";
         const ts = data["Timestamp"] || new Date().getTime();
         const fileName = "ATT_" + staffId + "_" + ts + ".jpg";
         
-        // ฟังก์ชันจาก ImageService.gs
         const uploadUrl = saveBase64ImageToDrive(data.imageBase64, fileName);
         if (uploadUrl && uploadUrl.indexOf("http") === 0) {
           finalImageUrl = uploadUrl; 
@@ -145,7 +159,7 @@ function doPost(e) {
         currentDistance = Math.round(calculateDistance(targetLat, targetLng, data.lat, data.lng));
       }
 
-      // บันทึก URL ลงช่อง Image (จะไม่บันทึกรหัส Base64 ลงชีตแล้ว)
+      // บันทึกข้อมูลลง Google Sheets แถวใหม่
       sheet.appendRow([
         data["Timestamp"],
         data["Date"],
