@@ -1,6 +1,6 @@
 
 /**
- * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026 (Updated for Drive URL)
+ * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026 (Fixed Data Sync & Image URL)
  */
  
 const SHEET_NAME = "Attendance"; 
@@ -49,8 +49,9 @@ function doGet(e) {
     const rows = sheet.getDataRange().getValues();
     const headers = rows[0];
     const data = [];
+    
     for (var i = rows.length - 1; i >= 1; i--) {
-      if (data.length >= 500) break; 
+      if (data.length >= 1000) break; 
       let record = {};
       headers.forEach((header, index) => {
         let key = header.toLowerCase().replace(/\s/g, "").replace(/\(m\)/g, "");
@@ -59,9 +60,22 @@ function doGet(e) {
         if (header === "AI Verification") key = "aiverification";
         if (header === "Image") key = "imageUrl";
         if (header === "Timestamp") key = "timestamp";
-        record[key] = rows[i][index];
+        
+        let value = rows[i][index];
+        
+        // แก้ปัญหาข้อมูลหาย: แปลงค่า Timestamp ให้เป็นตัวเลข Milliseconds เสมอ
+        if (key === "timestamp") {
+          if (value instanceof Date) {
+            value = value.getTime();
+          } else if (typeof value === 'string' || typeof value === 'number') {
+            value = Number(value);
+          }
+        }
+        
+        record[key] = value;
       });
-      data.push(record);
+      // ตรวจสอบว่า record มีข้อมูลจริงก่อนเพิ่ม
+      if (record.timestamp) data.push(record);
     }
     return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
   }
@@ -77,7 +91,6 @@ function doPost(e) {
     let sheet = ss.getSheetByName(SHEET_NAME);
     if (!sheet) { setup(); sheet = ss.getSheetByName(SHEET_NAME); }
 
-    // บันทึกการตั้งค่า
     if (data.action === "saveSettings") {
       props.setProperty("lat", data.lat.toString());
       props.setProperty("lng", data.lng.toString());
@@ -86,7 +99,6 @@ function doPost(e) {
       return ContentService.createTextOutput("Settings Saved");
     }
     
-    // ลบข้อมูล
     if (data.action === "deleteRecord") {
       const rows = sheet.getDataRange().getValues();
       const targetId = data.id.toString();
@@ -96,26 +108,22 @@ function doPost(e) {
       return ContentService.createTextOutput("Deleted");
     }
 
-    // บันทึกเวลา (insertRecord)
     if (data.action === "insertRecord" || data.imageBase64) {
       let finalImageUrl = "-";
       
-      // 1. จัดการอัปโหลดรูปภาพลง Drive ก่อนบันทึกเข้า Sheet
-      if (data.imageBase64 && data.imageBase64.length > 100) {
+      // อัปโหลดรูปภาพลง Drive และรับ URL กลับมา
+      if (data.imageBase64 && data.imageBase64.length > 500) {
         const staffId = data["Staff ID"] || "Unknown";
         const ts = data["Timestamp"] || new Date().getTime();
         const fileName = "ATT_" + staffId + "_" + ts + ".jpg";
         
-        // เรียกใช้ฟังก์ชันจาก ImageService.gs
-        const uploadResult = saveBase64ImageToDrive(data.imageBase64, fileName);
-        if (uploadResult && uploadResult.indexOf("http") === 0) {
-          finalImageUrl = uploadResult; 
-        } else {
-          finalImageUrl = "Upload Failed: " + uploadResult;
+        // ฟังก์ชันจาก ImageService.gs
+        const uploadUrl = saveBase64ImageToDrive(data.imageBase64, fileName);
+        if (uploadUrl && uploadUrl.indexOf("http") === 0) {
+          finalImageUrl = uploadUrl; 
         }
       }
 
-      // 2. คำนวณระยะทาง
       let currentDistance = 0;
       if (data.lat && data.lng) {
         const targetLat = parseFloat(props.getProperty("lat") || "17.345854");
@@ -123,7 +131,7 @@ function doPost(e) {
         currentDistance = Math.round(calculateDistance(targetLat, targetLng, data.lat, data.lng));
       }
 
-      // 3. บันทึกข้อมูลลง Sheet
+      // บันทึก URL ลงช่อง Image (จะไม่บันทึกรหัส Base64 ลงชีตแล้ว)
       sheet.appendRow([
         data["Timestamp"],
         data["Date"],
@@ -137,7 +145,7 @@ function doPost(e) {
         data["Location"] || "Web App",
         currentDistance,
         data["AI Verification"] || "-",
-        finalImageUrl // บันทึก URL ที่ได้จากขั้นตอนที่ 1
+        finalImageUrl
       ]);
 
       return ContentService.createTextOutput("Success");
