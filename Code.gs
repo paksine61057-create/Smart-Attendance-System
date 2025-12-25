@@ -1,30 +1,39 @@
 
 /**
- * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026 (ชุดเชื่อมโยงข้อมูลสมบูรณ์)
- * Spreadsheet: https://docs.google.com/spreadsheets/d/1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI/
+ * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026 (ฉบับสมบูรณ์เชื่อมต่อ ID)
+ * Spreadsheet ID: 1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI
  */
  
 const SHEET_NAME = "Attendance"; 
 const SPREADSHEET_ID = "1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI";
 
 /**
- * ฟังก์ชันหลักในการดึง Spreadsheet โดยระบุ ID ที่แน่นอน
+ * ฟังก์ชันดึง Spreadsheet แบบระบุ ID (ป้องกันสคริปต์หาไฟล์ไม่เจอ)
  */
 function getSS() {
   try {
     return SpreadsheetApp.openById(SPREADSHEET_ID);
   } catch (e) {
-    console.error("Critical Error: ไม่สามารถเปิดไฟล์ชีตด้วย ID ได้ - " + e.toString());
+    console.error("Error opening spreadsheet: " + e.toString());
     return SpreadsheetApp.getActiveSpreadsheet();
   }
 }
 
 /**
- * คำนวณระยะทางระหว่างจุดพิกัด (Haversine Formula)
+ * ฟังก์ชันหา Sheet โดยพยายามหาจากชื่อก่อน ถ้าไม่เจอจะเอาแผ่นแรก
  */
+function getTargetSheet(ss) {
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.getSheets()[0]; // ถ้าหาชื่อ Attendance ไม่เจอ ให้เอาแผ่นแรกที่มี (GID=0)
+    console.warn("Sheet '" + SHEET_NAME + "' not found. Using the first sheet: " + sheet.getName());
+  }
+  return sheet;
+}
+
 function calculateDistance(lat1, lon1, lat2, lon2) {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
-  const R = 6371000; // รัศมีโลกในหน่วยเมตร
+  const R = 6371000; 
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -34,9 +43,6 @@ function calculateDistance(lat1, lon1, lat2, lon2) {
   return R * c;
 }
 
-/**
- * เตรียมหน้าชีตสำหรับเก็บข้อมูล
- */
 function setup() {
   const ss = getSS();
   let sheet = ss.getSheetByName(SHEET_NAME);
@@ -44,19 +50,15 @@ function setup() {
   const headers = ["Timestamp", "Date", "Time", "Staff ID", "Name", "Role", "Type", "Status", "Reason", "Location", "Distance (m)", "AI Verification", "Image"];
   sheet.getRange(1, 1, 1, headers.length).setValues([headers]).setFontWeight("bold").setBackground("#f3f3f3");
   sheet.setFrozenRows(1);
-  return "Setup Complete";
+  return "Setup Complete สำหรับไฟล์ ID: " + SPREADSHEET_ID;
 }
 
-/**
- * จัดการคำขอแบบ GET (ดึงข้อมูล/ตั้งค่า)
- */
 function doGet(e) {
   const action = e.parameter.action;
   const ss = getSS();
-  let sheet = ss.getSheetByName(SHEET_NAME);
+  const sheet = getTargetSheet(ss);
   const props = PropertiesService.getScriptProperties();
   
-  // กรณีเรียกตั้งค่าระบบ
   if (action === "getSettings" || !action) {
     return ContentService.createTextOutput(JSON.stringify({
       officeLocation: { 
@@ -68,15 +70,16 @@ function doGet(e) {
     })).setMimeType(ContentService.MimeType.JSON);
   }
   
-  // กรณีดึงรายการบันทึกทั้งหมด
   if (action === "getRecords") {
     if (!sheet) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
     const rows = sheet.getDataRange().getValues();
+    if (rows.length <= 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
+    
     const headers = rows[0];
     const data = [];
     
     for (var i = rows.length - 1; i >= 1; i--) {
-      if (data.length >= 1000) break; 
+      if (data.length >= 2000) break; // เพิ่มโควตาดึงข้อมูล
       let record = {};
       headers.forEach((header, index) => {
         let key = header.toLowerCase().replace(/\s/g, "").replace(/\(m\)/g, "");
@@ -88,25 +91,22 @@ function doGet(e) {
         
         let value = rows[i][index];
         
-        // แปลง Timestamp ให้เป็นตัวเลขเพื่อความถูกต้องในการส่งผ่าน JSON
         if (key === "timestamp") {
           if (value instanceof Date) {
             value = value.getTime();
-          } else if (typeof value === 'string' || typeof value === 'number') {
+          } else if (!isNaN(value) && value !== "") {
             value = Number(value);
           }
         }
         record[key] = value;
       });
-      if (record.timestamp) data.push(record);
+      // เพิ่มความยืดหยุ่นในการตรวจสอบข้อมูลก่อนส่งกลับ
+      if (record.timestamp || record.name) data.push(record);
     }
     return ContentService.createTextOutput(JSON.stringify(data)).setMimeType(ContentService.MimeType.JSON);
   }
 }
 
-/**
- * จัดการคำขอแบบ POST (บันทึก/ลบข้อมูล)
- */
 function doPost(e) {
   try {
     const props = PropertiesService.getScriptProperties();
@@ -114,10 +114,8 @@ function doPost(e) {
     const data = JSON.parse(rawData);
     
     const ss = getSS();
-    let sheet = ss.getSheetByName(SHEET_NAME);
-    if (!sheet) { setup(); sheet = ss.getSheetByName(SHEET_NAME); }
+    let sheet = getTargetSheet(ss);
 
-    // บันทึกการตั้งค่าระบบลงใน Script Properties
     if (data.action === "saveSettings") {
       props.setProperty("lat", data.lat.toString());
       props.setProperty("lng", data.lng.toString());
@@ -126,7 +124,6 @@ function doPost(e) {
       return ContentService.createTextOutput("Settings Saved");
     }
     
-    // ลบรายการบันทึก
     if (data.action === "deleteRecord") {
       const rows = sheet.getDataRange().getValues();
       const targetId = data.id.toString();
@@ -136,11 +133,9 @@ function doPost(e) {
       return ContentService.createTextOutput("Deleted");
     }
 
-    // บันทึกรายการลงเวลาใหม่
     if (data.action === "insertRecord" || data.imageBase64) {
       let finalImageUrl = "-";
       
-      // อัปโหลดรูปภาพลง Google Drive (ใช้ฟังก์ชันจาก ImageService.gs)
       if (data.imageBase64 && data.imageBase64.length > 500) {
         const staffId = data["Staff ID"] || "Unknown";
         const ts = data["Timestamp"] || new Date().getTime();
@@ -159,7 +154,6 @@ function doPost(e) {
         currentDistance = Math.round(calculateDistance(targetLat, targetLng, data.lat, data.lng));
       }
 
-      // บันทึกข้อมูลลง Google Sheets แถวใหม่
       sheet.appendRow([
         data["Timestamp"],
         data["Date"],
