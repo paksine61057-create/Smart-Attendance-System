@@ -166,9 +166,18 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         canvas.width = TARGET_WIDTH;
         canvas.height = video.videoHeight * scale;
         
+        // --- การปรับเพื่อไม่ให้รูปบันทึกสลับด้าน (Natural Capture) ---
+        // เคลียร์ Canvas และตั้งค่า Transformation เพื่อกลับด้านรูปภาพให้เป็นธรรมชาติ
+        context.save();
+        context.translate(canvas.width, 0);
+        context.scale(-1, 1);
+        
         const filter = CAMERA_FILTERS.find(f => f.id === activeFilterId);
         context.filter = filter?.css || 'none';
+        
+        // วาดภาพจากวิดีโอ (ภาพจะถูกกลับด้านด้วย scale(-1, 1) ทำให้ตัวหนังสืออ่านออกปกติในไฟล์บันทึก)
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        context.restore();
         
         const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
         
@@ -365,7 +374,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   if (step === 'camera') {
     return (
       <div className="max-w-md mx-auto bg-stone-900 rounded-[3rem] overflow-hidden shadow-2xl relative border-[12px] border-white ring-4 ring-rose-100">
-        <div className="relative w-full h-[650px] bg-stone-800">
+        <div className="relative w-full h-[650px] bg-stone-800 overflow-hidden">
             {isCameraLoading && (
                 <div className="absolute inset-0 flex flex-col items-center justify-center text-white z-10 bg-stone-900">
                     <div className="w-12 h-12 border-4 border-t-rose-500 border-white/20 rounded-full animate-spin mb-4" />
@@ -378,7 +387,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                 playsInline 
                 muted
                 className="w-full h-full object-cover" 
-                style={{ filter: CAMERA_FILTERS.find(f => f.id === activeFilterId)?.css || 'none' }} 
+                // --- การปรับเพื่อให้ตอนส่องกล้องไม่สลับด้าน (Natural Preview) ---
+                style={{ 
+                  filter: CAMERA_FILTERS.find(f => f.id === activeFilterId)?.css || 'none',
+                  transform: 'scaleX(-1)' // ใส่ scaleX(-1) เพื่อหักล้างการ Mirror ของกล้องหน้าปกติ ให้กลายเป็นภาพธรรมชาติ
+                }} 
             />
         </div>
         <canvas ref={canvasRef} className="hidden" />
