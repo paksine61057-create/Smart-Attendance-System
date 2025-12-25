@@ -218,18 +218,27 @@ const parseThaiDateTimeToTimestamp = (dateStr: string, timeStr: string): number 
     }
 };
 
+/**
+ * ฟังก์ชันแปลงลิงก์ Google Drive ให้เป็น Direct Image URL
+ */
 const formatDriveImageUrl = (url: string): string => {
-  if (!url || typeof url !== 'string' || url === '-' || url.startsWith('Image Error')) return '';
-  if (url.includes('drive.google.com')) {
-    let fileId = '';
-    const dMatch = url.match(/\/d\/([^/&#?]+)/);
-    if (dMatch) fileId = dMatch[1];
-    else {
-      const idMatch = url.match(/[?&]id=([^&#?]+)/);
-      if (idMatch) fileId = idMatch[1];
-    }
-    if (fileId) return `https://drive.google.com/thumbnail?id=${fileId}&sz=w1000`;
+  if (!url || typeof url !== 'string' || url === '-' || url.startsWith('Error')) return '';
+  
+  // ตรวจสอบว่ามี ID ของ Google Drive หรือไม่
+  let fileId = '';
+  const dMatch = url.match(/\/d\/([^/&#?]+)/);
+  if (dMatch) {
+    fileId = dMatch[1];
+  } else {
+    const idMatch = url.match(/[?&]id=([^&#?]+)/);
+    if (idMatch) fileId = idMatch[1];
   }
+
+  if (fileId) {
+    // ใช้ Google Thumbnail CDN ซึ่งรองรับการแสดงผลบนเว็บแอปได้เสถียรที่สุด
+    return `https://lh3.googleusercontent.com/d/${fileId}=w1000`;
+  }
+  
   return url;
 };
 
@@ -255,8 +264,11 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                     ts = parseThaiDateTimeToTimestamp(r.date || r.Date || '', r.time || r.Time || '');
                 }
 
+                // ตรวจสอบชื่อ Key ของรูปภาพให้ครอบคลุม (imageUrl จาก Code.gs)
                 let rawImg = r.imageUrl || r.imageurl || r.image || r.Image || "";
-                if (rawImg && typeof rawImg === 'string' && rawImg.startsWith('http')) {
+                
+                // ถ้าเป็นลิงก์ (เริ่มต้นด้วย http) ให้ทำการแปลงเป็นรูปภาพตรง
+                if (typeof rawImg === 'string' && rawImg.startsWith('http')) {
                     rawImg = formatDriveImageUrl(rawImg);
                 }
 
@@ -277,6 +289,6 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
                 };
             }).filter(rec => rec.timestamp > 0);
         }
-    } catch (e) { console.error(e); }
+    } catch (e) { console.error("Fetch Global Records Error:", e); }
     return [];
 };
