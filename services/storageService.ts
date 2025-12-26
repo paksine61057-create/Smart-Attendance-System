@@ -142,10 +142,12 @@ export const getSettings = (): AppSettings => {
   
   if (data) {
     const parsed = JSON.parse(data);
-    // บังคับใช้ค่า Default ล่าสุดหาก URL ใน LocalStorage ไม่ตรงกับที่กำหนดไว้เป็นค่ากลาง
-    // เพื่อให้มั่นใจว่าทุกเครื่องจะซิงค์ข้อมูลไปยังที่เดียวกัน
+    // บังคับใช้ค่า URL ล่าสุดเสมอหากค่าในเครื่องไม่ตรงหรือว่างเปล่า
+    // เพื่อให้แอดมินที่เข้าระบบจากเครื่องใหม่เห็นข้อมูลทันที
     if (!parsed.googleSheetUrl || parsed.googleSheetUrl !== DEFAULT_GOOGLE_SHEET_URL) {
       parsed.googleSheetUrl = DEFAULT_GOOGLE_SHEET_URL;
+      // บันทึกกลับลง LocalStorage เพื่อให้ค่าใหม่เป็นปัจจุบัน
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
     }
     return { ...def, ...parsed };
   }
