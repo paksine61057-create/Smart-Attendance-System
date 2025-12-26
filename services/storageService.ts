@@ -28,9 +28,17 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "imageBase64": cleanImageBase64 
     };
 
-    await fetch(url, { method: 'POST', mode: 'no-cors', body: JSON.stringify(payload) });
+    await fetch(url, { 
+      method: 'POST', 
+      mode: 'no-cors', 
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify(payload) 
+    });
     return true; 
-  } catch (e) { return false; }
+  } catch (e) { 
+    console.error("Post to Sheets Error:", e);
+    return false; 
+  }
 };
 
 export const saveRecord = async (record: CheckInRecord) => {
@@ -45,7 +53,10 @@ export const saveRecord = async (record: CheckInRecord) => {
     if (success) {
         const updated = getRecords();
         const idx = updated.findIndex(r => r.id === record.id);
-        if (idx !== -1) { updated[idx].syncedToSheets = true; localStorage.setItem(RECORDS_KEY, JSON.stringify(updated)); }
+        if (idx !== -1) { 
+          updated[idx].syncedToSheets = true; 
+          localStorage.setItem(RECORDS_KEY, JSON.stringify(updated)); 
+        }
     }
   }
 };
@@ -68,7 +79,7 @@ export const getSettings = (): AppSettings => {
 };
 
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
-    return true; // ข้ามการดึงตั้งค่าจาก Cloud เพื่อความเสถียร
+    return true; 
 };
 
 export const syncUnsyncedRecords = async () => {
@@ -77,7 +88,9 @@ export const syncUnsyncedRecords = async () => {
     if (unsynced.length === 0) return;
     const s = getSettings();
     for (const record of unsynced) {
-        if (await sendToGoogleSheets(record, s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL)) record.syncedToSheets = true;
+        if (await sendToGoogleSheets(record, s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL)) {
+          record.syncedToSheets = true;
+        }
     }
     localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
 };
@@ -93,35 +106,51 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
     const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
     try {
         const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
+        if (!response.ok) return [];
         const data = await response.json();
+        
         if (Array.isArray(data)) {
             return data.map((r: any) => {
-                const typeStr = String(r["Type"] || "");
+                // ฟังก์ชันช่วยดึงค่าแบบไม่สน Case sensitive หรือช่องว่าง
+                const getValue = (keys: string[]) => {
+                  for (let key of keys) {
+                    if (r[key] !== undefined) return r[key];
+                    // ลองหาแบบตัวเล็กทั้งหมดและตัดช่องว่าง
+                    const normalizedKey = key.toLowerCase().replace(/\s/g, '');
+                    const foundKey = Object.keys(r).find(k => k.toLowerCase().replace(/\s/g, '') === normalizedKey);
+                    if (foundKey) return r[foundKey];
+                  }
+                  return null;
+                };
+
+                const typeStr = String(getValue(["Type"]) || "");
                 let type: AttendanceType = 'arrival';
                 if (typeStr.includes('กลับ')) type = 'departure';
                 else if (typeStr.includes('ราชการ')) type = 'duty';
                 else if (typeStr.includes('ป่วย')) type = 'sick_leave';
                 else if (typeStr.includes('กิจ')) type = 'personal_leave';
 
+                const ts = Number(getValue(["Timestamp"]));
+
                 return {
-                    id: String(r["Timestamp"] || Math.random()),
-                    staffId: String(r["Staff ID"] || ""),
-                    name: String(r["Name"] || ""),
-                    role: String(r["Role"] || ""),
-                    timestamp: Number(r["Timestamp"]),
+                    id: String(ts || Math.random()),
+                    staffId: String(getValue(["Staff ID"]) || ""),
+                    name: String(getValue(["Name"]) || ""),
+                    role: String(getValue(["Role"]) || ""),
+                    timestamp: ts,
                     type: type,
-                    status: (r["Status"] || 'Normal') as any,
-                    reason: String(r["Reason"] || ""),
+                    status: (getValue(["Status"]) || 'Normal') as any,
+                    reason: String(getValue(["Reason"]) || ""),
                     location: { lat: 0, lng: 0 },
-                    distanceFromBase: Number(r["Distance (m)"]) || 0,
-                    aiVerification: String(r["AI Verification"] || ""),
-                    imageUrl: String(r["Image"] || "").includes('http') ? r["Image"] : "",
+                    distanceFromBase: Number(getValue(["Distance (m)"])) || 0,
+                    aiVerification: String(getValue(["AI Verification"]) || ""),
+                    imageUrl: String(getValue(["Image"]) || "").includes('http') ? getValue(["Image"]) : "",
                     syncedToSheets: true
                 };
             }).filter(rec => rec.timestamp > 0);
         }
     } catch (e) {
-        console.error("Fetch Error:", e);
+        console.error("Fetch Global Records Error:", e);
     }
     return [];
 };
