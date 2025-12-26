@@ -1,3 +1,4 @@
+
 /**
  * Smart Attendance System – Production Code.gs
  * Spreadsheet: โรงเรียนประจักษ์ศิลปาคม
@@ -36,15 +37,14 @@ function getSheet() {
 }
 
 /* =========================
-   Response Helper (CORS)
+   Response Helper (GAS Standard)
 ========================= */
 function jsonResponse(data) {
+  // Google Apps Script handles CORS automatically for Web Apps set to "Anyone"
+  // .setHeader is not a valid method for TextOutput in GAS
   return ContentService
     .createTextOutput(JSON.stringify(data))
-    .setMimeType(ContentService.MimeType.JSON)
-    .setHeader("Access-Control-Allow-Origin", "*")
-    .setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-    .setHeader("Access-Control-Allow-Headers", "Content-Type");
+    .setMimeType(ContentService.MimeType.JSON);
 }
 
 /* =========================
@@ -117,14 +117,4 @@ function doPost(e) {
   } catch (err) {
     return jsonResponse({ status: "error", message: err.toString() });
   }
-}
-
-/* =========================
-   OPTIONS : CORS Preflight
-========================= */
-function doOptions() {
-  return ContentService.createTextOutput("")
-    .setHeader("Access-Control-Allow-Origin", "*")
-    .setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
-    .setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
