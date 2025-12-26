@@ -8,29 +8,30 @@ const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzxtqm
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
-    const rawImage = record.imageUrl || "";
-    const cleanImageBase64 = rawImage.includes(',') ? rawImage.split(',')[1] : rawImage;
+    // ใช้รูปภาพแบบเต็มหรือแบบตัด Header ออกตามที่ Code.gs ต้องการ
+    const imageToLink = record.imageUrl || "";
 
     const payload = {
       "action": "insertRecord",
       "Timestamp": record.timestamp,
       "Date": dateObj.toLocaleDateString('th-TH', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       "Time": dateObj.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-      "Staff ID": record.staffId || '-',
+      "Staff ID": record.staffId || '',
       "Name": record.name,
       "Role": record.role,
-      "Type": record.type === 'arrival' ? 'มาทำงาน' : record.type === 'departure' ? 'กลับบ้าน' : record.type === 'duty' ? 'ไปราชการ' : record.type === 'sick_leave' ? 'ลาป่วย' : record.type === 'personal_leave' ? 'ลากิจ' : 'อื่นๆ',
+      "Type": record.type === 'arrival' ? 'มาทำงาน' : record.type === 'departure' ? 'กลับบ้าน' : record.type === 'duty' ? 'ไปราชการ' : record.type === 'sick_leave' ? 'ลาป่วย' : record.type === 'personal_leave' ? 'ลากิจ' : record.type === 'authorized_late' ? 'ขอเข้าสาย' : 'อื่นๆ',
       "Status": record.status,
       "Reason": record.reason || '-',
       "Location": "บันทึกผ่านระบบ AI Web App",
       "Distance (m)": record.distanceFromBase || 0,
       "AI Verification": record.aiVerification || '-',
-      "imageBase64": cleanImageBase64 
+      "Image": imageToLink // เปลี่ยนจาก imageBase64 เป็น Image เพื่อให้ตรงกับ Code.gs
     };
 
+    // ส่งข้อมูลแบบ POST ไปยัง Google Apps Script
     await fetch(url, { 
       method: 'POST', 
-      mode: 'no-cors', 
+      mode: 'no-cors', // ใช้ no-cors ตามมาตรฐานการส่งไป Apps Script แบบง่าย
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload) 
     });
@@ -111,40 +112,29 @@ export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
         
         if (Array.isArray(data)) {
             return data.map((r: any) => {
-                // ฟังก์ชันช่วยดึงค่าแบบไม่สน Case sensitive หรือช่องว่าง
-                const getValue = (keys: string[]) => {
-                  for (let key of keys) {
-                    if (r[key] !== undefined) return r[key];
-                    // ลองหาแบบตัวเล็กทั้งหมดและตัดช่องว่าง
-                    const normalizedKey = key.toLowerCase().replace(/\s/g, '');
-                    const foundKey = Object.keys(r).find(k => k.toLowerCase().replace(/\s/g, '') === normalizedKey);
-                    if (foundKey) return r[foundKey];
-                  }
-                  return null;
-                };
-
-                const typeStr = String(getValue(["Type"]) || "");
+                const typeStr = String(r["Type"] || "");
                 let type: AttendanceType = 'arrival';
                 if (typeStr.includes('กลับ')) type = 'departure';
                 else if (typeStr.includes('ราชการ')) type = 'duty';
                 else if (typeStr.includes('ป่วย')) type = 'sick_leave';
                 else if (typeStr.includes('กิจ')) type = 'personal_leave';
+                else if (typeStr.includes('สาย')) type = 'authorized_late';
 
-                const ts = Number(getValue(["Timestamp"]));
+                const ts = Number(r["Timestamp"]);
 
                 return {
                     id: String(ts || Math.random()),
-                    staffId: String(getValue(["Staff ID"]) || ""),
-                    name: String(getValue(["Name"]) || ""),
-                    role: String(getValue(["Role"]) || ""),
+                    staffId: String(r["Staff ID"] || ""),
+                    name: String(r["Name"] || ""),
+                    role: String(r["Role"] || ""),
                     timestamp: ts,
                     type: type,
-                    status: (getValue(["Status"]) || 'Normal') as any,
-                    reason: String(getValue(["Reason"]) || ""),
+                    status: (r["Status"] || 'Normal') as any,
+                    reason: String(r["Reason"] || ""),
                     location: { lat: 0, lng: 0 },
-                    distanceFromBase: Number(getValue(["Distance (m)"])) || 0,
-                    aiVerification: String(getValue(["AI Verification"]) || ""),
-                    imageUrl: String(getValue(["Image"]) || "").includes('http') ? getValue(["Image"]) : "",
+                    distanceFromBase: Number(r["Distance (m)"]) || 0,
+                    aiVerification: String(r["AI Verification"] || ""),
+                    imageUrl: String(r["Image"] || "").includes('http') || String(r["Image"] || "").startsWith('data:image') ? r["Image"] : "",
                     syncedToSheets: true
                 };
             }).filter(rec => rec.timestamp > 0);
