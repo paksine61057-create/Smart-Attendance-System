@@ -4,7 +4,7 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
 
-// URL ล่าสุดที่คุณครูให้มา
+// URL ของ Google Apps Script ที่ Deploy จาก Code.gs
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbyykIU7bOmtrJmjU5t3u58b15rSMTlEPhWumKHYCE7xU1VyId8-3cdZD8T4hWR8Lpo/exec'; 
 
 /**
@@ -34,12 +34,11 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
 
     const response = await fetch(url, { 
       method: 'POST', 
-      mode: 'no-cors', // POST ไปยัง GAS มักใช้ no-cors เพื่อความเสถียร (ข้อมูลเข้าชีตได้ปกติ)
+      mode: 'no-cors', 
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload) 
     });
 
-    // เนื่องจากใช้ no-cors จะอ่าน response ไม่ได้ แต่ข้อมูลจะถูกบันทึกสำเร็จ
     return true; 
   } catch (e) { 
     console.error("Post to Sheets Error:", e);
@@ -140,7 +139,16 @@ export const getSettings = (): AppSettings => {
     officeLocation: { lat: 17.345854, lng: 102.834789 }, 
     maxDistanceMeters: 50 
   };
-  return data ? { ...def, ...JSON.parse(data) } : def;
+  
+  if (data) {
+    const parsed = JSON.parse(data);
+    // บังคับใช้ Default URL หากในเครื่องยังไม่มีค่า URL บันทึกไว้
+    if (!parsed.googleSheetUrl) {
+      parsed.googleSheetUrl = DEFAULT_GOOGLE_SHEET_URL;
+    }
+    return { ...def, ...parsed };
+  }
+  return def;
 };
 
 export const syncSettingsFromCloud = async (): Promise<boolean> => {
