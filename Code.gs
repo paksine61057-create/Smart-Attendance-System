@@ -1,96 +1,130 @@
-
 /**
- * ระบบจัดการฐานข้อมูลโรงเรียนประจักษ์ศิลปาคม 2026
- * Spreadsheet ID: 1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI
+ * Smart Attendance System – Production Code.gs
+ * Spreadsheet: โรงเรียนประจักษ์ศิลปาคม
+ * ID: 1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI
  */
- 
-const SHEET_NAME = "Attendance"; 
+
 const SPREADSHEET_ID = "1r5-VJYsR_kvtSW_jSYG3sv1GQqXEVbCMjFj9ov6SiWI";
+const SHEET_NAME = "Attendance";
 
-function getSS() {
-  try {
-    return SpreadsheetApp.openById(SPREADSHEET_ID);
-  } catch (e) {
-    return SpreadsheetApp.getActiveSpreadsheet();
-  }
-}
-
-function getTargetSheet(ss) {
+/* =========================
+   Sheet Utilities
+========================= */
+function getSheet() {
+  const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
   let sheet = ss.getSheetByName(SHEET_NAME);
+
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_NAME);
     sheet.appendRow([
-      "Timestamp", "Date", "Time", "Staff ID", "Name", "Role", "Type", "Status", "Reason", "Location", "Distance (m)", "AI Verification", "Image"
+      "Timestamp",
+      "Date",
+      "Time",
+      "Staff ID",
+      "Name",
+      "Role",
+      "Type",
+      "Status",
+      "Reason",
+      "Location",
+      "Distance (m)",
+      "AI Verification",
+      "Image"
     ]);
   }
   return sheet;
 }
 
+/* =========================
+   Response Helper (CORS)
+========================= */
+function jsonResponse(data) {
+  return ContentService
+    .createTextOutput(JSON.stringify(data))
+    .setMimeType(ContentService.MimeType.JSON)
+    .setHeader("Access-Control-Allow-Origin", "*")
+    .setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+    .setHeader("Access-Control-Allow-Headers", "Content-Type");
+}
+
+/* =========================
+   GET : Read Records
+========================= */
 function doGet(e) {
-  const action = e.parameter.action;
-  const ss = getSS();
-  const sheet = getTargetSheet(ss);
-  
-  if (action === "getRecords" || !action) {
-    const rows = sheet.getDataRange().getValues();
-    if (rows.length <= 1) return ContentService.createTextOutput("[]").setMimeType(ContentService.MimeType.JSON);
-    
-    const headers = rows[0];
-    const data = [];
-    
-    // วนจากล่างขึ้นบนเพื่อให้ข้อมูลใหม่ล่าสุดอยู่บน
-    for (var i = rows.length - 1; i >= 1; i--) {
-      let record = {};
-      headers.forEach((header, index) => {
-        let val = rows[i][index];
-        if (header === "Timestamp") {
-          val = (val instanceof Date) ? val.getTime() : Number(val);
-        }
-        record[header] = val;
-      });
-      if (record["Timestamp"]) data.push(record);
+  try {
+    const action = e && e.parameter && e.parameter.action ? e.parameter.action : "getRecords";
+    const sheet = getSheet();
+
+    if (action === "getRecords") {
+      const values = sheet.getDataRange().getValues();
+      if (values.length <= 1) return jsonResponse([]);
+
+      const headers = values[0];
+      const result = [];
+
+      for (let i = values.length - 1; i >= 1; i--) {
+        const row = values[i];
+        let obj = {};
+        headers.forEach((h, j) => {
+          let val = row[j];
+          if (h === "Timestamp" && val instanceof Date) {
+            val = val.getTime();
+          }
+          obj[h] = val;
+        });
+        result.push(obj);
+      }
+      return jsonResponse(result);
     }
-    
-    const output = JSON.stringify(data);
-    return ContentService.createTextOutput(output).setMimeType(ContentService.MimeType.JSON);
+
+    return jsonResponse({ status: "unknown action" });
+
+  } catch (err) {
+    return jsonResponse({ status: "error", message: err.toString() });
   }
 }
 
+/* =========================
+   POST : Insert Record
+========================= */
 function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
-    const ss = getSS();
-    let sheet = getTargetSheet(ss);
-
-    if (data.action === "insertRecord") {
-      let finalImageUrl = data["Image"] || "-";
-      
-      // ถ้ามีการส่งรูป Base64 มา ให้บันทึกลง Drive
-      if (data.imageBase64 && data.imageBase64.length > 100) {
-        const fileName = "ATT_" + (data["Staff ID"] || "STAFF") + "_" + (data["Timestamp"] || Date.now()) + ".jpg";
-        finalImageUrl = saveBase64ImageToDrive(data.imageBase64, fileName);
-      }
-
-      sheet.appendRow([
-        data["Timestamp"],
-        data["Date"],
-        data["Time"],
-        data["Staff ID"],
-        data["Name"],
-        data["Role"],
-        data["Type"],
-        data["Status"],
-        data["Reason"],
-        data["Location"],
-        data["Distance (m)"],
-        data["AI Verification"],
-        finalImageUrl
-      ]);
-      
-      return ContentService.createTextOutput("Success").setMimeType(ContentService.MimeType.TEXT);
+    if (!data || data.action !== "insertRecord") {
+      return jsonResponse({ status: "invalid action" });
     }
-    return ContentService.createTextOutput("Unknown Action").setMimeType(ContentService.MimeType.TEXT);
+
+    const sheet = getSheet();
+
+    sheet.appendRow([
+      data.Timestamp || Date.now(),
+      data.Date || "",
+      data.Time || "",
+      data["Staff ID"] || "",
+      data.Name || "",
+      data.Role || "",
+      data.Type || "",
+      data.Status || "",
+      data.Reason || "",
+      data.Location || "",
+      data["Distance (m)"] || "",
+      data["AI Verification"] || "",
+      data.Image || ""
+    ]);
+
+    return jsonResponse({ status: "success" });
+
   } catch (err) {
-    return ContentService.createTextOutput("Error: " + err.toString()).setMimeType(ContentService.MimeType.TEXT);
+    return jsonResponse({ status: "error", message: err.toString() });
   }
+}
+
+/* =========================
+   OPTIONS : CORS Preflight
+========================= */
+function doOptions() {
+  return ContentService.createTextOutput("")
+    .setHeader("Access-Control-Allow-Origin", "*")
+    .setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS")
+    .setHeader("Access-Control-Allow-Headers", "Content-Type");
 }
