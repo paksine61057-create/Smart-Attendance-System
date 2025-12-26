@@ -3,12 +3,12 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
-const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbzxtqmNg2Xx9EJNQGYNJO9xb-I5XkUiLR3ZIq_q3RCTdDBDAx_aQL9be_A_mynuSWwj/exec'; 
+// อัปเดตเป็น URL ล่าสุดที่คุณครูให้มา
+const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbyykIU7bOmtrJmjU5t3u58b15rSMTlEPhWumKHYCE7xU1VyId8-3cdZD8T4hWR8Lpo/exec'; 
 
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
-    // ใช้รูปภาพแบบเต็มหรือแบบตัด Header ออกตามที่ Code.gs ต้องการ
     const imageToLink = record.imageUrl || "";
 
     const payload = {
@@ -25,17 +25,22 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Location": "บันทึกผ่านระบบ AI Web App",
       "Distance (m)": record.distanceFromBase || 0,
       "AI Verification": record.aiVerification || '-',
-      "Image": imageToLink // เปลี่ยนจาก imageBase64 เป็น Image เพื่อให้ตรงกับ Code.gs
+      "Image": imageToLink 
     };
 
-    // ส่งข้อมูลแบบ POST ไปยัง Google Apps Script
-    await fetch(url, { 
+    // เปลี่ยนโหมดเป็น cors เพื่อให้สามารถรับ Response สถานะจาก Apps Script ได้
+    const response = await fetch(url, { 
       method: 'POST', 
-      mode: 'no-cors', // ใช้ no-cors ตามมาตรฐานการส่งไป Apps Script แบบง่าย
+      mode: 'cors', 
       headers: { 'Content-Type': 'text/plain' },
       body: JSON.stringify(payload) 
     });
-    return true; 
+
+    if (response.ok) {
+      const resData = await response.json();
+      return resData.status === "success";
+    }
+    return false;
   } catch (e) { 
     console.error("Post to Sheets Error:", e);
     return false; 
