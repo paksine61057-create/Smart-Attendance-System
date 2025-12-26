@@ -40,8 +40,6 @@ function getSheet() {
    Response Helper (GAS Standard)
 ========================= */
 function jsonResponse(data) {
-  // Google Apps Script handles CORS automatically for Web Apps set to "Anyone"
-  // .setHeader is not a valid method for TextOutput in GAS
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
@@ -94,8 +92,26 @@ function doPost(e) {
       return jsonResponse({ status: "invalid action" });
     }
 
+    let imageUrl = data.Image || "";
+    
+    // 1. ตรวจสอบและบันทึกรูปภาพลง Google Drive ผ่าน ImageService.gs
+    if (imageUrl && (imageUrl.startsWith("data:image") || imageUrl.length > 500)) {
+      const staffName = data.Name || "Staff";
+      const timestamp = data.Timestamp || Date.now();
+      const fileName = "CheckIn_" + staffName + "_" + timestamp + ".jpg";
+      
+      // เรียกใช้ฟังก์ชันจากไฟล์ ImageService.gs
+      const driveUrl = saveBase64ImageToDrive(imageUrl, fileName);
+      
+      // ถ้าบันทึกสำเร็จ (คืนค่ามาเป็น URL) ให้ใช้ URL นั้นแทน Base64
+      if (driveUrl && driveUrl.startsWith("http")) {
+        imageUrl = driveUrl;
+      }
+    }
+
     const sheet = getSheet();
 
+    // 2. บันทึกข้อมูลลงใน Google Sheets โดยคอลัมน์ Image จะเป็น URL ของไฟล์ใน Drive
     sheet.appendRow([
       data.Timestamp || Date.now(),
       data.Date || "",
@@ -109,10 +125,10 @@ function doPost(e) {
       data.Location || "",
       data["Distance (m)"] || "",
       data["AI Verification"] || "",
-      data.Image || ""
+      imageUrl 
     ]);
 
-    return jsonResponse({ status: "success" });
+    return jsonResponse({ status: "success", imageUrl: imageUrl });
 
   } catch (err) {
     return jsonResponse({ status: "error", message: err.toString() });
