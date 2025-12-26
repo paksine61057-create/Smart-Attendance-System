@@ -3,9 +3,13 @@ import { CheckInRecord, AppSettings, AttendanceType } from '../types';
 
 const RECORDS_KEY = 'school_checkin_records';
 const SETTINGS_KEY = 'school_checkin_settings';
-// อัปเดตเป็น URL ล่าสุดที่คุณครูให้มา
+
+// URL ล่าสุดที่คุณครูให้มา
 const DEFAULT_GOOGLE_SHEET_URL = 'https://script.google.com/macros/s/AKfycbyykIU7bOmtrJmjU5t3u58b15rSMTlEPhWumKHYCE7xU1VyId8-3cdZD8T4hWR8Lpo/exec'; 
 
+/**
+ * ส่งข้อมูลไปยัง Google Sheets
+ */
 export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Promise<boolean> => {
   try {
     const dateObj = new Date(record.timestamp);
@@ -28,7 +32,11 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
       "Image": imageToLink 
     };
 
-    // เปลี่ยนโหมดเป็น cors เพื่อให้สามารถรับ Response สถานะจาก Apps Script ได้
+    /**
+     * สำหรับ Google Apps Script: 
+     * 1. ใช้ mode: 'cors' ร่วมกับการตั้งค่า Header ใน Code.gs (jsonResponse)
+     * 2. ส่ง Content-Type เป็น 'text/plain' เพื่อหลีกเลี่ยงข้อจำกัดบางประการของ Google
+     */
     const response = await fetch(url, { 
       method: 'POST', 
       mode: 'cors', 
@@ -43,8 +51,67 @@ export const sendToGoogleSheets = async (record: CheckInRecord, url: string): Pr
     return false;
   } catch (e) { 
     console.error("Post to Sheets Error:", e);
+    // กรณี Failed to fetch ใน POST (แต่บันทึกสำเร็จในชีต) มักเกิดจากการ Redirect 
+    // ถ้าคุณครูเช็คใน Google Sheets แล้วข้อมูลเข้า แสดงว่าใช้งานได้ปกติครับ
     return false; 
   }
+};
+
+/**
+ * ดึงข้อมูลทั้งหมดจาก Google Sheets
+ */
+export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
+    const s = getSettings();
+    const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
+    
+    try {
+        // เพิ่ม t= เพื่อป้องกัน Browser cache ข้อมูลเก่า
+        const fetchUrl = `${targetUrl}?action=getRecords&t=${Date.now()}`;
+        
+        const response = await fetch(fetchUrl, {
+            method: 'GET',
+            mode: 'cors',
+            cache: 'no-cache',
+            redirect: 'follow'
+        });
+
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        
+        const data = await response.json();
+        
+        if (Array.isArray(data)) {
+            return data.map((r: any) => {
+                const typeStr = String(r["Type"] || "");
+                let type: AttendanceType = 'arrival';
+                if (typeStr.includes('กลับ')) type = 'departure';
+                else if (typeStr.includes('ราชการ')) type = 'duty';
+                else if (typeStr.includes('ป่วย')) type = 'sick_leave';
+                else if (typeStr.includes('กิจ')) type = 'personal_leave';
+                else if (typeStr.includes('สาย')) type = 'authorized_late';
+
+                const ts = Number(r["Timestamp"]);
+
+                return {
+                    id: String(ts || Math.random()),
+                    staffId: String(r["Staff ID"] || ""),
+                    name: String(r["Name"] || ""),
+                    role: String(r["Role"] || ""),
+                    timestamp: ts,
+                    type: type,
+                    status: (r["Status"] || 'Normal') as any,
+                    reason: String(r["Reason"] || ""),
+                    location: { lat: 0, lng: 0 },
+                    distanceFromBase: Number(r["Distance (m)"]) || 0,
+                    aiVerification: String(r["AI Verification"] || ""),
+                    imageUrl: String(r["Image"] || "").includes('http') || String(r["Image"] || "").startsWith('data:image') ? r["Image"] : "",
+                    syncedToSheets: true
+                };
+            }).filter(rec => rec.timestamp > 0);
+        }
+    } catch (e) {
+        console.error("Fetch Global Records Error Detail:", e);
+    }
+    return [];
 };
 
 export const saveRecord = async (record: CheckInRecord) => {
@@ -80,7 +147,12 @@ export const saveSettings = async (settings: AppSettings) => {
 
 export const getSettings = (): AppSettings => {
   const data = localStorage.getItem(SETTINGS_KEY);
-  const def: AppSettings = { googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL, locationMode: 'online', officeLocation: { lat: 17.345854, lng: 102.834789 }, maxDistanceMeters: 50 };
+  const def: AppSettings = { 
+    googleSheetUrl: DEFAULT_GOOGLE_SHEET_URL, 
+    locationMode: 'online', 
+    officeLocation: { lat: 17.345854, lng: 102.834789 }, 
+    maxDistanceMeters: 50 
+  };
   return data ? { ...def, ...JSON.parse(data) } : def;
 };
 
@@ -105,47 +177,4 @@ export const deleteRecord = async (record: CheckInRecord) => {
   const records = getRecords().filter(r => r.id !== record.id);
   localStorage.setItem(RECORDS_KEY, JSON.stringify(records));
   return true;
-};
-
-export const fetchGlobalRecords = async (): Promise<CheckInRecord[]> => {
-    const s = getSettings();
-    const targetUrl = s.googleSheetUrl || DEFAULT_GOOGLE_SHEET_URL;
-    try {
-        const response = await fetch(`${targetUrl}?action=getRecords&t=${Date.now()}`);
-        if (!response.ok) return [];
-        const data = await response.json();
-        
-        if (Array.isArray(data)) {
-            return data.map((r: any) => {
-                const typeStr = String(r["Type"] || "");
-                let type: AttendanceType = 'arrival';
-                if (typeStr.includes('กลับ')) type = 'departure';
-                else if (typeStr.includes('ราชการ')) type = 'duty';
-                else if (typeStr.includes('ป่วย')) type = 'sick_leave';
-                else if (typeStr.includes('กิจ')) type = 'personal_leave';
-                else if (typeStr.includes('สาย')) type = 'authorized_late';
-
-                const ts = Number(r["Timestamp"]);
-
-                return {
-                    id: String(ts || Math.random()),
-                    staffId: String(r["Staff ID"] || ""),
-                    name: String(r["Name"] || ""),
-                    role: String(r["Role"] || ""),
-                    timestamp: ts,
-                    type: type,
-                    status: (r["Status"] || 'Normal') as any,
-                    reason: String(r["Reason"] || ""),
-                    location: { lat: 0, lng: 0 },
-                    distanceFromBase: Number(r["Distance (m)"]) || 0,
-                    aiVerification: String(r["AI Verification"] || ""),
-                    imageUrl: String(r["Image"] || "").includes('http') || String(r["Image"] || "").startsWith('data:image') ? r["Image"] : "",
-                    syncedToSheets: true
-                };
-            }).filter(rec => rec.timestamp > 0);
-        }
-    } catch (e) {
-        console.error("Fetch Global Records Error:", e);
-    }
-    return [];
 };
