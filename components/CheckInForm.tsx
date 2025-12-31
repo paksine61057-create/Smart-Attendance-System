@@ -1,5 +1,4 @@
 
-// Added React to the import to resolve namespace error
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { AppSettings, GeoLocation, CheckInRecord, AttendanceType, Staff } from '../types';
 import { saveRecord, getSettings } from '../services/storageService';
@@ -25,7 +24,7 @@ const ON_TIME_MESSAGES = [
   { title: "✅ ลงเวลาเรียบร้อย", body: "ขอบคุณที่มาตรงเวลา ความสม่ำเสมอของคุณช่วยให้วันทำงานราบรื่น 🌟" },
   { title: "⏰ คุณมาทันเวลา เยี่ยมมาก!", body: "เริ่มต้นวันด้วยวินัยเล็ก ๆ ที่สร้างผลลัพธ์ที่ดีในระยะยาว 👍" },
   { title: "🌱 เริ่มวันใหม่ได้อย่างดี", body: "การมาตรงเวลาคือก้าวแรกของความเป็นมืออาชีพ ขอบคุณที่รักษามาตรฐานนี้ไว้" },
-  { title: "💙 ขอบคุณสำหรับการตรงเวลา", body: "สิ่งเล็ก ๆ นี้สร้างบรรยากาศการทำงานที่ดีให้กับทุกคน" },
+  { title: "💜 ขอบคุณสำหรับการตรงเวลา", body: "สิ่งเล็ก ๆ นี้สร้างบรรยากาศการทำงานที่ดีให้กับทุกคน" },
   { title: "⭐ วันนี้คุณเริ่มต้นได้ยอดเยี่ยม", body: "มาตรงเวลา = พร้อมทำงาน = พร้อมสร้างคุณค่า" }
 ];
 
@@ -45,30 +44,6 @@ const DEPARTURE_MESSAGES = [
   { title: "🌟 จบภารกิจวันนี้แล้ว", body: "ขอให้มีความสุขกับเวลาพักผ่อนที่บ้าน และกลับมาสู้ใหม่ในวันพรุ่งนี้ครับ" }
 ];
 
-const DUTY_MESSAGES = [
-  { title: "🏛️ บันทึกไปราชการสำเร็จ", body: "ขอให้การปฏิบัติหน้าที่ราบรื่นและสำเร็จตามเป้าหมาย เป็นตัวแทนที่ดีของโรงเรียนเราครับ 🌟" },
-  { title: "💼 เดินทางไปราชการปลอดภัย", body: "ขอให้ภารกิจภายนอกลุล่วงด้วยดี ปฏิบัติงานด้วยความภาคภูมิใจนะครับ 👍" },
-  { title: "🏛️ ภารกิจเพื่อทางราชการ", body: "ขอให้ทุกอย่างผ่านไปอย่างราบรื่น บรรลุวัตถุประสงค์และเดินทางโดยสวัสดิภาพครับ ✨" },
-  { title: "⭐ ปฏิบัติหน้าที่ให้เต็มที่", body: "ขอให้การประสานงานและการทำงานภายนอกสำเร็จเรียบร้อย ไร้อุปสรรคครับ 💙" },
-  { title: "🚀 บันทึกข้อมูลเรียบร้อย", body: "ขอให้ภารกิจในวันนี้ส่งผลดีต่อองค์กรและลูกศิษย์ เดินทางปลอดภัยทุกเส้นทางครับ 🏛️" }
-];
-
-const SICK_LEAVE_MESSAGES = [
-  { title: "🤒 บันทึกการลาป่วยสำเร็จ", body: "สุขภาพต้องมาก่อนเสมอ พักผ่อนให้เต็มที่เพื่อร่างกายที่แข็งแรงกลับมาสู้ใหม่นะครับ 💊" },
-  { title: "😴 พักกายพักใจให้หายเหนื่อย", body: "ขอให้หายป่วยไวๆ และกลับมามีสุขภาพที่สมบูรณ์แข็งแรงในเร็ววันครับ 🧡" },
-  { title: "💊 อย่าลืมดูแลตัวเองนะครับ", body: "ทานยาและพักผ่อนตามหมอสั่ง ขอส่งกำลังใจให้คุณครูหายจากอาการป่วยโดยเร็วที่สุดครับ 🏥" },
-  { title: "🍃 เพราะคุณคือคนสำคัญ", body: "พักผ่อนให้สบายใจจนกว่าจะดีขึ้น แล้วค่อยกลับมาพบกันใหม่ด้วยรอยยิ้มนะครับ 🤍" },
-  { title: "🏥 บันทึกข้อมูลลาป่วยแล้ว", body: "ขอให้ร่างกายฟื้นตัวได้รวดเร็ว พักผ่อนให้เพียงพอ หายไวๆ นะครับคุณครู ✨" }
-];
-
-const PERSONAL_LEAVE_MESSAGES = [
-  { title: "🙏 บันทึกการลากิจสำเร็จ", body: "ขอให้จัดการธุระส่วนตัวให้เสร็จสิ้นและราบรื่นทุกประการ แล้วกลับมาพบกันใหม่ครับ ✨" },
-  { title: "🏠 ขอให้ธุระลุล่วงด้วยดี", body: "บันทึกข้อมูลแล้ว ขอให้จัดการภารกิจส่วนตัวได้อย่างเรียบร้อยและไร้อุปสรรคครับ 🌟" },
-  { title: "✅ ดำเนินธุระอย่างสบายใจ", body: "ทุกภารกิจสำคัญเสมอ ขอให้จัดการธุระเสร็จสิ้นอย่างรวดเร็วและราบรื่นนะครับ 👍" },
-  { title: "🌈 บันทึกข้อมูลเรียบร้อย", body: "ขอบคุณที่แจ้งล่วงหน้า ขอให้ธุระส่วนตัวของคุณสำเร็จลุล่วงไปด้วยดีในทุกขั้นตอนครับ 💙" },
-  { title: "💼 เสร็จธุระแล้วเจอกันครับ", body: "ขอให้การจัดการธุระส่วนตัวเป็นไปตามที่ตั้งใจ แล้วกลับมาทำงานด้วยพลังที่เต็มเปี่ยมครับ 🎁" }
-];
-
 const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [step, setStep] = useState<'info' | 'camera' | 'verifying' | 'result'>('info');
   const [attendanceType, setAttendanceType] = useState<AttendanceType>(() => {
@@ -84,7 +59,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [gpsLoadingMsg, setGpsLoadingMsg] = useState('');
   const [isLocating, setIsLocating] = useState(false);
 
-  // Result metadata for customization
   const [resultTitle, setResultTitle] = useState('');
   const [resultBody, setResultBody] = useState('');
   const [resultTheme, setResultTheme] = useState<'success' | 'warning'>('success');
@@ -165,11 +139,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
       const startCamera = async () => {
         try {
           stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-              facingMode: 'user',
-              width: { ideal: 640 },
-              height: { ideal: 480 }
-            } 
+            video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 480 } } 
           });
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
@@ -198,33 +168,25 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         canvas.width = TARGET_WIDTH;
         canvas.height = video.videoHeight * scale;
         
-        // --- การปรับเพื่อไม่ให้รูปบันทึกสลับด้าน (Natural Capture) ---
         context.save();
         context.translate(canvas.width, 0);
         context.scale(-1, 1);
-        
         const filter = CAMERA_FILTERS.find(f => f.id === activeFilterId);
         context.filter = filter?.css || 'none';
-        
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         context.restore();
         
         const imageBase64 = canvas.toDataURL('image/jpeg', 0.6); 
         
         setStep('verifying');
-        setGpsLoadingMsg('กำลังวิเคราะห์ใบหน้าด้วย AI...');
+        setGpsLoadingMsg('กำลังตรวจสอบใบหน้าด้วย AI...');
 
         const aiResult = await analyzeCheckInImage(imageBase64);
-        
         const now = new Date();
         let status: any = 'Normal';
         
-        // --- New Year 2026 Greeting Logic ---
-        const isNewYearFirstDay = now.getFullYear() === 2026 && 
-                                 now.getMonth() === 0 && 
-                                 now.getDate() === 5;
+        const isNewYearFirstDay = now.getFullYear() === 2026 && now.getMonth() === 0 && now.getDate() === 5;
 
-        // Determine status and set random success message
         if (attendanceType === 'arrival') {
             const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 1, 0, 0);
             if (now.getTime() >= limit.getTime()) {
@@ -241,7 +203,6 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                 setResultTheme('success');
             }
 
-            // Override with New Year Greeting if it's the specific day
             if (isNewYearFirstDay) {
                 let greetingName = `คุณครู${currentUser.name}`;
                 let personalizedMsg = "ขอให้ปีนี้เป็นปีที่ยอดเยี่ยม มีแต่รอยยิ้มและความสุขในการทำงานตลอดปีนะครับ/คะ 🎁❄️";
@@ -262,57 +223,28 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         } else if (attendanceType === 'departure') {
             const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0, 0);
             status = now.getTime() < limit.getTime() ? 'Early Leave' : 'Normal';
-            
-            // ใช้ชุดข้อความอวยพรสำหรับการกลับบ้าน
             const msg = DEPARTURE_MESSAGES[Math.floor(Math.random() * DEPARTURE_MESSAGES.length)];
             setResultTitle(msg.title);
             setResultBody(msg.body);
             setResultTheme('success');
-        } else if (attendanceType === 'duty') {
-            status = 'Duty';
-            const msg = DUTY_MESSAGES[Math.floor(Math.random() * DUTY_MESSAGES.length)];
-            setResultTitle(msg.title);
-            setResultBody(msg.body);
-            setResultTheme('success');
-        } else if (attendanceType === 'sick_leave') {
-            status = 'Sick Leave';
-            const msg = SICK_LEAVE_MESSAGES[Math.floor(Math.random() * SICK_LEAVE_MESSAGES.length)];
-            setResultTitle(msg.title);
-            setResultBody(msg.body);
-            setResultTheme('success');
-        } else if (attendanceType === 'personal_leave') {
-            status = 'Personal Leave';
-            const msg = PERSONAL_LEAVE_MESSAGES[Math.floor(Math.random() * PERSONAL_LEAVE_MESSAGES.length)];
-            setResultTitle(msg.title);
-            setResultBody(msg.body);
-            setResultTheme('success');
         } else {
-            // Specialized attendance types fallback
             status = attendanceType.replace('_', ' ').split(' ').map(s => s.charAt(0).toUpperCase() + s.slice(1)).join(' ');
-            setResultTitle("✅ ลงเวลาสำเร็จ");
-            setResultBody("ระบบได้บันทึกข้อมูลของคุณเรียบร้อยแล้ว");
+            setResultTitle("✅ บันทึกข้อมูลสำเร็จ");
+            setResultBody("ระบบได้บันทึกข้อมูลการปฏิบัติหน้าที่ของคุณเรียบร้อยแล้ว");
             setResultTheme('success');
         }
 
         const record: CheckInRecord = {
-          id: crypto.randomUUID(), 
-          staffId: currentUser.id, 
-          name: currentUser.name, 
-          role: currentUser.role,
-          type: attendanceType, 
-          timestamp: now.getTime(), 
-          location: preFetchedLocation, 
-          distanceFromBase: preFetchedDistance, 
-          status, 
-          imageUrl: imageBase64, 
-          aiVerification: aiResult,
+          id: crypto.randomUUID(), staffId: currentUser.id, name: currentUser.name, role: currentUser.role,
+          type: attendanceType, timestamp: now.getTime(), location: preFetchedLocation, 
+          distanceFromBase: preFetchedDistance, status, imageUrl: imageBase64, aiVerification: aiResult,
           reason: reason || undefined
         };
 
         await saveRecord(record);
         setStep('result');
         localStorage.setItem('school_checkin_saved_staff_id', currentUser.id);
-        setTimeout(() => onSuccess(), 2500);
+        setTimeout(() => onSuccess(), 3000);
       }
     }
   }, [currentUser, attendanceType, reason, activeFilterId, onSuccess, preFetchedLocation, preFetchedDistance]);
@@ -322,117 +254,122 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
     return (
       <div className="max-w-xl mx-auto relative mt-4">
-        <div className="absolute -top-12 -left-12 text-7xl animate-float opacity-90 z-20 pointer-events-none">⛄</div>
-        <div className="absolute -bottom-10 -right-10 text-7xl animate-sway opacity-90 z-20 pointer-events-none">🎅</div>
-        <div className="relative overflow-hidden p-8 md:p-10 rounded-[2.5rem] shadow-[0_32px_80px_-20px_rgba(190,18,60,0.6)] border border-white/30 bg-gradient-to-br from-rose-800 via-red-700 to-amber-600 animate-shimmer-bg backdrop-blur-2xl">
-          <div className="relative z-10 text-white text-center">
-            <h2 className="text-3xl md:text-4xl font-extrabold flex items-center justify-center gap-3 drop-shadow-lg">
-              <span className="animate-sparkle text-amber-300">🎄</span> ยืนยันตัวตน
+        <div className="relative overflow-hidden p-8 md:p-12 rounded-[3rem] shadow-2xl border border-white/40 bg-white/70 backdrop-blur-3xl animate-in slide-in-from-bottom-10 duration-700">
+          <div className="absolute top-0 right-0 p-8 opacity-5"><svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg></div>
+
+          <div className="relative z-10 text-purple-900 text-center">
+            <h2 className="text-3xl md:text-4xl font-black tracking-tight flex items-center justify-center gap-3">
+               ยืนยันตัวตน
             </h2>
-            <p className="text-rose-100 text-sm mt-2 font-bold opacity-90 tracking-widest uppercase">Prachaksinlapakhom School ❄️</p>
+            <p className="text-purple-500 text-xs mt-1 font-bold tracking-[0.2em] uppercase opacity-60">School Attendance AI</p>
 
             {todayHoliday && (
-                <div className="my-8 p-6 bg-gradient-to-br from-amber-400 via-yellow-500 to-amber-600 border-4 border-white/50 rounded-[2rem] flex items-center justify-center gap-5 animate-in zoom-in shadow-[0_20px_40px_-10px_rgba(251,191,36,0.5)]">
-                     <span className="text-4xl animate-float">🏝️</span>
-                     <div className="text-center">
-                         <p className="text-[11px] text-white/90 uppercase font-black tracking-[0.2em] mb-1">ยินดีด้วย วันนี้คือวันหยุด</p>
-                         <p className="text-2xl font-black text-white drop-shadow-md">{todayHoliday}</p>
+                <div className="my-8 p-6 bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-100 rounded-[2.5rem] flex items-center justify-center gap-4 animate-in zoom-in shadow-sm">
+                     <span className="text-3xl">🏖️</span>
+                     <div className="text-left">
+                         <p className="text-[10px] text-purple-400 uppercase font-black tracking-widest mb-0.5">วันนี้คือวันหยุด</p>
+                         <p className="text-xl font-black text-purple-800 leading-none">{todayHoliday}</p>
                      </div>
-                     <span className="text-4xl animate-sway">🍹</span>
                 </div>
             )}
             
-            <div className="mt-8 space-y-6">
-              <div className="space-y-2 text-left">
-                 <label className="block text-[10px] font-black text-amber-200 uppercase tracking-widest ml-2">รหัสบุคลากร (Staff ID)</label>
-                 <div className="relative">
-                    <input type="text" value={staffIdInput} onChange={(e) => setStaffIdInput(e.target.value.toUpperCase())}
-                        className={`w-full px-4 py-5 rounded-3xl focus:ring-8 outline-none transition-all font-black text-2xl text-center tracking-[0.3em] shadow-2xl bg-white
-                        ${currentUser ? 'text-emerald-700 border-4 border-emerald-400' : 'text-stone-700 border-4 border-amber-300 focus:border-amber-400 focus:ring-amber-400/50'}`}
-                        placeholder="PJ..." maxLength={5} />
-                    {currentUser && <div className="absolute right-5 top-1/2 -translate-y-1/2 text-emerald-500 animate-in zoom-in"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>}
+            <div className="mt-10 space-y-8">
+              <div className="space-y-3 text-left">
+                 <label className="block text-[10px] font-black text-purple-400 uppercase tracking-widest ml-3">ป้อนรหัสบุคลากร (Staff ID)</label>
+                 <div className="relative group">
+                    <input 
+                        type="text" 
+                        value={staffIdInput} 
+                        onChange={(e) => setStaffIdInput(e.target.value.toUpperCase())}
+                        className={`w-full px-6 py-5 rounded-[2rem] focus:ring-8 outline-none transition-all font-black text-3xl text-center tracking-[0.2em] shadow-inner
+                        ${currentUser ? 'text-purple-700 bg-purple-50 border-4 border-purple-200' : 'text-purple-900 bg-purple-50/50 border-4 border-purple-100/50 focus:border-purple-300 focus:ring-purple-200/50'}`}
+                        placeholder="PJ..." maxLength={5} 
+                    />
+                    {currentUser && <div className="absolute right-6 top-1/2 -translate-y-1/2 text-pink-500 animate-in zoom-in"><svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg></div>}
                  </div>
               </div>
 
               {currentUser && (
-                <div className="animate-in slide-in-from-bottom-4 duration-700">
-                    <div className="bg-white/10 p-5 rounded-3xl border border-white/20 backdrop-blur-xl mb-6 flex items-center gap-4 shadow-xl">
-                        <div className="w-16 h-16 rounded-full bg-gradient-to-br from-amber-400 to-rose-400 border-4 border-white flex items-center justify-center font-black text-2xl shadow-lg relative overflow-hidden text-white">
+                <div className="animate-in slide-in-from-bottom-4 duration-500">
+                    <div className="bg-gradient-to-br from-purple-600 to-purple-800 p-6 rounded-[2.5rem] shadow-xl mb-8 flex items-center gap-5 text-left border border-white/20">
+                        <div className="w-16 h-16 rounded-3xl bg-white/20 backdrop-blur-md border border-white/30 flex items-center justify-center font-black text-3xl text-white shadow-lg">
                             {currentUser.name.charAt(0)}
                         </div>
-                        <div className="text-left">
-                            <h3 className="text-white font-black text-xl drop-shadow-md">{currentUser.name}</h3>
-                            <p className="text-rose-100 text-sm font-bold opacity-90">{currentUser.role} 🎁</p>
+                        <div>
+                            <h3 className="text-white font-black text-xl tracking-tight leading-tight">{currentUser.name}</h3>
+                            <p className="text-purple-100/80 text-xs font-bold uppercase tracking-widest">{currentUser.role}</p>
                         </div>
                     </div>
                     
-                    <div className="space-y-6">
-                        <div className="space-y-4">
-                           <p className="text-[9px] font-black text-white/50 uppercase tracking-widest text-left ml-2">เลือกประเภทการลงเวลา</p>
-                           <div className="space-y-3">
-                               <div className="grid grid-cols-2 gap-4">
-                                   <button onClick={() => setAttendanceType('arrival')} className={`p-6 rounded-[2rem] border-4 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${attendanceType === 'arrival' ? 'bg-white border-emerald-400 text-emerald-800 scale-105 shadow-2xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
-                                       <span className="text-2xl">🌅</span>
-                                       <span className="font-black text-base">มาทำงาน</span>
-                                   </button>
-                                   <button onClick={() => setAttendanceType('departure')} className={`p-6 rounded-[2rem] border-4 transition-all duration-300 flex flex-col items-center justify-center gap-2 ${attendanceType === 'departure' ? 'bg-white border-rose-400 text-rose-800 scale-105 shadow-2xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
-                                       <span className="text-2xl">🏠</span>
-                                       <span className="font-black text-base">กลับบ้าน</span>
-                                   </button>
-                               </div>
-                               <button onClick={() => setAttendanceType('authorized_late')} className={`w-full p-5 rounded-[2rem] border-4 transition-all duration-300 flex items-center justify-center gap-4 ${attendanceType === 'authorized_late' ? 'bg-white border-amber-400 text-amber-800 scale-105 shadow-2xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
-                                   <span className="text-2xl">🕒</span>
-                                   <div className="text-left">
-                                      <span className="font-black text-base block">ขออนุญาตเข้าสาย</span>
-                                      <span className="text-[9px] font-bold opacity-70 uppercase tracking-tighter">(กรณีได้รับอนุญาตจากผู้บริหารแล้ว)</span>
-                                   </div>
+                    <div className="space-y-8">
+                        <div>
+                           <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest text-left ml-3 mb-3">เลือกโหมดการลงเวลา</p>
+                           <div className="grid grid-cols-2 gap-4">
+                               <button onClick={() => setAttendanceType('arrival')} className={`p-8 rounded-[2.5rem] border-4 transition-all duration-300 flex flex-col items-center gap-3 ${attendanceType === 'arrival' ? 'bg-white border-purple-600 text-purple-900 scale-105 shadow-xl' : 'bg-purple-50/50 border-transparent text-purple-400 hover:bg-purple-50'}`}>
+                                   <span className="text-3xl">🌅</span>
+                                   <span className="font-black text-base">มาทำงาน</span>
+                               </button>
+                               <button onClick={() => setAttendanceType('departure')} className={`p-8 rounded-[2.5rem] border-4 transition-all duration-300 flex flex-col items-center gap-3 ${attendanceType === 'departure' ? 'bg-white border-pink-500 text-pink-900 scale-105 shadow-xl' : 'bg-purple-50/50 border-transparent text-purple-400 hover:bg-purple-50'}`}>
+                                   <span className="text-3xl">🏠</span>
+                                   <span className="font-black text-base">กลับบ้าน</span>
                                </button>
                            </div>
                         </div>
 
-                        <div className="space-y-3 pt-2">
-                           <p className="text-[9px] font-black text-white/50 uppercase tracking-widest text-left ml-2">ลา / ไปราชการ</p>
+                        <div className="space-y-4">
+                           <p className="text-[10px] font-black text-purple-400 uppercase tracking-widest text-left ml-3">ลา / ไปราชการ</p>
                            <div className="grid grid-cols-3 gap-3">
-                               <button onClick={() => setAttendanceType('duty')} className={`p-4 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${attendanceType === 'duty' ? 'bg-white border-blue-400 text-blue-800 scale-105 shadow-xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
-                                   <span className="text-lg">🏛️</span>
+                               <button onClick={() => setAttendanceType('duty')} className={`p-4 rounded-3xl border-2 transition-all duration-300 flex flex-col items-center gap-1 ${attendanceType === 'duty' ? 'bg-white border-purple-400 text-purple-800 shadow-md' : 'bg-purple-50/50 border-transparent text-purple-400'}`}>
+                                   <span className="text-xl">🏛️</span>
                                    <span className="font-black text-[10px]">ไปราชการ</span>
                                </button>
-                               <button onClick={() => setAttendanceType('sick_leave')} className={`p-4 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${attendanceType === 'sick_leave' ? 'bg-white border-orange-400 text-orange-800 scale-105 shadow-xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
-                                   <span className="text-lg">🤒</span>
+                               <button onClick={() => setAttendanceType('sick_leave')} className={`p-4 rounded-3xl border-2 transition-all duration-300 flex flex-col items-center gap-1 ${attendanceType === 'sick_leave' ? 'bg-white border-purple-400 text-purple-800 shadow-md' : 'bg-purple-50/50 border-transparent text-purple-400'}`}>
+                                   <span className="text-xl">🤒</span>
                                    <span className="font-black text-[10px]">ลาป่วย</span>
                                </button>
-                               <button onClick={() => setAttendanceType('personal_leave')} className={`p-4 rounded-2xl border-2 transition-all duration-300 flex flex-col items-center justify-center gap-1 ${attendanceType === 'personal_leave' ? 'bg-white border-red-400 text-red-800 scale-105 shadow-xl' : 'bg-black/20 border-white/10 text-white/60'}`}>
-                                   <span className="text-lg">🙏</span>
+                               <button onClick={() => setAttendanceType('personal_leave')} className={`p-4 rounded-3xl border-2 transition-all duration-300 flex flex-col items-center gap-1 ${attendanceType === 'personal_leave' ? 'bg-white border-purple-400 text-purple-800 shadow-md' : 'bg-purple-50/50 border-transparent text-purple-400'}`}>
+                                   <span className="text-xl">🙏</span>
                                    <span className="font-black text-[10px]">ลากิจ</span>
                                </button>
                            </div>
+                           <button onClick={() => setAttendanceType('authorized_late')} className={`w-full p-4 rounded-3xl border-2 transition-all duration-300 flex items-center justify-center gap-3 ${attendanceType === 'authorized_late' ? 'bg-white border-purple-400 text-purple-800 shadow-md' : 'bg-purple-50/50 border-transparent text-purple-400'}`}>
+                                <span className="text-xl">🕒</span>
+                                <span className="font-black text-xs">ขออนุญาตเข้าสาย</span>
+                           </button>
                         </div>
 
                         {(isSpecialType || (attendanceType === 'departure' && new Date().getHours() < 16) || (attendanceType === 'arrival' && (new Date().getHours() > 8 || (new Date().getHours() === 8 && new Date().getMinutes() >= 1)))) && (
-                            <div className="animate-in fade-in zoom-in text-left">
-                                <label className="block text-[9px] font-black text-amber-200 uppercase tracking-widest ml-2 mb-2">โปรดระบุเหตุผล / รายละเอียด</label>
-                                <textarea value={reason} onChange={(e) => setReason(e.target.value)} className="w-full p-4 bg-white border-4 border-amber-200 rounded-2xl outline-none text-stone-800 font-bold shadow-lg focus:ring-4 focus:ring-amber-400/30 transition-all" placeholder="พิมพ์เหตุผลที่นี่..." rows={2} />
+                            <div className="animate-in fade-in zoom-in text-left space-y-2">
+                                <label className="block text-[10px] font-black text-purple-400 uppercase tracking-widest ml-3">ระบุเหตุผล / รายละเอียด</label>
+                                <textarea 
+                                    value={reason} 
+                                    onChange={(e) => setReason(e.target.value)} 
+                                    className="w-full p-5 bg-purple-50/50 border-2 border-purple-100 rounded-3xl outline-none text-purple-900 font-bold focus:bg-white focus:border-purple-300 transition-all" 
+                                    placeholder="พิมพ์เหตุผลที่นี่..." rows={2} 
+                                />
                             </div>
                         )}
 
-                        <div className="mt-4 p-4 bg-blue-900/40 rounded-2xl border border-blue-500/30 backdrop-blur-md flex items-center justify-center gap-3">
-                            <span className="text-blue-300 text-[11px] font-black uppercase tracking-widest flex items-center gap-2 text-center">
+                        <div className="mt-4 p-4 bg-purple-100/50 rounded-2xl border border-purple-200/50 flex items-center justify-center gap-3">
+                            <span className="text-purple-600 text-[10px] font-black uppercase tracking-widest flex items-center gap-2">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
-                                {getSettings().locationMode === 'gps' ? 'ระบบจะตรวจสอบพิกัดโรงเรียนก่อนบันทึกเวลา 📍' : 'ระบบดึงพิกัดเพื่อบันทึกข้อมูลแบบออนไลน์ 🌐'}
+                                {getSettings().locationMode === 'gps' ? 'ระบบตรวจสอบพิกัดโรงเรียน 📍' : 'ระบบบันทึกตำแหน่งออนไลน์ 🌐'}
                             </span>
                         </div>
                         
                         <button 
                             onClick={startCameraStep}
                             disabled={isLocating}
-                            className={`w-full py-5 rounded-[2.5rem] font-black text-xl shadow-2xl active:scale-95 transition-all mt-4 flex items-center justify-center gap-3 bg-gradient-to-r from-amber-400 via-orange-400 to-rose-500 text-white animate-pulse-ring-festive disabled:opacity-80`}
+                            className={`w-full py-6 rounded-[2.5rem] font-black text-xl shadow-2xl transition-all mt-4 flex items-center justify-center gap-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white animate-pulse-ring-modern hover:scale-[1.02] active:scale-95 disabled:opacity-50`}
                         >
                             {isLocating ? (
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-3">
                                 <div className="w-5 h-5 border-3 border-t-white border-white/20 rounded-full animate-spin" />
-                                กำลังตรวจสอบตำแหน่ง...
+                                กำลังตรวจสอบพื้นที่...
                               </div>
-                            ) : 'ถ่ายรูปบันทึกเวลา 📸'}
+                            ) : (
+                                <><span>บันทึกใบหน้า (AI Check-in)</span><span className="text-2xl">📸</span></>
+                            )}
                         </button>
                     </div>
                 </div>
@@ -446,50 +383,42 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
 
   if (step === 'camera') {
     return (
-      <div className="max-w-md mx-auto bg-stone-900 rounded-[3rem] overflow-hidden shadow-2xl relative border-[12px] border-white ring-4 ring-rose-100">
-        <div className="relative w-full h-[650px] bg-stone-800 overflow-hidden">
+      <div className="max-w-md mx-auto bg-black rounded-[3rem] overflow-hidden shadow-2xl relative border-[12px] border-white ring-8 ring-purple-100">
+        <div className="relative w-full h-[650px] bg-purple-900/10 overflow-hidden">
             {isCameraLoading && (
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-white z-10 bg-stone-900">
-                    <div className="w-12 h-12 border-4 border-t-rose-500 border-white/20 rounded-full animate-spin mb-4" />
-                    <p className="font-bold text-xs uppercase tracking-widest">กำลังเปิดกล้อง...</p>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-white z-10 bg-purple-950">
+                    <div className="w-12 h-12 border-4 border-t-pink-500 border-white/20 rounded-full animate-spin mb-4" />
+                    <p className="font-bold text-xs uppercase tracking-widest">เปิดกล้อง AI...</p>
                 </div>
             )}
-            <video 
-                ref={videoRef} 
-                autoPlay 
-                playsInline 
-                muted
-                className="w-full h-full object-cover" 
-                style={{ 
-                  filter: CAMERA_FILTERS.find(f => f.id === activeFilterId)?.css || 'none',
-                  transform: 'scaleX(-1)' 
-                }} 
-            />
+            <video ref={videoRef} autoPlay playsInline muted className="w-full h-full object-cover" style={{ filter: CAMERA_FILTERS.find(f => f.id === activeFilterId)?.css || 'none', transform: 'scaleX(-1)' }} />
         </div>
         <canvas ref={canvasRef} className="hidden" />
         
-        <div className="absolute inset-x-0 bottom-0 p-10 bg-gradient-to-t from-black flex flex-col items-center z-20">
+        <div className="absolute inset-x-0 bottom-0 p-10 bg-gradient-to-t from-purple-950 flex flex-col items-center z-20">
           <div className="flex gap-4 overflow-x-auto pb-8 w-full justify-center scrollbar-hide">
             {CAMERA_FILTERS.map(f => (
                 <button key={f.id} onClick={() => setActiveFilterId(f.id)} className={`flex flex-col items-center min-w-[60px] transition-all ${activeFilterId === f.id ? 'scale-110 opacity-100' : 'opacity-60'}`}>
-                    <div className="w-10 h-10 rounded-full border-2 border-white shadow-lg" style={{ backgroundColor: f.color }} />
-                    <span className="text-[9px] text-white font-bold mt-1 uppercase">{f.name}</span>
+                    <div className="w-11 h-11 rounded-full border-2 border-white shadow-lg" style={{ backgroundColor: f.color }} />
+                    <span className="text-[9px] text-white font-bold mt-1.5 uppercase tracking-tighter">{f.name}</span>
                 </button>
             ))}
           </div>
           <button 
             onClick={capturePhoto} 
             disabled={isCameraLoading}
-            className="w-20 h-20 rounded-full bg-white/20 border-4 border-white/40 backdrop-blur-md flex items-center justify-center active:scale-90 transition-all shadow-2xl disabled:opacity-50"
+            className="w-22 h-22 rounded-full bg-white/10 border-4 border-white/30 backdrop-blur-md flex items-center justify-center active:scale-90 transition-all shadow-2xl disabled:opacity-50"
           >
-             <div className="w-14 h-14 rounded-full bg-white flex items-center justify-center shadow-inner"><div className="w-6 h-6 rounded-full bg-rose-600 animate-pulse" /></div>
+             <div className="w-16 h-16 rounded-full bg-white flex items-center justify-center shadow-inner group">
+                <div className="w-8 h-8 rounded-full bg-purple-600 animate-pulse group-active:scale-150 transition-transform" />
+             </div>
           </button>
         </div>
         
         <div className="absolute top-8 left-0 right-0 flex justify-center gap-3 z-20">
-            <button onClick={() => setStep('info')} className="bg-black/40 backdrop-blur-md px-4 py-2 rounded-full text-white text-[10px] font-black border border-white/20 hover:bg-black/60 transition-all">ยกเลิก</button>
-            <div className="bg-blue-600/60 backdrop-blur-md px-6 py-2 rounded-full text-white text-[10px] font-black border border-white/20">
-                พิกัดตรวจสอบแล้ว 📍
+            <button onClick={() => setStep('info')} className="bg-black/60 backdrop-blur-md px-5 py-2.5 rounded-2xl text-white text-[10px] font-black border border-white/20 hover:bg-black/80 transition-all uppercase tracking-widest">ยกเลิก</button>
+            <div className="bg-purple-600/70 backdrop-blur-md px-6 py-2.5 rounded-2xl text-white text-[10px] font-black border border-white/20 uppercase tracking-widest">
+                พิกัด: {preFetchedDistance}ม. ✅
             </div>
         </div>
       </div>
@@ -497,28 +426,28 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   }
 
   if (step === 'verifying') return (
-    <div className="max-w-md mx-auto p-20 bg-white/10 backdrop-blur-xl rounded-[3rem] text-white text-center flex flex-col items-center justify-center border-4 border-white/20 shadow-2xl">
-        <div className="w-24 h-24 border-8 border-t-amber-400 border-white/20 rounded-full animate-spin mb-8" />
-        <h3 className="text-3xl font-black text-amber-200">บันทึกข้อมูล...</h3>
-        <p className="font-bold opacity-60 mt-2 uppercase tracking-widest text-xs">{gpsLoadingMsg || 'กำลังบันทึก ❄️'}</p>
+    <div className="max-w-md mx-auto p-24 bg-white/80 backdrop-blur-xl rounded-[4rem] text-purple-900 text-center flex flex-col items-center justify-center border-4 border-purple-100 shadow-2xl">
+        <div className="w-24 h-24 border-8 border-t-pink-500 border-purple-100 rounded-full animate-spin mb-10" />
+        <h3 className="text-3xl font-black tracking-tight">AI กำลังวิเคราะห์...</h3>
+        <p className="font-bold opacity-40 mt-3 uppercase tracking-widest text-xs leading-relaxed">{gpsLoadingMsg || 'บันทึกข้อมูลเข้าสู่ระบบ 🚀'}</p>
     </div>
   );
   
   if (step === 'result') return (
-    <div className={`max-w-md mx-auto p-12 md:p-16 rounded-[3rem] text-white text-center flex flex-col items-center justify-center shadow-2xl animate-in zoom-in border-8 border-white ${resultTheme === 'success' ? 'bg-emerald-500' : 'bg-amber-400'}`}>
-        <div className="w-24 h-24 bg-white/20 rounded-full flex items-center justify-center mb-8 animate-bounce">
+    <div className={`max-w-md mx-auto p-12 md:p-16 rounded-[4rem] text-white text-center flex flex-col items-center justify-center shadow-2xl animate-in zoom-in duration-500 border-8 border-white ${resultTheme === 'success' ? 'bg-gradient-to-br from-purple-600 to-purple-900' : 'bg-gradient-to-br from-pink-500 to-rose-700'}`}>
+        <div className="w-24 h-24 bg-white/20 rounded-[2.5rem] flex items-center justify-center mb-10 animate-float shadow-xl rotate-3">
             <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="20 6 9 17 4 12"></polyline>
             </svg>
         </div>
-        <h3 className="text-4xl md:text-5xl font-black leading-tight drop-shadow-md">{resultTitle}</h3>
-        <p className="font-bold text-lg md:text-xl mt-6 opacity-95 tracking-tight leading-relaxed max-w-xs">
+        <h3 className="text-4xl md:text-5xl font-black leading-tight tracking-tight drop-shadow-lg">{resultTitle}</h3>
+        <p className="font-bold text-lg md:text-xl mt-8 opacity-90 tracking-tight leading-relaxed max-w-xs">
             {resultBody}
         </p>
-        <div className="mt-10 flex items-center gap-2 px-6 py-2 bg-black/10 rounded-full text-[10px] font-black uppercase tracking-[0.2em]">
-           <span>Prachak Attendance System</span>
-           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>
-           <span>Success ❄️</span>
+        <div className="mt-12 flex items-center gap-3 px-8 py-3 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-[0.3em] border border-white/20 shadow-sm">
+           <span>PJ SMART SYSTEM</span>
+           <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse"></span>
+           <span>SUCCESS</span>
         </div>
     </div>
   );
