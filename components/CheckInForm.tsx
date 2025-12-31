@@ -219,6 +219,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         const now = new Date();
         let status: any = 'Normal';
         
+        // --- New Year 2026 Greeting Logic ---
+        const isNewYearFirstDay = now.getFullYear() === 2026 && 
+                                 now.getMonth() === 0 && 
+                                 now.getDate() === 5;
+
         // Determine status and set random success message
         if (attendanceType === 'arrival') {
             const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 1, 0, 0);
@@ -235,6 +240,25 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                 setResultBody(msg.body);
                 setResultTheme('success');
             }
+
+            // Override with New Year Greeting if it's the specific day
+            if (isNewYearFirstDay) {
+                let greetingName = `คุณครู${currentUser.name}`;
+                let personalizedMsg = "ขอให้ปีนี้เป็นปีที่ยอดเยี่ยม มีแต่รอยยิ้มและความสุขในการทำงานตลอดปีนะครับ/คะ 🎁❄️";
+                
+                if (currentUser.id === 'PJ001') {
+                    greetingName = "ผอ.ชัชตะวัน";
+                    personalizedMsg = "ขอให้ท่านและครอบครัวมีความสุขยิ่งๆ ขึ้นไป เป็นร่มโพธิ์ร่มไทรให้พวกเราชาวประจักษ์ศิลปาคมตลอดปี ๒๕๖๙ นะครับ/คะ 🌟🎄";
+                } else if (currentUser.id === 'PJ002') {
+                    greetingName = "รองฯภราดร";
+                    personalizedMsg = "ขอให้ท่านมีความสุข สุขภาพแข็งแรง และประสบความสำเร็จในทุกภารกิจตลอดปี ๒๕๖๙ นะครับ/คะ 🌟🎁";
+                }
+
+                setResultTitle(`สวัสดีปีใหม่ ๒๕๖๙ 🎉`);
+                setResultBody(`สวัสดีปีใหม่ครับ/ค่ะ ${greetingName} ❄️ ${personalizedMsg}`);
+                setResultTheme('success');
+            }
+
         } else if (attendanceType === 'departure') {
             const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 16, 0, 0, 0);
             status = now.getTime() < limit.getTime() ? 'Early Leave' : 'Normal';
