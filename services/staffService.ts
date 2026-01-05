@@ -23,7 +23,7 @@ const DEFAULT_STAFF_LIST: Staff[] = [
   { id: 'PJ017', name: 'นายบุญเสริม สาทไทสงค์', role: 'ครู' },
   { id: 'PJ018', name: 'นายอุดมวิทย์ บุพิ', role: 'ครู' },
   { id: 'PJ019', name: 'นายพงษ์เพชร แซ่ตั้ง', role: 'ครู' },
-  { id: 'PJ020', name: 'นางสาวชลฎา บุตรเนียน', role: 'ครูผู้ช่วย' },
+  { id: 'PJ020', name: 'นางสาวชลฎา บุตรเนียน', role: 'ครู' },
   { id: 'PJ021', name: 'นางสาวปภัสพ์มณ ทองอาสา', role: 'ครูผู้ช่วย' },
   { id: 'PJ022', name: 'นายศราวุธ ศรีวงราช', role: 'ลูกจ้างประจำ' },
   { id: 'PJ023', name: 'นางสาวตรีนัทธิ์ธนา บุญโท', role: 'ครูธุรการ' },
@@ -36,20 +36,26 @@ export const getAllStaff = (): Staff[] => {
   if (stored) {
     let list = JSON.parse(stored) as Staff[];
     
-    // *** ระบบแก้คำผิดอัตโนมัติ (Auto-fix typo) ***
-    // ตรวจสอบว่ามีชื่อเก่าค้างอยู่หรือไม่ ถ้ามีให้แก้แล้วบันทึกทับทันที
+    // *** ระบบแก้คำผิดและอัปเดตตำแหน่งอัตโนมัติ (Auto-fix & Update) ***
     let changed = false;
+
+    // แก้ไขคำผิด PJ023
     const pj023Index = list.findIndex(s => s.id === 'PJ023');
-    
-    // เช็คกรณีชื่อเป็น "ตรีนัทธ์ธนา" (แบบผิด)
     if (pj023Index !== -1 && list[pj023Index].name.includes('ตรีนัทธ์ธนา')) {
         list[pj023Index].name = 'นางสาวตรีนัทธิ์ธนา บุญโท';
+        changed = true;
+    }
+
+    // อัปเดตตำแหน่ง PJ020 จาก ครูผู้ช่วย เป็น ครู
+    const pj020Index = list.findIndex(s => s.id === 'PJ020');
+    if (pj020Index !== -1 && list[pj020Index].role === 'ครูผู้ช่วย') {
+        list[pj020Index].role = 'ครู';
         changed = true;
     }
     
     if (changed) {
         localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(list));
-        console.log('Fixed typo for PJ023 in localStorage');
+        console.log('Data updated in localStorage');
     }
 
     return list;
