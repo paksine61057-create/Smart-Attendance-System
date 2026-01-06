@@ -4,31 +4,31 @@ import { Staff } from '../types';
 const STAFF_STORAGE_KEY = 'school_checkin_staff_list';
 
 const DEFAULT_STAFF_LIST: Staff[] = [
-  { id: 'PJ001', name: 'นางชัชตะวัน สีเขียว', role: 'ผู้อำนวยการ' },
-  { id: 'PJ002', name: 'นายภราดร คัณทักษ์', role: 'รองผู้อำนวยการ' },
-  { id: 'PJ003', name: 'นางทิวาวรรณ กองแก้ว', role: 'ครูชำนาญการพิเศษ' },
-  { id: 'PJ004', name: 'นายบุญจันทร์ สุวรรณพรม', role: 'ครูชำนาญการพิเศษ' },
-  { id: 'PJ005', name: 'นายอภิชาติ ชุมพล', role: 'ครูชำนาญการพิเศษ' },
-  { id: 'PJ006', name: 'นายภาคภูมิ พงษ์สิทธิศักดิ์', role: 'ครูชำนาญการพิเศษ' },
-  { id: 'PJ007', name: 'นางวัชรี พิมพ์ศรี', role: 'ครูชำนาญการพิเศษ' },
-  { id: 'PJ008', name: 'นางบุญญาภรณ์ ธิตานนท์', role: 'ครูชำนาญการพิเศษ' },
-  { id: 'PJ009', name: 'นางสาวอัญชนีย์ วงศ์วาน', role: 'ครูชำนาญการพิเศษ' },
-  { id: 'PJ010', name: 'นางวลัยรัตน์ แนวบุตร', role: 'ครูชำนาญการพิเศษ' },
-  { id: 'PJ011', name: 'นายยุทธไกร อ่างแก้ว', role: 'ครูชำนาญการพิเศษ' },
-  { id: 'PJ012', name: 'นางสาวเสาวภา สิงหเสนา', role: 'ครูชำนาญการพิเศษ' },
-  { id: 'PJ013', name: 'นางสาวกันต์ฤทัย นามมาลา', role: 'ครูชำนาญการ' },
-  { id: 'PJ014', name: 'นางสาวสุภาภรณ์ ลัพธะลักษ์', role: 'ครูชำนาญการ' },
-  { id: 'PJ015', name: 'นายจักรพงษ์ ไชยราช', role: 'ครู' },
-  { id: 'PJ016', name: 'ว่าที่ ร.ต.วิษณุ โสภา', role: 'ครู' },
-  { id: 'PJ017', name: 'นายบุญเสริม สาทไทสงค์', role: 'ครู' },
-  { id: 'PJ018', name: 'นายอุดมวิทย์ บุพิ', role: 'ครู' },
-  { id: 'PJ019', name: 'นายพงษ์เพชร แซ่ตั้ง', role: 'ครู' },
-  { id: 'PJ020', name: 'นางสาวชลฎา บุตรเนียน', role: 'ครู' },
-  { id: 'PJ021', name: 'นางสาวปภัสพ์มณ ทองอาสา', role: 'ครูผู้ช่วย' },
-  { id: 'PJ022', name: 'นายศราวุธ ศรีวงราช', role: 'ลูกจ้างประจำ' },
-  { id: 'PJ023', name: 'นางสาวตรีนัทธิ์ธนา บุญโท', role: 'ครูธุรการ' },
-  { id: 'PJ024', name: 'นางสาวศิรินภา นาแว่น', role: 'ครูอัตราจ้าง' },
-  { id: 'PJ025', name: 'นายวชิรวิทย์ นันทชัย', role: 'ครูอัตราจ้าง' }
+  { id: 'PJ001', name: 'นางชัชตะวัน สีเขียว', role: 'ผู้อำนวยการ', birthday: '20/02/2513' },
+  { id: 'PJ002', name: 'นายภราดร คัณทักษ์', role: 'รองผู้อำนวยการ', birthday: '08/07/2525' },
+  { id: 'PJ003', name: 'นางทิวาวรรณ กองแก้ว', role: 'ครูชำนาญการพิเศษ', birthday: '24/10/2513' },
+  { id: 'PJ004', name: 'นายบุญจันทร์ สุวรรณพรม', role: 'ครูชำนาญการพิเศษ', birthday: '26/05/2523' },
+  { id: 'PJ005', name: 'นายอภิชาติ ชุมพล', role: 'ครูชำนาญการพิเศษ', birthday: '01/07/2531' },
+  { id: 'PJ006', name: 'นายภาคภูมิ พงษ์สิทธิศักดิ์', role: 'ครูชำนาญการพิเศษ', birthday: '24/05/2509' },
+  { id: 'PJ007', name: 'นางวัชรี พิมพ์ศรี', role: 'ครูชำนาญการพิเศษ', birthday: '04/02/2510' },
+  { id: 'PJ008', name: 'นางบุญญาภรณ์ ธิตานนท์', role: 'ครูชำนาญการพิเศษ', birthday: '08/10/2511' },
+  { id: 'PJ009', name: 'นางสาวอัญชนีย์ วงศ์วาน', role: 'ครูชำนาญการพิเศษ', birthday: '21/09/2512' },
+  { id: 'PJ010', name: 'นางวลัยรัตน์ แนวบุตร', role: 'ครูชำนาญการพิเศษ', birthday: '11/01/2514' },
+  { id: 'PJ011', name: 'นายยุทธไกร อ่างแก้ว', role: 'ครูชำนาญการพิเศษ', birthday: '29/03/2523' },
+  { id: 'PJ012', name: 'นางสาวเสาวภา สิงหเสนา', role: 'ครูชำนาญการพิเศษ', birthday: '26/08/2531' },
+  { id: 'PJ013', name: 'นางสาวกันต์ฤทัย นามมาลา', role: 'ครูชำนาญการ', birthday: '02/02/2527' },
+  { id: 'PJ014', name: 'นางสาวสุภาภรณ์ ลัพธะลักษ์', role: 'ครูชำนาญการ', birthday: '22/06/2535' },
+  { id: 'PJ015', name: 'นายจักรพงษ์ ไชยราช', role: 'ครู', birthday: '16/12/2536' },
+  { id: 'PJ016', name: 'ว่าที่ ร.ต.วิษณุ โสภา', role: 'ครู', birthday: '28/10/2532' },
+  { id: 'PJ017', name: 'นายบุญเสริม สาทไทสงค์', role: 'ครู', birthday: '09/09/2539' },
+  { id: 'PJ018', name: 'นายอุดมวิทย์ บุพิ', role: 'ครู', birthday: '12/11/2538' },
+  { id: 'PJ019', name: 'นายพงษ์เพชร แซ่ตั้ง', role: 'ครู', birthday: '18/02/2541' },
+  { id: 'PJ020', name: 'นางสาวชลฎา บุตรเนียน', role: 'ครู', birthday: '21/01/2542' },
+  { id: 'PJ021', name: 'นางสาวปภัสพ์มณ ทองอาสา', role: 'ครูผู้ช่วย', birthday: '12/07/2539' },
+  { id: 'PJ022', name: 'นายศราวุธ ศรีวงราช', role: 'ลูกจ้างประจำ', birthday: '08/08/2510' },
+  { id: 'PJ023', name: 'นางสาวตรีนัทธิ์ธนา บุญโท', role: 'ครูธุรการ', birthday: '03/08/2534' },
+  { id: 'PJ024', name: 'นางสาวศิรินภา นาแว่น', role: 'ครูอัตราจ้าง', birthday: '08/01/2542' },
+  { id: 'PJ025', name: 'นายวชิรวิทย์ นันทชัย', role: 'ครูอัตราจ้าง', birthday: '07/01/2545' }
 ];
 
 export const getAllStaff = (): Staff[] => {
@@ -36,26 +36,31 @@ export const getAllStaff = (): Staff[] => {
   if (stored) {
     let list = JSON.parse(stored) as Staff[];
     
-    // *** ระบบแก้คำผิดและอัปเดตตำแหน่งอัตโนมัติ (Auto-fix & Update) ***
+    // *** ระบบอัปเดตข้อมูลอัตโนมัติ (Auto-update birthdays) ***
     let changed = false;
 
-    // แก้ไขคำผิด PJ023
-    const pj023Index = list.findIndex(s => s.id === 'PJ023');
-    if (pj023Index !== -1 && list[pj023Index].name.includes('ตรีนัทธ์ธนา')) {
-        list[pj023Index].name = 'นางสาวตรีนัทธิ์ธนา บุญโท';
+    DEFAULT_STAFF_LIST.forEach(defStaff => {
+      const existingIdx = list.findIndex(s => s.id === defStaff.id);
+      if (existingIdx !== -1) {
+        // อัปเดตวันเกิดถ้ายังไม่มีหรือข้อมูลไม่ตรง
+        if (list[existingIdx].birthday !== defStaff.birthday) {
+          list[existingIdx].birthday = defStaff.birthday;
+          changed = true;
+        }
+        // อัปเดตตำแหน่ง PJ020
+        if (defStaff.id === 'PJ020' && list[existingIdx].role !== 'ครู') {
+          list[existingIdx].role = 'ครู';
+          changed = true;
+        }
+      } else {
+        // เพิ่มถ้าไม่มีในรายการ
+        list.push(defStaff);
         changed = true;
-    }
-
-    // อัปเดตตำแหน่ง PJ020 จาก ครูผู้ช่วย เป็น ครู
-    const pj020Index = list.findIndex(s => s.id === 'PJ020');
-    if (pj020Index !== -1 && list[pj020Index].role === 'ครูผู้ช่วย') {
-        list[pj020Index].role = 'ครู';
-        changed = true;
-    }
+      }
+    });
     
     if (changed) {
         localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(list));
-        console.log('Data updated in localStorage');
     }
 
     return list;

@@ -62,6 +62,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   const [resultTitle, setResultTitle] = useState('');
   const [resultBody, setResultBody] = useState('');
   const [resultTheme, setResultTheme] = useState<'success' | 'warning'>('success');
+  const [isBirthdayToday, setIsBirthdayToday] = useState(false);
 
   const [preFetchedLocation, setPreFetchedLocation] = useState<GeoLocation>({ lat: 0, lng: 0 });
   const [preFetchedDistance, setPreFetchedDistance] = useState(0);
@@ -185,6 +186,18 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         const now = new Date();
         let status: any = 'Normal';
         
+        // Check for Birthday
+        const today = new Date();
+        const currentD = today.getDate();
+        const currentM = today.getMonth() + 1;
+        
+        if (currentUser.birthday) {
+          const [bDay, bMonth] = currentUser.birthday.split('/').map(Number);
+          if (currentD === bDay && currentM === bMonth && ['arrival', 'duty', 'authorized_late'].includes(attendanceType)) {
+            setIsBirthdayToday(true);
+          }
+        }
+
         const isNewYearFirstDay = now.getFullYear() === 2026 && now.getMonth() === 0 && now.getDate() === 5;
 
         if (attendanceType === 'arrival') {
@@ -244,10 +257,16 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         await saveRecord(record);
         setStep('result');
         localStorage.setItem('school_checkin_saved_staff_id', currentUser.id);
-        setTimeout(() => onSuccess(), 3000);
+        
+        // Extent success display time if it's birthday
+        const timeout = isBirthdayToday ? 10000 : 3000;
+        setTimeout(() => {
+          onSuccess();
+          setIsBirthdayToday(false);
+        }, timeout);
       }
     }
-  }, [currentUser, attendanceType, reason, activeFilterId, onSuccess, preFetchedLocation, preFetchedDistance]);
+  }, [currentUser, attendanceType, reason, activeFilterId, onSuccess, preFetchedLocation, preFetchedDistance, isBirthdayToday]);
 
   if (step === 'info') {
     const isSpecialType = ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(attendanceType);
@@ -434,21 +453,81 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   );
   
   if (step === 'result') return (
-    <div className={`max-w-md mx-auto p-12 md:p-16 rounded-[4rem] text-white text-center flex flex-col items-center justify-center shadow-2xl animate-in zoom-in duration-500 border-8 border-white ${resultTheme === 'success' ? 'bg-gradient-to-br from-purple-600 to-purple-900' : 'bg-gradient-to-br from-pink-500 to-rose-700'}`}>
-        <div className="w-24 h-24 bg-white/20 rounded-[2.5rem] flex items-center justify-center mb-10 animate-float shadow-xl rotate-3">
-            <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12"></polyline>
-            </svg>
+    <div className="relative">
+      <div className={`max-w-md mx-auto p-12 md:p-16 rounded-[4rem] text-white text-center flex flex-col items-center justify-center shadow-2xl animate-in zoom-in duration-500 border-8 border-white ${resultTheme === 'success' ? 'bg-gradient-to-br from-purple-600 to-purple-900' : 'bg-gradient-to-br from-pink-500 to-rose-700'}`}>
+          <div className="w-24 h-24 bg-white/20 rounded-[2.5rem] flex items-center justify-center mb-10 animate-float shadow-xl rotate-3">
+              <svg xmlns="http://www.w3.org/2000/svg" width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+              </svg>
+          </div>
+          <h3 className="text-4xl md:text-5xl font-black leading-tight tracking-tight drop-shadow-lg">{resultTitle}</h3>
+          <p className="font-bold text-lg md:text-xl mt-8 opacity-90 tracking-tight leading-relaxed max-w-xs">
+              {resultBody}
+          </p>
+          <div className="mt-12 flex items-center gap-3 px-8 py-3 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-[0.3em] border border-white/20 shadow-sm">
+            <span>PJ SMART SYSTEM</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse"></span>
+            <span>SUCCESS</span>
+          </div>
+      </div>
+
+      {/* Birthday Surprise Overlay */}
+      {isBirthdayToday && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-purple-950/40 backdrop-blur-xl animate-in fade-in duration-700">
+           {/* Confetti Emoji Elements */}
+           <div className="absolute inset-0 pointer-events-none overflow-hidden">
+              {[...Array(20)].map((_, i) => (
+                <div 
+                  key={i} 
+                  className="absolute text-4xl animate-bounce" 
+                  style={{ 
+                    left: `${Math.random() * 100}%`, 
+                    top: `${Math.random() * 100}%`,
+                    animationDelay: `${Math.random() * 2}s`,
+                    opacity: 0.6
+                  }}
+                >
+                  {['🎉', '🎂', '🎈', '✨', '🎁'][Math.floor(Math.random() * 5)]}
+                </div>
+              ))}
+           </div>
+
+           <div className="bg-white/90 p-8 md:p-12 rounded-[4rem] shadow-[0_35px_60px_-15px_rgba(168,85,247,0.3)] max-w-lg w-full text-center border-4 border-white animate-in zoom-in slide-in-from-bottom-20 duration-1000">
+              <div className="relative mb-10">
+                <div className="w-32 h-32 bg-gradient-to-br from-purple-100 to-pink-100 rounded-full flex items-center justify-center mx-auto shadow-inner border border-purple-50 animate-float">
+                  <span className="text-6xl">🎂</span>
+                </div>
+                <div className="absolute -top-4 -right-4 text-4xl animate-sway">🎁</div>
+                <div className="absolute -bottom-4 -left-4 text-4xl animate-sway" style={{animationDelay: '1s'}}>🎈</div>
+              </div>
+
+              <h2 className="text-3xl md:text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-purple-600 to-pink-500 tracking-tight mb-4">
+                สุขสันต์วันเกิดครับ/ค่ะ
+              </h2>
+              <h3 className="text-2xl font-black text-purple-900 mb-6">{currentUser?.name}</h3>
+              
+              <div className="space-y-4 text-purple-600/80 font-bold leading-relaxed">
+                 <p className="text-lg">✨ ขอให้คุณครูมีความสุขกาย สบายใจ มีสุขภาพแข็งแรง</p>
+                 <p className="text-lg">และเป็นแม่พิมพ์ที่สง่างามของลูกศิษย์ชาวประจักษ์ฯ ตลอดไปนะครับ/คะ 💜</p>
+              </div>
+
+              <div className="mt-12">
+                 <button 
+                  onClick={() => { setIsBirthdayToday(false); onSuccess(); }} 
+                  className="px-12 py-5 bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-[2rem] font-black text-lg shadow-xl shadow-purple-200 hover:scale-105 active:scale-95 transition-all"
+                >
+                  ขอบคุณครับ/ค่ะ 🙏
+                </button>
+              </div>
+
+              <div className="mt-8 flex items-center justify-center gap-3">
+                 <span className="h-px w-8 bg-purple-100"></span>
+                 <p className="text-[10px] font-black text-purple-300 uppercase tracking-[0.3em]">Prachaksinlapakhom School</p>
+                 <span className="h-px w-8 bg-purple-100"></span>
+              </div>
+           </div>
         </div>
-        <h3 className="text-4xl md:text-5xl font-black leading-tight tracking-tight drop-shadow-lg">{resultTitle}</h3>
-        <p className="font-bold text-lg md:text-xl mt-8 opacity-90 tracking-tight leading-relaxed max-w-xs">
-            {resultBody}
-        </p>
-        <div className="mt-12 flex items-center gap-3 px-8 py-3 bg-white/10 rounded-full text-[10px] font-black uppercase tracking-[0.3em] border border-white/20 shadow-sm">
-           <span>PJ SMART SYSTEM</span>
-           <span className="w-1.5 h-1.5 rounded-full bg-pink-400 animate-pulse"></span>
-           <span>SUCCESS</span>
-        </div>
+      )}
     </div>
   );
   

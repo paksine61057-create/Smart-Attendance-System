@@ -10,6 +10,7 @@ export interface Staff {
   id: string;
   name: string;
   role: string;
+  birthday?: string; // Format: DD/MM/YYYY (BE)
 }
 
 export interface CheckInRecord {
