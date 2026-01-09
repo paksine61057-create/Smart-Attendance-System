@@ -341,12 +341,12 @@ const Dashboard: React.FC = () => {
          
          {activeTab === 'official' && (
             <div className="p-4 md:p-8 bg-white border-2 border-purple-100 rounded-[3rem] shadow-inner print-page-a4 flex flex-col mx-auto">
-               <div className="text-center mb-6">
-                  <img src={SCHOOL_LOGO_URL} alt="school logo" className="school-logo-print w-16 h-16 mx-auto mb-3 bg-white p-1 rounded-full shadow-md" />
+               <div className="text-center mb-4">
+                  <img src={SCHOOL_LOGO_URL} alt="school logo" className="school-logo-print w-16 h-16 mx-auto mb-2 bg-white p-1 rounded-full shadow-md" />
                   <h1 className="text-xl font-black text-purple-950 leading-tight">รายงานสรุปการลงปฏิบัติงานรายวัน</h1>
                   <p className="text-purple-400 font-bold text-[10px] leading-tight uppercase tracking-widest mt-1">Prachaksinlapakhom School Identity</p>
                   <div className="mt-2 h-1 w-20 bg-gradient-to-r from-purple-500 to-pink-500 mx-auto rounded-full"></div>
-                  <p className="text-purple-900 font-black mt-3 text-sm">ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                  <p className="text-purple-900 font-black mt-2 text-sm">ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                </div>
                <div className="flex-1">
                  <table className="w-full border-collapse border border-purple-950 text-[11px] table-fixed">
@@ -374,30 +374,30 @@ const Dashboard: React.FC = () => {
                     </tbody>
                  </table>
                </div>
-               <div className="signature-section mt-10 flex justify-around text-center border-t border-dashed border-purple-100 pt-6">
+               <div className="signature-section mt-4 flex justify-around text-center border-t border-dashed border-purple-100 pt-4">
                   <div className="flex-1">
-                     <p className="text-[10px] font-black text-purple-300 mb-10 uppercase tracking-widest">เจ้าหน้าที่ผู้รับผิดชอบ</p>
+                     <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest">เจ้าหน้าที่ผู้รับผิดชอบ</p>
                      <p className="font-bold text-purple-900 text-xs">....................................................</p>
                      <p className="text-[10px] font-bold text-purple-300 mt-2">(....................................................)</p>
                   </div>
                   <div className="flex-1">
-                     <p className="text-[10px] font-black text-purple-300 mb-10 uppercase tracking-widest">ผู้อำนวยการโรงเรียน</p>
+                     <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest">ผู้อำนวยการโรงเรียน</p>
                      <p className="font-bold text-purple-900 text-xs">....................................................</p>
                      <p className="text-[10px] font-bold text-purple-300 mt-2">(....................................................)</p>
                   </div>
                </div>
-               <button onClick={() => window.print()} className="mt-10 w-full py-5 bg-gradient-to-r from-purple-800 to-purple-950 text-white rounded-[2rem] font-black text-sm no-print shadow-xl hover:scale-[1.01] active:scale-95 transition-all">🖨️ พิมพ์รายงานสรุปรายวัน</button>
+               <button onClick={() => window.print()} className="mt-6 w-full py-5 bg-gradient-to-r from-purple-800 to-purple-950 text-white rounded-[2rem] font-black text-sm no-print shadow-xl hover:scale-[1.01] active:scale-95 transition-all">🖨️ พิมพ์รายงานสรุปรายวัน</button>
             </div>
          )}
 
          {activeTab === 'monthly' && (
            <div className="p-4 md:p-8 bg-white border-2 border-purple-100 rounded-[3rem] shadow-inner print-page-a4 flex flex-col mx-auto">
-             <div className="text-center mb-6">
-                <img src={SCHOOL_LOGO_URL} alt="school logo" className="school-logo-print w-16 h-16 mx-auto mb-3 bg-white p-1 rounded-full shadow-md" />
+             <div className="text-center mb-4">
+                <img src={SCHOOL_LOGO_URL} alt="school logo" className="school-logo-print w-16 h-16 mx-auto mb-2 bg-white p-1 rounded-full shadow-md" />
                 <h1 className="text-xl font-black text-purple-950 leading-tight">สถิติการมาปฏิบัติราชการรายเดือน</h1>
                 <p className="text-purple-400 font-bold text-[10px] leading-tight uppercase tracking-widest mt-1">Modern Attendance Analytics</p>
                 <div className="mt-2 h-1 w-24 bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 mx-auto rounded-full"></div>
-                <div className="flex flex-col items-center gap-1 mt-3">
+                <div className="flex flex-col items-center gap-1 mt-2">
                     <p className="text-purple-900 font-black text-base">เดือน {new Date(selectedMonth).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</p>
                 </div>
              </div>
@@ -427,19 +427,19 @@ const Dashboard: React.FC = () => {
                   </tbody>
                 </table>
              </div>
-             <div className="signature-section mt-10 flex justify-between text-center border-t border-dashed border-purple-100 pt-6">
+             <div className="signature-section mt-4 flex justify-between text-center border-t border-dashed border-purple-100 pt-4">
                 <div className="flex-1">
-                   <p className="text-[10px] font-black text-purple-300 mb-10 uppercase tracking-widest">ผู้สรุปรายงาน</p>
+                   <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest">ผู้สรุปรายงาน</p>
                    <p className="font-bold text-purple-900 text-xs">....................................................</p>
                    <p className="text-[10px] font-bold text-purple-300 mt-2">(....................................................)</p>
                 </div>
                 <div className="flex-1">
-                   <p className="text-[10px] font-black text-purple-300 mb-10 uppercase tracking-widest">ผู้อำนวยการโรงเรียน</p>
+                   <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest">ผู้อำนวยการโรงเรียน</p>
                    <p className="font-bold text-purple-900 text-xs">....................................................</p>
                    <p className="text-[10px] font-bold text-purple-300 mt-2">(....................................................)</p>
                 </div>
              </div>
-             <button onClick={() => window.print()} className="mt-10 w-full py-5 bg-gradient-to-r from-purple-800 to-purple-950 text-white rounded-[2rem] font-black text-sm no-print shadow-xl hover:scale-[1.01] active:scale-95">🖨️ พิมพ์รายงานสถิติรายเดือน</button>
+             <button onClick={() => window.print()} className="mt-6 w-full py-5 bg-gradient-to-r from-purple-800 to-purple-950 text-white rounded-[2rem] font-black text-sm no-print shadow-xl hover:scale-[1.01] active:scale-95">🖨️ พิมพ์รายงานสถิติรายเดือน</button>
            </div>
          )}
 
