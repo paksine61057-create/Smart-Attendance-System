@@ -191,7 +191,7 @@ const Dashboard: React.FC = () => {
   };
 
   return (
-    <div className="w-full max-w-7xl mx-auto pb-20 px-0 md:px-4">
+    <div className="w-full max-w-7xl mx-auto pb-20 px-0 md:px-4 print:p-0 print:m-0">
       <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-6 no-print bg-white/60 backdrop-blur-2xl p-8 rounded-[3rem] border border-white/40 shadow-xl shadow-purple-100/50 mx-4">
         <div className="flex items-center gap-5">
           <div className="bg-gradient-to-br from-purple-100 to-pink-50 p-2.5 rounded-2xl shadow-sm border border-purple-100">
@@ -235,7 +235,7 @@ const Dashboard: React.FC = () => {
         ))}
       </div>
 
-      <div className="bg-white/90 backdrop-blur-xl rounded-[4rem] shadow-2xl border border-white/60 overflow-hidden min-h-[650px] p-2 md:p-10 animate-in fade-in duration-700 mx-4">
+      <div className="bg-white/90 backdrop-blur-xl rounded-[4rem] shadow-2xl border border-white/60 print:border-none print:shadow-none print:bg-white overflow-hidden print:overflow-visible min-h-[650px] p-2 md:p-10 animate-in fade-in duration-700 mx-4 print:m-0 print:p-0">
          
          {activeTab === 'today' && (
            <div className="p-4 space-y-12">
@@ -340,50 +340,50 @@ const Dashboard: React.FC = () => {
          )}
          
          {activeTab === 'official' && (
-            <div className="p-4 md:p-8 bg-white border-2 border-purple-100 rounded-[3rem] shadow-inner print-page-a4 flex flex-col mx-auto">
+            <div className="p-4 md:p-8 bg-white border-2 border-purple-100 rounded-[3rem] shadow-inner print-page-a4 flex flex-col mx-auto print:border-none print:shadow-none print:rounded-none">
                <div className="text-center mb-4">
                   <img src={SCHOOL_LOGO_URL} alt="school logo" className="school-logo-print w-16 h-16 mx-auto mb-2 bg-white p-1 rounded-full shadow-md" />
                   <h1 className="text-xl font-black text-purple-950 leading-tight">รายงานสรุปการลงปฏิบัติงานรายวัน</h1>
                   <p className="text-purple-400 font-bold text-[10px] leading-tight uppercase tracking-widest mt-1">Prachaksinlapakhom School Identity</p>
-                  <div className="mt-2 h-1 w-20 bg-gradient-to-r from-purple-500 to-pink-500 mx-auto rounded-full"></div>
+                  <div className="mt-2 h-1 w-20 bg-gradient-to-r from-purple-500 to-pink-500 mx-auto rounded-full no-print"></div>
                   <p className="text-purple-900 font-black mt-2 text-sm">ประจำวันที่ {new Date(selectedDate).toLocaleDateString('th-TH', { day: 'numeric', month: 'long', year: 'numeric' })}</p>
                </div>
                <div className="flex-1">
-                 <table className="w-full border-collapse border border-purple-950 text-[11px] table-fixed">
+                 <table className="w-full border-collapse border border-purple-950 text-[11px] table-fixed print:border-black">
                     <thead>
-                       <tr className="bg-purple-50 text-purple-950 border-b border-purple-950">
-                          <th className="border border-purple-950 py-1.5 px-2 w-[35px] text-center font-black">ที่</th>
-                          <th className="border border-purple-950 py-1.5 px-2 text-left font-black w-[160px]">ชื่อ - นามสกุล</th>
-                          <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[130px]">ตำแหน่ง</th>
-                          <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[65px]">เวลามา</th>
-                          <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[65px]">เวลากลับ</th>
-                          <th className="border border-purple-950 py-1.5 px-2 text-left font-black">หมายเหตุ</th>
+                       <tr className="bg-purple-50 text-purple-950 border-b border-purple-950 print:bg-gray-100 print:border-black">
+                          <th className="border border-purple-950 py-1.5 px-2 w-[35px] text-center font-black print:border-black">ที่</th>
+                          <th className="border border-purple-950 py-1.5 px-2 text-left font-black w-[160px] print:border-black">ชื่อ - นามสกุล</th>
+                          <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[130px] print:border-black">ตำแหน่ง</th>
+                          <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[65px] print:border-black">เวลามา</th>
+                          <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[65px] print:border-black">เวลากลับ</th>
+                          <th className="border border-purple-950 py-1.5 px-2 text-left font-black print:border-black">หมายเหตุ</th>
                        </tr>
                     </thead>
                     <tbody>
                        {officialDailyData.map(d => (
-                          <tr key={d.no} className="hover:bg-purple-50/50">
-                             <td className="border border-purple-950 py-1 px-1 text-center text-purple-800 font-bold">{d.no}</td>
-                             <td className="border border-purple-950 py-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis font-black text-purple-950">{d.name}</td>
-                             <td className="border border-purple-950 py-1 px-1 text-center whitespace-nowrap overflow-hidden text-ellipsis text-[10px] font-bold text-purple-500">{d.role}</td>
-                             <td className={`border border-purple-950 py-1 px-1 text-center font-mono font-black ${d.arrival !== '-' && !ATTENDANCE_START_TYPES.includes(d.arrival as any) ? 'text-purple-700' : 'text-pink-600'}`}>{d.arrival}</td>
-                             <td className={`border border-purple-950 py-1 px-1 text-center font-mono font-black ${d.departure !== '-' && !ATTENDANCE_START_TYPES.includes(d.departure as any) ? 'text-purple-700' : 'text-pink-600'}`}>{d.departure}</td>
-                             <td className="border border-purple-950 py-1 px-2 text-[9px] italic text-purple-400 font-bold leading-tight break-words">{d.remark}</td>
+                          <tr key={d.no} className="hover:bg-purple-50/50 print:hover:bg-transparent">
+                             <td className="border border-purple-950 py-1 px-1 text-center text-purple-800 font-bold print:border-black print:text-black">{d.no}</td>
+                             <td className="border border-purple-950 py-1 px-2 whitespace-nowrap overflow-hidden text-ellipsis font-black text-purple-950 print:border-black print:text-black">{d.name}</td>
+                             <td className="border border-purple-950 py-1 px-1 text-center whitespace-nowrap overflow-hidden text-ellipsis text-[10px] font-bold text-purple-500 print:border-black print:text-black">{d.role}</td>
+                             <td className={`border border-purple-950 py-1 px-1 text-center font-mono font-black print:border-black print:text-black ${d.arrival !== '-' && !ATTENDANCE_START_TYPES.includes(d.arrival as any) ? 'text-purple-700' : 'text-pink-600'}`}>{d.arrival}</td>
+                             <td className={`border border-purple-950 py-1 px-1 text-center font-mono font-black print:border-black print:text-black ${d.departure !== '-' && !ATTENDANCE_START_TYPES.includes(d.departure as any) ? 'text-purple-700' : 'text-pink-600'}`}>{d.departure}</td>
+                             <td className="border border-purple-950 py-1 px-2 text-[9px] italic text-purple-400 font-bold leading-tight break-words print:border-black print:text-black">{d.remark}</td>
                           </tr>
                        ))}
                     </tbody>
                  </table>
                </div>
-               <div className="signature-section mt-4 flex justify-around text-center border-t border-dashed border-purple-100 pt-4">
+               <div className="signature-section mt-4 flex justify-around text-center border-t border-dashed border-purple-100 pt-4 print:border-none">
                   <div className="flex-1">
-                     <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest">เจ้าหน้าที่ผู้รับผิดชอบ</p>
-                     <p className="font-bold text-purple-900 text-xs">....................................................</p>
-                     <p className="text-[10px] font-bold text-purple-300 mt-2">(....................................................)</p>
+                     <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest print:text-black">เจ้าหน้าที่ผู้รับผิดชอบ</p>
+                     <p className="font-bold text-purple-900 text-xs print:text-black">....................................................</p>
+                     <p className="text-[10px] font-bold text-purple-300 mt-2 print:text-black">(....................................................)</p>
                   </div>
                   <div className="flex-1">
-                     <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest">ผู้อำนวยการโรงเรียน</p>
-                     <p className="font-bold text-purple-900 text-xs">....................................................</p>
-                     <p className="text-[10px] font-bold text-purple-300 mt-2">(....................................................)</p>
+                     <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest print:text-black">ผู้อำนวยการโรงเรียน</p>
+                     <p className="font-bold text-purple-900 text-xs print:text-black">....................................................</p>
+                     <p className="text-[10px] font-bold text-purple-300 mt-2 print:text-black">(....................................................)</p>
                   </div>
                </div>
                <button onClick={() => window.print()} className="mt-6 w-full py-5 bg-gradient-to-r from-purple-800 to-purple-950 text-white rounded-[2rem] font-black text-sm no-print shadow-xl hover:scale-[1.01] active:scale-95 transition-all">🖨️ พิมพ์รายงานสรุปรายวัน</button>
@@ -391,52 +391,52 @@ const Dashboard: React.FC = () => {
          )}
 
          {activeTab === 'monthly' && (
-           <div className="p-4 md:p-8 bg-white border-2 border-purple-100 rounded-[3rem] shadow-inner print-page-a4 flex flex-col mx-auto">
+           <div className="p-4 md:p-8 bg-white border-2 border-purple-100 rounded-[3rem] shadow-inner print-page-a4 flex flex-col mx-auto print:border-none print:shadow-none print:rounded-none">
              <div className="text-center mb-4">
                 <img src={SCHOOL_LOGO_URL} alt="school logo" className="school-logo-print w-16 h-16 mx-auto mb-2 bg-white p-1 rounded-full shadow-md" />
                 <h1 className="text-xl font-black text-purple-950 leading-tight">สถิติการมาปฏิบัติราชการรายเดือน</h1>
                 <p className="text-purple-400 font-bold text-[10px] leading-tight uppercase tracking-widest mt-1">Modern Attendance Analytics</p>
-                <div className="mt-2 h-1 w-24 bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 mx-auto rounded-full"></div>
+                <div className="mt-2 h-1 w-24 bg-gradient-to-r from-pink-500 via-purple-500 to-pink-500 mx-auto rounded-full no-print"></div>
                 <div className="flex flex-col items-center gap-1 mt-2">
                     <p className="text-purple-900 font-black text-base">เดือน {new Date(selectedMonth).toLocaleDateString('th-TH', { month: 'long', year: 'numeric' })}</p>
                 </div>
              </div>
              <div className="flex-1">
-                <table className="w-full border-collapse border border-purple-950 text-[11px] table-fixed">
+                <table className="w-full border-collapse border border-purple-950 text-[11px] table-fixed print:border-black">
                   <thead>
-                    <tr className="bg-purple-50 text-purple-950 border-b border-purple-950">
-                      <th className="border border-purple-950 py-1.5 px-2 w-[35px] text-center font-black">ที่</th>
-                      <th className="border border-purple-950 py-1.5 px-2 text-left font-black w-[160px]">ชื่อ-นามสกุล</th>
-                      <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[130px]">ตำแหน่ง</th>
-                      <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[60px]">สาย (ครั้ง)</th>
-                      <th className="border border-purple-950 py-1.5 px-2 text-center font-black">วันที่มาสาย</th>
-                      <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[65px]">ขาด/ไม่ลง</th>
+                    <tr className="bg-purple-50 text-purple-950 border-b border-purple-950 print:bg-gray-100 print:border-black">
+                      <th className="border border-purple-950 py-1.5 px-2 w-[35px] text-center font-black print:border-black">ที่</th>
+                      <th className="border border-purple-950 py-1.5 px-2 text-left font-black w-[160px] print:border-black">ชื่อ-นามสกุล</th>
+                      <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[130px] print:border-black">ตำแหน่ง</th>
+                      <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[60px] print:border-black">สาย (ครั้ง)</th>
+                      <th className="border border-purple-950 py-1.5 px-2 text-center font-black print:border-black">วันที่มาสาย</th>
+                      <th className="border border-purple-950 py-1.5 px-2 text-center font-black w-[65px] print:border-black">ขาด/ไม่ลง</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-purple-200">
                     {monthlyStats.map(s => (
-                      <tr key={s.id} className="hover:bg-purple-50/50 transition-colors">
-                        <td className="border border-purple-950 py-1 px-1 text-center font-bold text-purple-300">{s.no}</td>
-                        <td className="border border-purple-950 py-1 px-2 text-left whitespace-nowrap overflow-hidden text-ellipsis font-black text-purple-950">{s.name}</td>
-                        <td className="border border-purple-950 py-1 px-1 text-center whitespace-nowrap overflow-hidden text-ellipsis text-[9px] font-bold text-purple-400 uppercase tracking-tighter">{s.role}</td>
-                        <td className="border border-purple-950 py-1 px-1 text-center font-mono font-black text-pink-600">{s.lateCount > 0 ? s.lateCount : '-'}</td>
-                        <td className="border border-purple-950 py-1 px-2 text-center text-purple-500 font-bold text-[9px] leading-tight break-words">{s.lateDates}</td>
-                        <td className="border border-purple-950 py-1 px-1 text-center font-mono font-bold text-purple-200">{s.absentCount > 0 ? s.absentCount : '-'}</td>
+                      <tr key={s.id} className="hover:bg-purple-50/50 transition-colors print:hover:bg-transparent">
+                        <td className="border border-purple-950 py-1 px-1 text-center font-bold text-purple-300 print:border-black print:text-black">{s.no}</td>
+                        <td className="border border-purple-950 py-1 px-2 text-left whitespace-nowrap overflow-hidden text-ellipsis font-black text-purple-950 print:border-black print:text-black">{s.name}</td>
+                        <td className="border border-purple-950 py-1 px-1 text-center whitespace-nowrap overflow-hidden text-ellipsis text-[9px] font-bold text-purple-400 uppercase tracking-tighter print:border-black print:text-black">{s.role}</td>
+                        <td className="border border-purple-950 py-1 px-1 text-center font-mono font-black text-pink-600 print:border-black print:text-black">{s.lateCount > 0 ? s.lateCount : '-'}</td>
+                        <td className="border border-purple-950 py-1 px-2 text-center text-purple-500 font-bold text-[9px] leading-tight break-words print:border-black print:text-black">{s.lateDates}</td>
+                        <td className="border border-purple-950 py-1 px-1 text-center font-mono font-bold text-purple-200 print:border-black print:text-black">{s.absentCount > 0 ? s.absentCount : '-'}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
              </div>
-             <div className="signature-section mt-4 flex justify-between text-center border-t border-dashed border-purple-100 pt-4">
+             <div className="signature-section mt-4 flex justify-between text-center border-t border-dashed border-purple-100 pt-4 print:border-none">
                 <div className="flex-1">
-                   <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest">ผู้สรุปรายงาน</p>
-                   <p className="font-bold text-purple-900 text-xs">....................................................</p>
-                   <p className="text-[10px] font-bold text-purple-300 mt-2">(....................................................)</p>
+                   <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest print:text-black">ผู้สรุปรายงาน</p>
+                   <p className="font-bold text-purple-900 text-xs print:text-black">....................................................</p>
+                   <p className="text-[10px] font-bold text-purple-300 mt-2 print:text-black">(....................................................)</p>
                 </div>
                 <div className="flex-1">
-                   <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest">ผู้อำนวยการโรงเรียน</p>
-                   <p className="font-bold text-purple-900 text-xs">....................................................</p>
-                   <p className="text-[10px] font-bold text-purple-300 mt-2">(....................................................)</p>
+                   <p className="text-[10px] font-black text-purple-300 mb-6 uppercase tracking-widest print:text-black">ผู้อำนวยการโรงเรียน</p>
+                   <p className="font-bold text-purple-900 text-xs print:text-black">....................................................</p>
+                   <p className="text-[10px] font-bold text-purple-300 mt-2 print:text-black">(....................................................)</p>
                 </div>
              </div>
              <button onClick={() => window.print()} className="mt-6 w-full py-5 bg-gradient-to-r from-purple-800 to-purple-950 text-white rounded-[2rem] font-black text-sm no-print shadow-xl hover:scale-[1.01] active:scale-95">🖨️ พิมพ์รายงานสถิติรายเดือน</button>
@@ -444,7 +444,7 @@ const Dashboard: React.FC = () => {
          )}
 
          {activeTab === 'admin_checkin' && (
-           <div className="p-4 md:p-12 bg-white/50 backdrop-blur-md border border-purple-100 rounded-[3.5rem] shadow-inner max-w-2xl mx-auto">
+           <div className="p-4 md:p-12 bg-white/50 backdrop-blur-md border border-purple-100 rounded-[3.5rem] shadow-inner max-w-2xl mx-auto no-print">
               <div className="text-center mb-10">
                  <div className="w-16 h-16 bg-purple-100 rounded-3xl flex items-center justify-center mx-auto mb-6 text-purple-600 shadow-sm border border-purple-200">
                    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>
