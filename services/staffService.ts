@@ -18,10 +18,10 @@ const DEFAULT_STAFF_LIST: Staff[] = [
   { id: 'PJ012', name: 'นางสาวเสาวภา สิงหเสนา', role: 'ครูชำนาญการพิเศษ', birthday: '26/08/2531' },
   { id: 'PJ013', name: 'นางสาวกันต์ฤทัย นามมาลา', role: 'ครูชำนาญการ', birthday: '02/02/2527' },
   { id: 'PJ014', name: 'นางสาวสุภาภรณ์ ลัพธะลักษ์', role: 'ครูชำนาญการ', birthday: '22/06/2535' },
+  { id: 'PJ018', name: 'นายอุดมวิทย์ บุพิ', role: 'ครู', birthday: '12/11/2538' }, // ขยับขึ้นมาลำดับที่ 15 (Index 14)
   { id: 'PJ015', name: 'นายจักรพงษ์ ไชยราช', role: 'ครู', birthday: '16/12/2536' },
   { id: 'PJ016', name: 'ว่าที่ ร.ต.วิษณุ โสภา', role: 'ครู', birthday: '28/10/2532' },
   { id: 'PJ017', name: 'นายบุญเสริม สาทไทสงค์', role: 'ครู', birthday: '09/09/2539' },
-  { id: 'PJ018', name: 'นายอุดมวิทย์ บุพิ', role: 'ครู', birthday: '12/11/2538' },
   { id: 'PJ019', name: 'นายพงษ์เพชร แซ่ตั้ง', role: 'ครู', birthday: '18/02/2541' },
   { id: 'PJ020', name: 'นางสาวชลฎา บุตรเนียน', role: 'ครู', birthday: '21/01/2542' },
   { id: 'PJ021', name: 'นางสาวปภัสพ์มณ ทองอาสา', role: 'ครูผู้ช่วย', birthday: '12/07/2539' },
@@ -38,12 +38,14 @@ export const getAllStaff = (forDate: Date = new Date()): Staff[] => {
   if (stored) {
     list = JSON.parse(stored) as Staff[];
     
-    // *** ระบบอัปเดตข้อมูลอัตโนมัติ ***
+    // *** ระบบอัปเดตข้อมูลและลำดับอัตโนมัติ ***
     let changed = false;
 
-    DEFAULT_STAFF_LIST.forEach(defStaff => {
+    // ตรวจสอบความถูกต้องของข้อมูลพื้นฐานและอัปเดตหากมีการเปลี่ยนแปลงใน DEFAULT_STAFF_LIST
+    DEFAULT_STAFF_LIST.forEach((defStaff, index) => {
       const existingIdx = list.findIndex(s => s.id === defStaff.id);
       if (existingIdx !== -1) {
+        // อัปเดตข้อมูลวันเกิดหากไม่ตรง
         if (list[existingIdx].birthday !== defStaff.birthday) {
           list[existingIdx].birthday = defStaff.birthday;
           changed = true;
@@ -54,12 +56,26 @@ export const getAllStaff = (forDate: Date = new Date()): Staff[] => {
           changed = true;
         }
       } else {
+        // เพิ่มรายชื่อใหม่ที่ยังไม่มีใน Storage
         list.push(defStaff);
         changed = true;
       }
     });
-    
-    if (changed) {
+
+    // บังคับการเรียงลำดับใหม่ตาม DEFAULT_STAFF_LIST หากเป็นรายชื่อดั้งเดิม (PJ001-PJ025)
+    // เพื่อให้ลำดับในตารางรายงาน (เช่น ลำดับที่ 15 ของ PJ018) แสดงผลถูกต้องสำหรับผู้ใช้เดิม
+    const sortedList: Staff[] = [];
+    DEFAULT_STAFF_LIST.forEach(def => {
+      const match = list.find(s => s.id === def.id);
+      if (match) sortedList.push(match);
+    });
+    // เพิ่มรายชื่ออื่นๆ ที่อาจถูกแอดเพิ่มเองภายหลัง (ถ้ามี)
+    list.forEach(s => {
+      if (!DEFAULT_STAFF_LIST.some(def => def.id === s.id)) sortedList.push(s);
+    });
+
+    if (changed || JSON.stringify(list) !== JSON.stringify(sortedList)) {
+        list = sortedList;
         localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(list));
     }
   } else {
