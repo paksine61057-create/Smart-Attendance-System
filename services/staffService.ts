@@ -31,18 +31,19 @@ const DEFAULT_STAFF_LIST: Staff[] = [
   { id: 'PJ025', name: 'นายวชิรวิทย์ นันทชัย', role: 'ครูอัตราจ้าง', birthday: '07/01/2545' }
 ];
 
-export const getAllStaff = (): Staff[] => {
+export const getAllStaff = (forDate: Date = new Date()): Staff[] => {
   const stored = localStorage.getItem(STAFF_STORAGE_KEY);
+  let list: Staff[] = [];
+  
   if (stored) {
-    let list = JSON.parse(stored) as Staff[];
+    list = JSON.parse(stored) as Staff[];
     
-    // *** ระบบอัปเดตข้อมูลอัตโนมัติ (Auto-update birthdays) ***
+    // *** ระบบอัปเดตข้อมูลอัตโนมัติ ***
     let changed = false;
 
     DEFAULT_STAFF_LIST.forEach(defStaff => {
       const existingIdx = list.findIndex(s => s.id === defStaff.id);
       if (existingIdx !== -1) {
-        // อัปเดตวันเกิดถ้ายังไม่มีหรือข้อมูลไม่ตรง
         if (list[existingIdx].birthday !== defStaff.birthday) {
           list[existingIdx].birthday = defStaff.birthday;
           changed = true;
@@ -53,7 +54,6 @@ export const getAllStaff = (): Staff[] => {
           changed = true;
         }
       } else {
-        // เพิ่มถ้าไม่มีในรายการ
         list.push(defStaff);
         changed = true;
       }
@@ -62,16 +62,26 @@ export const getAllStaff = (): Staff[] => {
     if (changed) {
         localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(list));
     }
-
-    return list;
+  } else {
+    list = [...DEFAULT_STAFF_LIST];
+    localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(list));
   }
-  // Initialize default if empty
-  localStorage.setItem(STAFF_STORAGE_KEY, JSON.stringify(DEFAULT_STAFF_LIST));
-  return DEFAULT_STAFF_LIST;
+
+  // ปรับตำแหน่งตามเงื่อนไขเวลา (PJ018)
+  return list.map(s => {
+    if (s.id === 'PJ018') {
+      const threshold = new Date(2026, 0, 12); // 12 มกราคม 2569 (JS Months are 0-indexed)
+      return {
+        ...s,
+        role: forDate >= threshold ? 'ครูชำนาญการ' : 'ครู'
+      };
+    }
+    return s;
+  });
 };
 
-export const getStaffById = (id: string): Staff | undefined => {
-  const staffList = getAllStaff();
+export const getStaffById = (id: string, forDate: Date = new Date()): Staff | undefined => {
+  const staffList = getAllStaff(forDate);
   return staffList.find(staff => staff.id.toUpperCase() === id.toUpperCase());
 };
 

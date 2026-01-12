@@ -62,7 +62,20 @@ const Dashboard: React.FC = () => {
   const [manualReason, setManualReason] = useState('');
   const [isSavingManual, setIsSavingManual] = useState(false);
 
-  const staffList = useMemo(() => getAllStaff(), []);
+  // ปรับปรุง staffList ให้สัมพันธ์กับวันที่เลือก
+  const staffList = useMemo(() => {
+    let dateToUse = new Date();
+    if (activeTab === 'monthly') {
+      const [year, month] = selectedMonth.split('-').map(Number);
+      dateToUse = new Date(year, month - 1, 1);
+    } else if (activeTab === 'admin_checkin') {
+      dateToUse = new Date(manualDate);
+    } else {
+      dateToUse = new Date(selectedDate);
+    }
+    return getAllStaff(dateToUse);
+  }, [activeTab, selectedDate, selectedMonth, manualDate]);
+
   const ATTENDANCE_START_TYPES: AttendanceType[] = ['arrival', 'duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'];
 
   const syncData = useCallback(async () => {
