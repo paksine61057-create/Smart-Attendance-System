@@ -90,7 +90,11 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
     const m = now.getMinutes();
     const isSpecialType = ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(attendanceType);
     
-    const isLate = attendanceType === 'arrival' && (h > 8 || (h === 8 && m >= 1));
+    // เงื่อนไขวันพิเศษ (16 มกราคม 2569)
+    const isTeacherDay2026 = now.getFullYear() === 2026 && now.getMonth() === 0 && now.getDate() === 16;
+    
+    // ถ้าเป็นวันครู 2569 ไม่ต้องเช็ค Late สำหรับการขอเหตุผล
+    const isLate = !isTeacherDay2026 && attendanceType === 'arrival' && (h > 8 || (h === 8 && m >= 1));
     const isEarly = attendanceType === 'departure' && h < 16;
     
     if ((isLate || isEarly || isSpecialType) && !reason.trim()) {
@@ -199,10 +203,20 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
         }
 
         const isNewYearFirstDay = now.getFullYear() === 2026 && now.getMonth() === 0 && now.getDate() === 5;
+        // วันพิเศษ: วันครู 16 มกราคม 2569
+        const isTeacherDay2026 = now.getFullYear() === 2026 && now.getMonth() === 0 && now.getDate() === 16;
 
         if (attendanceType === 'arrival') {
             const limit = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 8, 1, 0, 0);
-            if (now.getTime() >= limit.getTime()) {
+            
+            // ถ้าเป็นวันครู 2569 ให้สถานะเป็น On Time เสมอ
+            if (isTeacherDay2026) {
+                status = 'On Time';
+                const msg = { title: "🎁 สวัสดีวันครู", body: "ขอให้เป็นวันที่มีความสุข ขอบคุณในความเสียสละของแม่พิมพ์ของชาติครับ/ค่ะ 🌟" };
+                setResultTitle(msg.title);
+                setResultBody(msg.body);
+                setResultTheme('success');
+            } else if (now.getTime() >= limit.getTime()) {
                 status = 'Late';
                 const msg = LATE_MESSAGES[Math.floor(Math.random() * LATE_MESSAGES.length)];
                 setResultTitle(msg.title);
@@ -269,6 +283,8 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
   }, [currentUser, attendanceType, reason, activeFilterId, onSuccess, preFetchedLocation, preFetchedDistance, isBirthdayToday]);
 
   if (step === 'info') {
+    const now = new Date();
+    const isTeacherDay2026 = now.getFullYear() === 2026 && now.getMonth() === 0 && now.getDate() === 16;
     const isSpecialType = ['duty', 'sick_leave', 'personal_leave', 'other_leave', 'authorized_late'].includes(attendanceType);
 
     return (
@@ -357,7 +373,7 @@ const CheckInForm: React.FC<CheckInFormProps> = ({ onSuccess }) => {
                            </button>
                         </div>
 
-                        {(isSpecialType || (attendanceType === 'departure' && new Date().getHours() < 16) || (attendanceType === 'arrival' && (new Date().getHours() > 8 || (new Date().getHours() === 8 && new Date().getMinutes() >= 1)))) && (
+                        {(isSpecialType || (attendanceType === 'departure' && new Date().getHours() < 16) || (!isTeacherDay2026 && attendanceType === 'arrival' && (new Date().getHours() > 8 || (new Date().getHours() === 8 && new Date().getMinutes() >= 1)))) && (
                             <div className="animate-in fade-in zoom-in text-left space-y-2">
                                 <label className="block text-[10px] font-black text-purple-400 uppercase tracking-widest ml-3">ระบุเหตุผล / รายละเอียด</label>
                                 <textarea 
